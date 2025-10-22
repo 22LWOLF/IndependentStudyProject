@@ -33,7 +33,8 @@
 ### Week 5:
   +  Goal: Implement Route generation that will use user-inputted distance or time.
   +  Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections) and [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute)
-  +    have simple input form  
+  *    have simple input form
+  *    
     * Have simple input form that asks for either a specific time or distance from the user.
     * At this stage time based routes will have placeholder values.
     * Use the random points that are within the calculated radius to make test routes.
