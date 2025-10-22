@@ -31,15 +31,14 @@
       - Use MKDirectisons to create multiple smaller routes that connect sequentially (EX: A->B, B->C, C->A).
       - Then combine the route segments into the full loop route.
 ### Week 5:
-  +  Goal: Implement Route generation that will use user-inputted distance or time.
-  +  Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections) and [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute)
-  *    have simple input form
-  *    
+  + Goal: Implement Route generation that will use user-inputted distance or time.
+  + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections) and [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute)
     * Have simple input form that asks for either a specific time or distance from the user.
     * At this stage time based routes will have placeholder values.
     * Use the random points that are within the calculated radius to make test routes.
     * Compare the returned route's using [MKRoute.distance](https://developer.apple.com/documentation/mapkit/mkroute/distance) or [MKRoute.expectedTravelTime](https://developer.apple.com/documentation/mapkit/mkroute/expectedtraveltime)
-     * Then display both the calculated route info and the requested to see if it is reasonable.
+    * Then display both the calculated route info and the requested to see if it is reasonable.
+
 ### Week 6:
   + Midterm Checkpoint/Demo build
   + Goal: have a basic version of the app that can:
