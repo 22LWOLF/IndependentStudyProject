@@ -9,11 +9,13 @@
     * This should look similar to the Apple Maps app.
     * Be able to scroll around and look at areas on the map and other basic map features.
       - All the tools to do this are under the "[Map Coordinates](https://developer.apple.com/documentation/mapkit/mkcoordinateregion)"  tab in the documentation.
+        
 ### Week 2:
   + Goal: Basic route generation for point-to-point routes
   + Tools: MapKit API
     * Will use "MKDirections" and other associated direction tools
       - These tools are under the "[Directions](https://developer.apple.com/documentation/mapkit)" tab in the documentation.
+        
 ### Week 3:
   + Goal: Refine route generation, get very basic alternate route types started
   + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections), [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute), and manual coordinate manipulation.
@@ -24,12 +26,14 @@
     * Potentinal issues:
       - Looped routes might need manual midpoint generation using cordinates rather than builitin route generation.
       - Route lenghts might become inaccurate because of generated waypoints.
+        
 ### Week 4:
   + Goal: Finish implmentation of alternate route types (loops)
   + Tools: Using [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute) create random points that will
     * Plan for implemntation:
       - Use MKDirectisons to create multiple smaller routes that connect sequentially (EX: A->B, B->C, C->A).
       - Then combine the route segments into the full loop route.
+        
 ### Week 5:
   + Goal: Implement Route generation that will use user-inputted distance or time.
   + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections) and [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute)
@@ -41,7 +45,7 @@
 
 ### Week 6:
   + Midterm Checkpoint/Demo build
-  + Goal: have a basic deom version of the app that can:
+  + Goal: have a basic demo version of the app that can:
     * Generate 3 different types of routes
     * Routes generated fall within spefications that the user provides (time or distance within ±10%)
     * Calculate the radius around the starting point for random route generation
@@ -92,11 +96,57 @@
 ### Week 11:
   + Goal: Implement notifications and in-route feedback for speed changes and directions.
   + Tools: [User Notifications](https://developer.apple.com/documentation/usernotifications), [Core Location](https://developer.apple.com/documentation/corelocation), and [AVFoundation](https://developer.apple.com/documentation/avfoundation).
-    * Have push-style notificaitons (important for later implementations) for pacing transitions.
+    * Have local notifications (important for later implementations) for pacing transitions.
       - Have dinging or rining sounds to differentiate.
       - When the user sets a route it will display the types of speeds they will be going and then show them what sound means what speed.
     * Have vibration alerts with the same concept as the sounds for people without headphones and/or are hearing impaired.
     * Include turn-by-turn or checkpoint cues for major route steps.
     * Make sure notifications are synced with location updates and not delayed.
+   
+### Week 12:
+  + Goal: Implement a tool that allows the user to place resting points along the generated route.
+  + Tools: [MKMapView](https://developer.apple.com/documentation/mapkit/mkmapview), [MKPointAnnotation](https://developer.apple.com/documentation/mapkit/mkpointannotation), and local data storage using [UserDefaults](https://developer.apple.com/documentation/foundation/userdefaults).
+    * Allow the user to tap a point on the generated route and insert a "pin".
+    * Allow multiple break points to be added
+    * Each resting point will be stored with its coordinates and an optional label.
+    * Resting points will have custom markers or points on the map for clarity.
+    * Ensure that the points are saved along with the route data so they can persist across uses.
+    * Allow for the removal of break points.
+      - In the future this system could be altered for creating POI pins aswell.
+
+### Week 13:
+  + Goal: Having the app work in the background and other clean up.
+  + Tools: [UIApplicationDelegate](https://developer.apple.com/documentation/uikit/uiapplicationdelegate) manages the apps state when doing transitions, [CLLoactionManager](https://developer.apple.com/documentation/corelocation/cllocationmanager), other random tools invovled in improving battery optimization.
+  * Allow the app to work if the user locks their phone and/or has another application in the fore-front.
+  * Make sure that the notifications and feedback continue to work when in the background.
+  * Optimize performance to limit battery drain.
+  * Overall "house-keeping" making things look nice and maybe altering little aspects of previous weeks.
+
+
+### Week 14:
+  + Goal: Have the "final" build of the app ready for presentation
+  + Tools: N/A
+    * Final debugging and performance testing
+    * Ensure that all major features are stable:
+      - Having a working display for a map.
+      - Generating routes based off of user given time or distance.
+      - Have the ability to generate 3 different types of routes point-to-point, out-and-back, and loop.
+      - Calibration for 3 different speed types from the user.
+        + Walk, jog, and run
+      - Generated routes will can have different sections that have the user switch inbetween the 3 speeds.
+      - The user has the ability to insert and remove resting spots on the route.
+      - Working notifications for general directions, changes in speed, and when you reach a resting spot.
+        + Visual, audiotorial, and physical (buzzing) notification types.
+      - Be able to save "favorited" routes and re-use them later.
+        + Will keep resting points in saved version.
+       
+
+### Unspecified:
+  + Potentially register for the [Apple Developer Program](https://developer.apple.com/programs)
+    * Dependent on how much I can accomplish using the "free" version of allowing real hardware testing.
+    * You can have apps on your device without paying for it but has limitations:
+      - Only allowed to have on device for 7 days
+      - Can't use TestFlight (send to other users to test) or distribute
+      - Has some limitations for certain background modes like GPS and push notifications
      
      
