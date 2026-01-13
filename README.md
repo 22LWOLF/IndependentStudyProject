@@ -26,7 +26,8 @@
       - Begin testing logic for loops by generating mid-way points before returning to the starting position.
     * Potential issues:
       - Looped routes might need manual midpoint generation using coordinates rather than built-in route generation.
-      - Route lengths might become inaccurate because of generated waypoints.
+      - Route lengths might become inaccurate because of generated waypoints
+      - Midpoint computation may work on distance or points.
         
 ### Week 4:
   + Goal: Finish implementation of alternate route types (loops)
