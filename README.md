@@ -35,6 +35,7 @@
     * Plan for implementation:
       - Use MKDirections to create multiple smaller routes that connect sequentially (EX: A->B, B->C, C->A).
       - Then combine the route segments into the full loop route.
+      - Consider if you want to build the route all at once or segement by segment.  Consider whether/how pins can be used.
         
 ### Week 5:
   + Goal: Implement Route generation that will use user-inputted distance or time.
