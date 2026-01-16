@@ -21,5 +21,7 @@
 			</array>
 		</dict>
 	</dict>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>We need your location to generate running routes</string>
 </dict>
 </plist>
