@@ -13,7 +13,6 @@ class ViewController: UIViewController {
 
     @IBOutlet weak var mapView: MKMapView!
     
-    //need to display a map of a designated size and a designated Longitude and Latitude.
     override func viewDidLoad() {
         super.viewDidLoad()
         
