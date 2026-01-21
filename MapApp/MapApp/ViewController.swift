@@ -48,7 +48,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         //adds annotation to the map with the coensiding name
         addAnnotation(at: coordinate, title: label)
         
-        //will generate a route inbetween the 2 points
+        //will generate a route inbetween the 2 points automatically
         if selectedCoordinates.count == 2{
             generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
             
@@ -76,29 +76,26 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.removeOverlays(mapView.overlays)
 
         // Build MKMapItems for routing using coordinate-based placemarks
-        let source = MKMapItem(placemark: MKPlacemark(coordinate: start, addressDictionary: nil))
-        let destination = MKMapItem(placemark: MKPlacemark(coordinate: end, addressDictionary: nil))
+        let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
+        let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
 
-        var request = MKDirections.Request()
+
+        let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .walking
 
         let directions = MKDirections(request: request)
-        Task { [weak self] in
-            guard let self = self else { return }
-            do {
-                let response = try await directions.calculate()
-                if let route = response.routes.first {
-                    self.mapView.addOverlay(route.polyline)
-                } else {
-                    print("No routes found")
+        
+        directions.calculate { [weak self] response, error in
+                if let error = error {
+                    print("Error calculating route: \(error.localizedDescription)")
+                    return
                 }
-            } catch {
-                print("Directions error: \(error.localizedDescription)")
+                guard let route = response?.routes.first else { return }
+                self?.mapView.addOverlay(route.polyline)
             }
         }
-    }
 
     // MKMapViewDelegate method to render the route polyline
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -125,16 +122,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
         //when it detects a tap it calls handleMapTap method
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
-    }
-    
-    @IBAction func generateButtonTapped(_ sender: UIButton) {
-        guard selectedCoordinates.count == 2 else {
-            print("Need exactly two points to generate a route")
-            return
-        }
-        let start = selectedCoordinates[0]
-        let end = selectedCoordinates[1]
-        generateRoute(from: start, to: end)
     }
     
 }
