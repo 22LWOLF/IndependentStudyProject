@@ -9,12 +9,27 @@ import UIKit
 import MapKit
 import CoreLocation
 
-class ViewController: UIViewController {
-
+class ViewController: UIViewController, MKMapViewDelegate {
+    
     @IBOutlet weak var mapView: MKMapView!
     
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
-    private var currentRoute : MKRoute?
+    
+    @objc func handleMapTap(_ gesture: UITapGestureRecognizer){
+        //gets the tap location in the view (screen pixels)
+        //EX: tap found at 100 pixels from the top of screen and 300 pixels from right of screen.
+        let locationInView = gesture.location(in: mapView)
+        
+        //convert the taps into coordinates (lat/long)
+        //it basicall takes the tap location in pixels and then converts that into the lat/long for the map.
+        let coordinate = mapView.convert(locationInView, toCoordinateFrom: mapView)
+        
+        //TEST TO SEE IF WORKS JUST PRINT FOR NOW
+        print("Tapped at: \(coordinate.latitude), \(coordinate.longitude)")
+        
+        // store the coordinates in my array
+        selectedCoordinates.append(coordinate)
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,56 +41,17 @@ class ViewController: UIViewController {
         let region = MKCoordinateRegion(center: cordinates, latitudinalMeters: 10000, longitudinalMeters: 10000)
         mapView.setRegion(region, animated: true)
         
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
-        mapView.addGestureRecognizer(tap)
+        //listening for when the "tap" event happens on the mapView
+        //when it detects a tap it calls handleMapTap method
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
+        mapView.addGestureRecognizer(tapGesture)
         
-        
-    }
-    
-    @objc private func handleMapTap(_ gestureRecognizer: UITapGestureRecognizer) {
-        let point = gestureRecognizer.location(in: mapView)
-        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
-        selectedCoordinates.append(coordinate)
-        
-        //if route already exists and the user taps again this resets it for a new route
-        if currentRoute != nil || selectedCoordinates.count > 2{
-            resetRouteAnnotations()
-        }
-        
-        //drop a pin
-        let annotation = MKPointAnnotation()
-        annotation.coordinate = coordinate
-        annotation.title = selectedCoordinates.count == 1 ? "Start" : "End"
-        mapView.addAnnotation(annotation)
-        
-        //if you have 2 points request a route
-        if selectedCoordinates.count == 2{
-            requestRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-        }
-        
-        private func resetRouteAnnotations(){
-            //This will clear the current state of the map and will add the new overlays/annotations
-            //set selectedCoordinates[0] = nothing then populate it with the new tap information
-            //then reset selectedCoordinates[1] to nothing
-            
-            //clear in-memory state
+        if selectedCoordinates.count >= 2{
             selectedCoordinates.removeAll()
-            currentRoute = nil
-            
-            //remove any existing route lines
-            mapView.removeOverlays(mapView.overlays)
-            
-            //remove pins, but keep the user location if available
-            let pinsToRemove = mapView.annotations.filter { !($0 is MKUserLocation) }
-            mapView.removeAnnotations(pinsToRemove)
-            
         }
-        private func requestRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D){
-            // This will build the directions request bewteen the 2 points and draw them
-        }
-
-    
 
     }
 }
+
+
 
