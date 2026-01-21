@@ -47,24 +47,68 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let label = (selectedCoordinates.count == 1) ? "Start" : "Stop"
         //adds annotation to the map with the coensiding name
         addAnnotation(at: coordinate, title: label)
-
+        
+        //will generate a route inbetween the 2 points
+        if selectedCoordinates.count == 2{
+            generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            
+            print("generated a route")
+            
+        }
     }
     
-    //function for removing all the annotations on the map
-    func removeAnnotations(){
+    // Remove all annotations from the map
+    func removeAnnotations() {
         mapView.removeAnnotations(mapView.annotations)
     }
-    
-    //function for adding a new annotation on the map
+
+    // Add a single annotation to the map with an optional title
     func addAnnotation(at coordinate: CLLocationCoordinate2D, title: String? = nil) {
-        //lets thing called "annotation" to be a MKPointAnnotation object.
         let annotation = MKPointAnnotation()
-        //allows for annotation to have a coordinate
         annotation.coordinate = coordinate
-        //allows for the annotation to have a title
         annotation.title = title
-        //adding the annotation to the mapview
         mapView.addAnnotation(annotation)
+    }
+
+    // Generate a route between two coordinates and draw it on the map
+    func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
+        // Clear existing overlays before drawing a new route
+        mapView.removeOverlays(mapView.overlays)
+
+        // Build MKMapItems for routing using coordinate-based placemarks
+        let source = MKMapItem(placemark: MKPlacemark(coordinate: start, addressDictionary: nil))
+        let destination = MKMapItem(placemark: MKPlacemark(coordinate: end, addressDictionary: nil))
+
+        var request = MKDirections.Request()
+        request.source = source
+        request.destination = destination
+        request.transportType = .walking
+
+        let directions = MKDirections(request: request)
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                let response = try await directions.calculate()
+                if let route = response.routes.first {
+                    self.mapView.addOverlay(route.polyline)
+                } else {
+                    print("No routes found")
+                }
+            } catch {
+                print("Directions error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MKMapViewDelegate method to render the route polyline
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        guard let polyline = overlay as? MKPolyline else {
+            return MKOverlayRenderer(overlay: overlay)
+        }
+        let renderer = MKPolylineRenderer(polyline: polyline)
+        renderer.strokeColor = .systemBlue
+        renderer.lineWidth = 5
+        return renderer
     }
     
     override func viewDidLoad() {
@@ -83,7 +127,15 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.addGestureRecognizer(tapGesture)
     }
     
+    @IBAction func generateButtonTapped(_ sender: UIButton) {
+        guard selectedCoordinates.count == 2 else {
+            print("Need exactly two points to generate a route")
+            return
+        }
+        let start = selectedCoordinates[0]
+        let end = selectedCoordinates[1]
+        generateRoute(from: start, to: end)
+    }
+    
 }
-
-
 
