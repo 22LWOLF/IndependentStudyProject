@@ -32,8 +32,10 @@ class ViewController: UIViewController, MKMapViewDelegate {
             //need to remove any previous annotations on the map
             removeAnnotations()
             
+            mapView.removeOverlays(mapView.overlays)
+            
             //testing to see if coords and annotations are being removed.
-            print("removed previous 2 coords + annotations")
+            print("removed previous 2 coords + annotations + old route")
             
         }
         
@@ -71,40 +73,62 @@ class ViewController: UIViewController, MKMapViewDelegate {
     }
 
     // Generate a route between two coordinates and draw it on the map
+    //taking 2 points (starting and ending) coordinates (lat/long)
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
         // Clear existing overlays before drawing a new route
         mapView.removeOverlays(mapView.overlays)
 
-        // Build MKMapItems for routing using coordinate-based placemarks
+        //Routing doesn't work based off of coordinates it needs Map Item's. So this wraps the 1st and 2nd points in a MKMapItem (they are still coordinates but they are puttin on a disguise to become Map Item's)
+        //address is nil because we aren't giving a specific street address just a location
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
 
 
+        //This is creating a directions request which in simple terms is saying "Apple give me directoins from here to here"
+        //First part is creating an empty request object (getting the form to fill out
         let request = MKDirections.Request()
+        //this is filling out the form to say start at the map item named "source"
         request.source = source
+        //This is filling out the form to say ending at the map item named "destination"
         request.destination = destination
+        //This is just what type of route it will make
         request.transportType = .walking
 
+        //Create a directions calculator object and give it the form.
+        //This is the thing that is talking to apple servers to get the info.
         let directions = MKDirections(request: request)
         
+        //Go calculate route and when your done/or if something breaks, run this code
+        //This is ansynchronous so that the app doesn't freeze up while waiting for directions
         directions.calculate { [weak self] response, error in
+                // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
                 if let error = error {
                     print("Error calculating route: \(error.localizedDescription)")
                     return
                 }
+                //Apple might multiple route options this is saying grab the first or if there are none then stop.
+                //Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
                 guard let route = response?.routes.first else { return }
+                //This is the part where the routes polyline is being pasted over the top of the map.
                 self?.mapView.addOverlay(route.polyline)
             }
         }
 
     // MKMapViewDelegate method to render the route polyline
+    //The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        //Check if this overlay is specifically a polyline or something else (there are differnt types like circles or polygon's) and just to draw it with default settings.
+        //The purpose of this is in the future I might need to have other overlays like circles and this ensures that it doesn't interact with those only polylines.
         guard let polyline = overlay as? MKPolyline else {
             return MKOverlayRenderer(overlay: overlay)
         }
+        //create the polyline drawer object (making the artist)
         let renderer = MKPolylineRenderer(polyline: polyline)
+        //what color the artist should use to draw
         renderer.strokeColor = .systemBlue
+        //how thick the pen should be when he draws
         renderer.lineWidth = 5
+        //gives the configured drawer back to the map. (gives the picture the artist drew back to the map that requested it)
         return renderer
     }
     
