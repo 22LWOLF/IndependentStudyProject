@@ -21,11 +21,11 @@
                                 <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                                 <standardMapConfiguration key="preferredConfiguration"/>
                             </mapView>
-                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="H08-k3-KzI">
-                                <rect key="frame" x="0.0" y="0.0" width="393" height="184"/>
+                            <view contentMode="scaleToFill" misplaced="YES" translatesAutoresizingMaskIntoConstraints="NO" id="nR2-kL-pkI">
+                                <rect key="frame" x="0.0" y="0.0" width="393" height="97"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tv6-ZN-Jc4">
-                                        <rect key="frame" x="127" y="78" width="138" height="35"/>
+                                        <rect key="frame" x="8" y="54" width="138" height="35"/>
                                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                         <state key="normal" title="Button"/>
                                         <buttonConfiguration key="configuration" style="filled" title="Go To Location"/>
@@ -40,17 +40,18 @@
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
-                            <constraint firstItem="H08-k3-KzI" firstAttribute="top" secondItem="8bC-Xf-vdC" secondAttribute="top" id="GcJ-Q2-jwt"/>
                             <constraint firstAttribute="bottom" secondItem="Km5-Dh-ECB" secondAttribute="bottom" id="Obh-xa-SGQ"/>
-                            <constraint firstItem="H08-k3-KzI" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="WiR-3G-xAZ"/>
+                            <constraint firstItem="nR2-kL-pkI" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="Q9y-ln-g90"/>
                             <constraint firstItem="Km5-Dh-ECB" firstAttribute="top" secondItem="8bC-Xf-vdC" secondAttribute="top" id="fep-AR-Yzn"/>
+                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="nR2-kL-pkI" secondAttribute="bottom" constant="680" id="ftP-do-CFV"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="Km5-Dh-ECB" secondAttribute="trailing" id="fw9-kF-fwP"/>
-                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="H08-k3-KzI" secondAttribute="bottom" constant="600" id="tFx-bQ-fNm"/>
+                            <constraint firstItem="nR2-kL-pkI" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="mVx-kp-VU0"/>
+                            <constraint firstItem="nR2-kL-pkI" firstAttribute="top" secondItem="8bC-Xf-vdC" secondAttribute="top" id="sa7-ei-LOm"/>
                             <constraint firstItem="Km5-Dh-ECB" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="vr8-pH-c8B"/>
-                            <constraint firstItem="H08-k3-KzI" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" id="xpi-VC-0SS"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="headerBox" destination="nR2-kL-pkI" id="Nkz-qo-Jxb"/>
                         <outlet property="mapView" destination="Km5-Dh-ECB" id="4M1-0u-Rc9"/>
                     </connections>
                 </viewController>

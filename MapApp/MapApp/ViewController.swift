@@ -11,6 +11,16 @@ import CoreLocation
 
 class ViewController: UIViewController, MKMapViewDelegate {
     
+    
+    @IBOutlet weak var headerBox: UIView!
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews( )
+        //round only the bottom corners
+        headerBox.layer.cornerRadius = 44
+        headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        headerBox.layer.masksToBounds = true
+    }
+    
     @IBOutlet weak var mapView: MKMapView!
     
     @IBAction func showCoordinateEntry(_ sender: Any) {
