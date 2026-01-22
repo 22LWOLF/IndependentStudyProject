@@ -176,16 +176,17 @@
 ### Features:
   1. Installed on phone [x]
   2. displays map [x]
-  3. allows for user to insert points to generate a route [ ]
-  4. allow for dragging around of point [ ]
-  5. have time in corner [ ]
-  6. app settings [ ]
-  7. start route button [ ]
-  8. stop route boutton [ ]
-  9. Use current location [ ]
-  10. have the user insert a distance for route length [ ]
-  11. have user insert a target time for the route [ ]
-  12. updating the user speeds for the users walk, jog, run speed [ ]
+  3. allows for user to insert points to generate a route [x]
+  4. allow user to insert coordinates for a location and go to it [x]
+  5. allow for dragging around of point [ ]
+  6. have time in corner [ ]
+  7. app settings [ ]
+  8. start route button [ ]
+  9. stop route boutton [ ]
+  10. Use current location [ ]
+  11. have the user insert a distance for route length [ ]
+  12. have user insert a target time for the route [ ]
+  13. updating the user speeds for the users walk, jog, run speed [ ]
 
 ### Unspecified:
   + Potentially register for the [Apple Developer Program](https://developer.apple.com/programs)
