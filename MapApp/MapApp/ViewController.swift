@@ -245,3 +245,18 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
 }
 
+//Ideas:
+/*
+For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
+ Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
+ 
+ Pseduo code thoughts:
+    different ways for random routes:
+    given the inputted time/distance make a route then measure it to see if it falls within the bounds if not make another route, rinse and repeat.
+            Pros: simple to implement take a random lat and long within blank distance from the user make a point then make a route.
+            Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
+ 
+ 
+ 
+ */
+
