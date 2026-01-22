@@ -13,7 +13,90 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     @IBOutlet weak var mapView: MKMapView!
     
+    @IBAction func showCoordinateEntry(_ sender: Any) {
+        showCoordinateEntry()
+    }
+    
+    
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
+    
+    @objc func showCoordinateEntry(){
+        //creating the actual alert popup
+        let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and longitude (-90 to 90, -180 to 180)", preferredStyle: .alert)
+        
+        //adding lat textfield
+        alert.addTextField{textField in textField.placeholder = "Latitude (-90 to 90)"
+            textField.keyboardType = .decimalPad
+        }
+        //adding long textfield
+        alert.addTextField {textField in textField.placeholder = "Longitude (-180 to 180)"
+            textField.keyboardType = .decimalPad
+        }
+        
+        //creating the Go action
+        //Creating a button + all the code that happens when its pressed in one statement.
+        //UIAlertAction is creating a button for the alert
+        //title: "Go" is the buttons label
+        //style: .default is how it looks (.cancel for bold, .destructive for red.)
+        //{action in...} is the code that runs when the button is tapped
+        let goAction = UIAlertAction(title: "Go", style: .default) {action in
+            //this stuff runs when the user taps Go
+            
+            //looking at textfields to make sure it is not empty
+            guard let latText = alert.textFields?[0].text, !latText.isEmpty else {
+                print("No latitude entered")
+                return
+            }
+            guard let longText = alert.textFields?[1].text, !longText.isEmpty else {
+                print("No longitude entered")
+                return
+            }
+            
+            //taking string from textfield's and converting to double if it isn't a value then it will give error
+            guard let lat = Double(latText) else {
+                print("Latitude is not a valid number")
+                return
+            }
+            guard let long = Double(longText) else {
+                print("Longitude is not a valid number")
+                return
+            }
+            
+            
+            // checking the now double values to ensure that they fall within range possible for lat and long.
+            guard lat >= -90.0, lat <= 90.0 else {
+                print("Latitude out of range (-90 to 90)")
+                return
+            }
+            guard long >= -180.0, long <= 180.0 else {
+                print("Longitude out of range (-180 to 180)")
+                return
+            }
+            
+            // Use the coordinates: drop a pin and center the map
+            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
+            
+            //taking the info and dropping a pin at that coordinate
+            self.addAnnotation(at: coordinate, title: "Entered")
+            
+            //display area around pin
+            let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 10000, longitudinalMeters: 10000)
+            
+            //move to pinned area
+            self.mapView.setRegion(region, animated: true)
+        }
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            print("User cancelled")
+            // don't need canceling code because when an action is called by default it will dismiss the alert.
+        }
+        
+        alert.addAction(cancelAction)
+        alert.addAction(goAction)
+        
+        //show alert on screen
+        present(alert, animated: true)
+    }
     
     @objc func handleMapTap(_ gesture: UITapGestureRecognizer){
         //gets the tap location in the view (screen pixels)
@@ -146,6 +229,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
         //when it detects a tap it calls handleMapTap method
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
+        
+        
     }
     
 }
