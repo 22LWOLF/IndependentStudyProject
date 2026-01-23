@@ -11,8 +11,9 @@ import CoreLocation
 
 class ViewController: UIViewController, MKMapViewDelegate {
     
-    
+    //White box at top of screen for UI
     @IBOutlet weak var headerBox: UIView!
+    
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews( )
         //round only the bottom corners
@@ -85,9 +86,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
             
             // Use the coordinates: drop a pin and center the map
             let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
-            
-            //taking the info and dropping a pin at that coordinate
-            self.addAnnotation(at: coordinate, title: "Entered")
             
             //display area around pin
             let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 10000, longitudinalMeters: 10000)
@@ -249,6 +247,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
 /*
 For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
+ For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  
  Pseduo code thoughts:
     different ways for random routes:
@@ -256,7 +255,18 @@ For week 3 and the alternate route types I will need to add in a way to measure 
             Pros: simple to implement take a random lat and long within blank distance from the user make a point then make a route.
             Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
  
+    okay talked with chatGPT it gave me a solution to try:
+        take the users time or distance (if they choose time then convet that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
+    Cont. on random route generation stuff:
+        if/when a user is making a route and a point ends up in a location that is not possible to reach (middle of a lake, field, etc.) instead of scrapping the entire route go back a step and remake the new pin.
+        EX: A -> B works, B -> C (lake), B -> C2 (good), C2 -> A
+        Also implement a system for maximum tries for legs and entire route generation. (so if B -> C doesn't work after 5 tries then scrap the entire route similar to route retry's as mentioned above). Also for retrying a point I can move it a couple hundred meters in a couple directions to see if something lands close enought to a road.
+        
  
+ 
+ 
+ Issues:
+ If the user uses "Go To" button before making a route you cannot generate a route after that.
  
  */
 
