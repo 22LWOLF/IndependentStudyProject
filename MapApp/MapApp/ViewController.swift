@@ -248,6 +248,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
 For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
+ Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
+ Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetntially add to week 2 goals if easy enough.
  
  Pseduo code thoughts:
     different ways for random routes:
