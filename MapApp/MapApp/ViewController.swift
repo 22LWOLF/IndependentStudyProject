@@ -29,6 +29,22 @@ class ViewController: UIViewController, MKMapViewDelegate {
     }
     
     
+    @IBAction func generateRouteBTN(_ sender: UIButton) {
+        guard selectedCoordinates.count == 2 else {
+            print("Please place 2 pins")
+            return
+        }
+        generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        
+    }
+    
+    
+    @IBAction func clearRouteBTN(_ sender: UIButton) {
+        mapView.removeAnnotations(mapView.annotations)
+        mapView.removeOverlays(mapView.overlays)
+    }
+    
+    
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     
     @objc func showCoordinateEntry(){
@@ -142,19 +158,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
         addAnnotation(at: coordinate, title: label)
         
         //will generate a route inbetween the 2 points automatically
-        if selectedCoordinates.count == 2{
-            generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-            
-            print("generated a route")
-            
-        }
+        
     }
     
     // Remove all annotations from the map
     func removeAnnotations() {
         mapView.removeAnnotations(mapView.annotations)
     }
-
+    
     // Add a single annotation to the map with an optional title
     func addAnnotation(at coordinate: CLLocationCoordinate2D, title: String? = nil) {
         let annotation = MKPointAnnotation()
@@ -162,19 +173,19 @@ class ViewController: UIViewController, MKMapViewDelegate {
         annotation.title = title
         mapView.addAnnotation(annotation)
     }
-
+    
     // Generate a route between two coordinates and draw it on the map
     //taking 2 points (starting and ending) coordinates (lat/long)
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
         // Clear existing overlays before drawing a new route
         mapView.removeOverlays(mapView.overlays)
-
+        
         //Routing doesn't work based off of coordinates it needs Map Item's. So this wraps the 1st and 2nd points in a MKMapItem (they are still coordinates but they are puttin on a disguise to become Map Item's)
         //address is nil because we aren't giving a specific street address just a location
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
-
-
+        
+        
         //This is creating a directions request which in simple terms is saying "Apple give me directoins from here to here"
         //First part is creating an empty request object (getting the form to fill out
         let request = MKDirections.Request()
@@ -184,7 +195,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         request.destination = destination
         //This is just what type of route it will make
         request.transportType = .walking
-
+        
         //Create a directions calculator object and give it the form.
         //This is the thing that is talking to apple servers to get the info.
         let directions = MKDirections(request: request)
@@ -192,19 +203,19 @@ class ViewController: UIViewController, MKMapViewDelegate {
         //Go calculate route and when your done/or if something breaks, run this code
         //This is ansynchronous so that the app doesn't freeze up while waiting for directions
         directions.calculate { [weak self] response, error in
-                // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
-                if let error = error {
-                    print("Error calculating route: \(error.localizedDescription)")
-                    return
-                }
-                //Apple might multiple route options this is saying grab the first or if there are none then stop.
-                //Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
-                guard let route = response?.routes.first else { return }
-                //This is the part where the routes polyline is being pasted over the top of the map.
-                self?.mapView.addOverlay(route.polyline)
+            // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
+            if let error = error {
+                print("Error calculating route: \(error.localizedDescription)")
+                return
             }
+            //Apple might multiple route options this is saying grab the first or if there are none then stop.
+            //Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
+            guard let route = response?.routes.first else { return }
+            //This is the part where the routes polyline is being pasted over the top of the map.
+            self?.mapView.addOverlay(route.polyline)
         }
-
+    }
+    
     // MKMapViewDelegate method to render the route polyline
     //The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -245,30 +256,33 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
 //Ideas:
 /*
-For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
+ For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
  Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetntially add to week 2 goals if easy enough.
  
- Pseduo code thoughts:
-    different ways for random routes:
-    given the inputted time/distance make a route then measure it to see if it falls within the bounds if not make another route, rinse and repeat.
-            Pros: simple to implement take a random lat and long within blank distance from the user make a point then make a route.
-            Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
  
-    okay talked with chatGPT it gave me a solution to try:
-        take the users time or distance (if they choose time then convet that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
-    Cont. on random route generation stuff:
-        if/when a user is making a route and a point ends up in a location that is not possible to reach (middle of a lake, field, etc.) instead of scrapping the entire route go back a step and remake the new pin.
-        EX: A -> B works, B -> C (lake), B -> C2 (good), C2 -> A
-        Also implement a system for maximum tries for legs and entire route generation. (so if B -> C doesn't work after 5 tries then scrap the entire route similar to route retry's as mentioned above). Also for retrying a point I can move it a couple hundred meters in a couple directions to see if something lands close enought to a road.
-        
+ Pseduo code thoughts:
+ different ways for random routes:
+ given the inputted time/distance make a route then measure it to see if it falls within the bounds if not make another route, rinse and repeat.
+ Pros: simple to implement take a random lat and long within blank distance from the user make a point then make a route.
+ Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
+ 
+ okay talked with chatGPT it gave me a solution to try:
+ take the users time or distance (if they choose time then convet that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
+ Cont. on random route generation stuff:
+ if/when a user is making a route and a point ends up in a location that is not possible to reach (middle of a lake, field, etc.) instead of scrapping the entire route go back a step and remake the new pin.
+ EX: A -> B works, B -> C (lake), B -> C2 (good), C2 -> A
+ Also implement a system for maximum tries for legs and entire route generation. (so if B -> C doesn't work after 5 tries then scrap the entire route similar to route retry's as mentioned above). Also for retrying a point I can move it a couple hundred meters in a couple directions to see if something lands close enought to a road.
+ 
  
  
  
  Issues:
- If the user uses "Go To" button before making a route you cannot generate a route after that.
+ If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
+ Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed.
+ 
  
  */
 
