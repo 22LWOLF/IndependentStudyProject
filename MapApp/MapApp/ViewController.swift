@@ -161,7 +161,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             mapView.removeOverlays(mapView.overlays)
             
             // testing to see if coords and annotations are being removed.
-            showInfoAlert(message: "Removed previous 2 pins, annotations, and old route")
+            print("Removed previous 2 pins, annotations, and old route")
         }
         
         // TEST TO SEE IF WORKS JUST PRINT FOR NOW
