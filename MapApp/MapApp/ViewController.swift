@@ -9,6 +9,12 @@ import UIKit
 import MapKit
 import CoreLocation
 
+// MARK: - RouteAnnotation
+class RouteAnnotation: MKPointAnnotation {
+    // 0 for Start, 1 for Stop
+    var index: Int = 0
+}
+
 class ViewController: UIViewController, MKMapViewDelegate {
     
     // MARK: - Outlets
@@ -184,9 +190,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // Add a single annotation to the map with an optional title
     func addAnnotation(at coordinate: CLLocationCoordinate2D, title: String? = nil) {
-        let annotation = MKPointAnnotation()
+        let annotation = RouteAnnotation()
         annotation.coordinate = coordinate
         annotation.title = title
+        if let title = title {
+            annotation.index = (title == "Start") ? 0 : 1
+        }
         mapView.addAnnotation(annotation)
     }
     
@@ -289,6 +298,59 @@ class ViewController: UIViewController, MKMapViewDelegate {
         renderer.lineWidth = 5
         // gives the configured drawer back to the map. (gives the picture the artist drew back to the map that requested it)
         return renderer
+    }
+    
+    // MARK: - MKMapViewDelegate (Annotation Views)
+    func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        // Don't customize user location annotation
+        if annotation is MKUserLocation { return nil }
+        
+        let identifier = "PinAnnotation"
+        var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+        
+        // "settings" for the markers
+        if annotationView == nil {
+            annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            // This line is to enable dragging around
+            annotationView?.isDraggable = true
+            // If pin is tapped it will display the title of the pin
+            annotationView?.canShowCallout = true
+        } else {
+            annotationView?.annotation = annotation
+        }
+        
+        return annotationView
+    }
+    
+    // For when pins are being dragged around
+    func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
+        // This is watching for when dragging has stopped or ended (meaning it is done being moved).
+        if newState == .ending || newState == .canceling {
+            view.dragState = .none
+            // When stopped moving this grabs the new coordinates and sets that new position to its new coords.
+            guard let movedAnnotation = view.annotation as? RouteAnnotation else { return }
+            let newCoordinate = movedAnnotation.coordinate
+            
+            // Update selectedCoordinates based on annotation index
+            // This is to ensure that even when a start or stop pin is being moved around that the new coordinates are assigned to the correct pin.
+            // For example I have start and stop. I move start pin around, and then let go. This ensures, even thought start was first pin placed, that start is the one getting assigned the coordinates and not the latest placed pin.
+            if movedAnnotation.index == 0 {
+                if selectedCoordinates.count >= 1 { selectedCoordinates[0] = newCoordinate }
+                else { selectedCoordinates.append(newCoordinate) }
+            } else if movedAnnotation.index == 1 {
+                if selectedCoordinates.count >= 2 { selectedCoordinates[1] = newCoordinate }
+                else if selectedCoordinates.count == 1 { selectedCoordinates.append(newCoordinate) }
+                else {
+                    // If somehow stop moved before start exists, insert placeholders
+                    selectedCoordinates = [newCoordinate]
+                }
+            }
+            
+            // Automatically regenerate route if we have both points
+            if selectedCoordinates.count == 2 {
+                generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            }
+        }
     }
 }
 
