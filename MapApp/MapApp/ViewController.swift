@@ -40,6 +40,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     
     @IBAction func clearRouteBTN(_ sender: UIButton) {
+        selectedCoordinates.removeAll()
         mapView.removeAnnotations(mapView.annotations)
         mapView.removeOverlays(mapView.overlays)
     }
@@ -282,6 +283,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
  Issues:
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
  Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed.
+ Switch print statements too UIAlertController that way you don't need a console open.
  
  
  */
