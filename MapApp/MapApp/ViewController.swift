@@ -11,33 +11,51 @@ import CoreLocation
 
 class ViewController: UIViewController, MKMapViewDelegate {
     
-    //White box at top of screen for UI
+    // MARK: - Outlets
+    // White box at top of screen for UI
     @IBOutlet weak var headerBox: UIView!
+    @IBOutlet weak var mapView: MKMapView!
+    
+    // MARK: - Properties
+    private var selectedCoordinates: [CLLocationCoordinate2D] = []
+    
+    // MARK: - Lifecycle
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        mapView.delegate = self
+        
+        // EX Cords Milan MO (1st value + is North - is South, 2nd value + is East - is West)
+        let cordinates = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
+        // Region is the displayed area on launch of the specified coordinates. (This is a 10 kilometers x 10 kilometers)
+        let region = MKCoordinateRegion(center: cordinates, latitudinalMeters: 10000, longitudinalMeters: 10000)
+        mapView.setRegion(region, animated: true)
+        
+        // listening for when the "tap" event happens on the mapView
+        // when it detects a tap it calls handleMapTap method
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
+        mapView.addGestureRecognizer(tapGesture)
+    }
     
     override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews( )
-        //round only the bottom corners
+        super.viewDidLayoutSubviews()
+        // round only the bottom corners
         headerBox.layer.cornerRadius = 44
         headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         headerBox.layer.masksToBounds = true
     }
     
-    @IBOutlet weak var mapView: MKMapView!
-    
+    // MARK: - User Actions (IBActions)
     @IBAction func showCoordinateEntry(_ sender: Any) {
         showCoordinateEntry()
     }
     
-    
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         guard selectedCoordinates.count == 2 else {
-            print("Please place 2 pins")
+            showInfoAlert(message: "Please place 2 pins")
             return
         }
         generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-        
     }
-    
     
     @IBAction func clearRouteBTN(_ sender: UIButton) {
         selectedCoordinates.removeAll()
@@ -45,123 +63,120 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.removeOverlays(mapView.overlays)
     }
     
-    
-    private var selectedCoordinates: [CLLocationCoordinate2D] = []
-    
-    @objc func showCoordinateEntry(){
-        //creating the actual alert popup
+    // MARK: - Coordinate Entry UI
+    @objc func showCoordinateEntry() {
+        // creating the actual alert popup
         let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and longitude (-90 to 90, -180 to 180)", preferredStyle: .alert)
         
-        //adding lat textfield
-        alert.addTextField{textField in textField.placeholder = "Latitude (-90 to 90)"
+        // adding lat textfield
+        alert.addTextField { textField in
+            textField.placeholder = "Latitude (-90 to 90)"
             textField.keyboardType = .decimalPad
         }
-        //adding long textfield
-        alert.addTextField {textField in textField.placeholder = "Longitude (-180 to 180)"
+        // adding long textfield
+        alert.addTextField { textField in
+            textField.placeholder = "Longitude (-180 to 180)"
             textField.keyboardType = .decimalPad
         }
         
-        //creating the Go action
-        //Creating a button + all the code that happens when its pressed in one statement.
-        //UIAlertAction is creating a button for the alert
-        //title: "Go" is the buttons label
-        //style: .default is how it looks (.cancel for bold, .destructive for red.)
-        //{action in...} is the code that runs when the button is tapped
-        let goAction = UIAlertAction(title: "Go", style: .default) {action in
-            //this stuff runs when the user taps Go
+        // creating the Go action
+        // Creating a button + all the code that happens when its pressed in one statement.
+        // UIAlertAction is creating a button for the alert
+        // title: "Go" is the buttons label
+        // style: .default is how it looks (.cancel for bold, .destructive for red.)
+        // {action in...} is the code that runs when the button is tapped
+        let goAction = UIAlertAction(title: "Go", style: .default) { action in
+            // this stuff runs when the user taps Go
             
-            //looking at textfields to make sure it is not empty
+            // looking at textfields to make sure it is not empty
             guard let latText = alert.textFields?[0].text, !latText.isEmpty else {
-                print("No latitude entered")
+                self.showErrorAlert(message: "No latitude entered")
                 return
             }
             guard let longText = alert.textFields?[1].text, !longText.isEmpty else {
-                print("No longitude entered")
+                self.showErrorAlert(message: "No longitude entered")
                 return
             }
             
-            //taking string from textfield's and converting to double if it isn't a value then it will give error
+            // taking string from textfield's and converting to double if it isn't a value then it will give error
             guard let lat = Double(latText) else {
-                print("Latitude is not a valid number")
+                self.showErrorAlert(message: "Latitude is not a valid number")
                 return
             }
             guard let long = Double(longText) else {
-                print("Longitude is not a valid number")
+                self.showErrorAlert(message: "Longitude is not a valid number")
                 return
             }
-            
             
             // checking the now double values to ensure that they fall within range possible for lat and long.
             guard lat >= -90.0, lat <= 90.0 else {
-                print("Latitude out of range (-90 to 90)")
+                self.showErrorAlert(message: "Latitude out of range (-90 to 90)")
                 return
             }
             guard long >= -180.0, long <= 180.0 else {
-                print("Longitude out of range (-180 to 180)")
+                self.showErrorAlert(message: "Longitude out of range (-180 to 180)")
                 return
             }
             
             // Use the coordinates: drop a pin and center the map
             let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
             
-            //display area around pin
+            // display area around pin
             let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 10000, longitudinalMeters: 10000)
             
-            //move to pinned area
+            // move to pinned area
             self.mapView.setRegion(region, animated: true)
         }
         
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
-            print("User cancelled")
+            self.showInfoAlert(message: "Cancelled location entry")
             // don't need canceling code because when an action is called by default it will dismiss the alert.
         }
         
         alert.addAction(cancelAction)
         alert.addAction(goAction)
         
-        //show alert on screen
+        // show alert on screen
         present(alert, animated: true)
     }
     
-    @objc func handleMapTap(_ gesture: UITapGestureRecognizer){
-        //gets the tap location in the view (screen pixels)
-        //EX: tap found at 100 pixels from the top of screen and 300 pixels from right of screen.
+    // MARK: - Gesture Handling
+    @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
+        // gets the tap location in the view (screen pixels)
+        // EX: tap found at 100 pixels from the top of screen and 300 pixels from right of screen.
         let locationInView = gesture.location(in: mapView)
         
-        //convert the taps into coordinates (lat/long)
-        //it basicall takes the tap location in pixels and then converts that into the lat/long for the map.
+        // convert the taps into coordinates (lat/long)
+        // it basicall takes the tap location in pixels and then converts that into the lat/long for the map.
         let coordinate = mapView.convert(locationInView, toCoordinateFrom: mapView)
         
-        //checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
-        if selectedCoordinates.count >= 2{
-            //removes coordinates (lat and long)
+        // checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
+        if selectedCoordinates.count >= 2 {
+            // removes coordinates (lat and long)
             selectedCoordinates.removeAll()
             
-            //need to remove any previous annotations on the map
+            // need to remove any previous annotations on the map
             removeAnnotations()
             
             mapView.removeOverlays(mapView.overlays)
             
-            //testing to see if coords and annotations are being removed.
-            print("removed previous 2 coords + annotations + old route")
-            
+            // testing to see if coords and annotations are being removed.
+            showInfoAlert(message: "Removed previous 2 pins, annotations, and old route")
         }
         
-        //TEST TO SEE IF WORKS JUST PRINT FOR NOW
-        print("Tapped at: \(coordinate.latitude), \(coordinate.longitude)")
+        // TEST TO SEE IF WORKS JUST PRINT FOR NOW
+        print("Tapped Lat: \(coordinate.latitude), Lon: \(coordinate.longitude)")
         
         // store the coordinates in my array
         selectedCoordinates.append(coordinate)
         
-        //alters the title of the coordinate depending if it is the 1st or 2nd annotation
+        // alters the title of the coordinate depending if it is the 1st or 2nd annotation
         let label = (selectedCoordinates.count == 1) ? "Start" : "Stop"
-        //adds annotation to the map with the coensiding name
+        // adds annotation to the map with the coensiding name
         addAnnotation(at: coordinate, title: label)
-        
-        //will generate a route inbetween the 2 points automatically
-        
     }
     
+    // MARK: - Map Annotation Helpers
     // Remove all annotations from the map
     func removeAnnotations() {
         mapView.removeAnnotations(mapView.annotations)
@@ -175,87 +190,109 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.addAnnotation(annotation)
     }
     
+    // MARK: - Alert Helpers
+    // Centralized helpers for presenting feedback to the user.
+    // Use these instead of print for user-facing messages.
+    // This is for giving information to the user EX: "please place 2 pins"
+    func showInfoAlert(title: String = "Info", message: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(alert, animated: true)
+        }
+    }
+    
+    // Specifically for error alerts EX: when using Go To "plese enter a longitude"
+    func showErrorAlert(title: String = "Error", message: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .destructive))
+            self.present(alert, animated: true)
+        }
+    }
+    
+    // Specifically for conformations
+    func showConfirmationAlert(
+        title: String,
+        message: String,
+        confirmTitle: String = "OK",
+        cancelTitle: String = "Cancel",
+        onConfirm: @escaping () -> Void
+    ) {
+        // This is to schedule the conformation alert using the main thread as soon as it finds an opening. Makes sure stuff runs correctly and doesn't cause a crash.
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            let confirm = UIAlertAction(title: confirmTitle, style: .default) { _ in onConfirm() }
+            let cancel = UIAlertAction(title: cancelTitle, style: .cancel)
+            alert.addAction(cancel)
+            alert.addAction(confirm)
+            self.present(alert, animated: true)
+        }
+    }
+    
+    // MARK: - Route Generation
     // Generate a route between two coordinates and draw it on the map
-    //taking 2 points (starting and ending) coordinates (lat/long)
+    // taking 2 points (starting and ending) coordinates (lat/long)
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
         // Clear existing overlays before drawing a new route
         mapView.removeOverlays(mapView.overlays)
         
-        //Routing doesn't work based off of coordinates it needs Map Item's. So this wraps the 1st and 2nd points in a MKMapItem (they are still coordinates but they are puttin on a disguise to become Map Item's)
-        //address is nil because we aren't giving a specific street address just a location
+        // Routing doesn't work based off of coordinates it needs Map Item's. So this wraps the 1st and 2nd points in a MKMapItem (they are still coordinates but they are puttin on a disguise to become Map Item's)
+        // address is nil because we aren't giving a specific street address just a location
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
         
-        
-        //This is creating a directions request which in simple terms is saying "Apple give me directoins from here to here"
-        //First part is creating an empty request object (getting the form to fill out
+        // This is creating a directions request which in simple terms is saying "Apple give me directoins from here to here"
+        // First part is creating an empty request object (getting the form to fill out
         let request = MKDirections.Request()
-        //this is filling out the form to say start at the map item named "source"
+        // this is filling out the form to say start at the map item named "source"
         request.source = source
-        //This is filling out the form to say ending at the map item named "destination"
+        // This is filling out the form to say ending at the map item named "destination"
         request.destination = destination
-        //This is just what type of route it will make
+        // This is just what type of route it will make
         request.transportType = .walking
         
-        //Create a directions calculator object and give it the form.
-        //This is the thing that is talking to apple servers to get the info.
+        // Create a directions calculator object and give it the form.
+        // This is the thing that is talking to apple servers to get the info.
         let directions = MKDirections(request: request)
         
-        //Go calculate route and when your done/or if something breaks, run this code
-        //This is ansynchronous so that the app doesn't freeze up while waiting for directions
+        // Go calculate route and when your done/or if something breaks, run this code
+        // This is ansynchronous so that the app doesn't freeze up while waiting for directions
         directions.calculate { [weak self] response, error in
             // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
             if let error = error {
-                print("Error calculating route: \(error.localizedDescription)")
+                self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
                 return
             }
-            //Apple might multiple route options this is saying grab the first or if there are none then stop.
-            //Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
+            // Apple might multiple route options this is saying grab the first or if there are none then stop.
+            // Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
             guard let route = response?.routes.first else { return }
-            //This is the part where the routes polyline is being pasted over the top of the map.
+            // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
         }
     }
     
+    // MARK: - MKMapViewDelegate
     // MKMapViewDelegate method to render the route polyline
-    //The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
+    // The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        //Check if this overlay is specifically a polyline or something else (there are differnt types like circles or polygon's) and just to draw it with default settings.
-        //The purpose of this is in the future I might need to have other overlays like circles and this ensures that it doesn't interact with those only polylines.
+        // Check if this overlay is specifically a polyline or something else (there are differnt types like circles or polygon's) and just to draw it with default settings.
+        // The purpose of this is in the future I might need to have other overlays like circles and this ensures that it doesn't interact with those only polylines.
         guard let polyline = overlay as? MKPolyline else {
             return MKOverlayRenderer(overlay: overlay)
         }
-        //create the polyline drawer object (making the artist)
+        // create the polyline drawer object (making the artist)
         let renderer = MKPolylineRenderer(polyline: polyline)
-        //what color the artist should use to draw
+        // what color the artist should use to draw
         renderer.strokeColor = .systemBlue
-        //how thick the pen should be when he draws
+        // how thick the pen should be when he draws
         renderer.lineWidth = 5
-        //gives the configured drawer back to the map. (gives the picture the artist drew back to the map that requested it)
+        // gives the configured drawer back to the map. (gives the picture the artist drew back to the map that requested it)
         return renderer
     }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        mapView.delegate = self
-        
-        //EX Cords Milan MO (1st value + is North - is South, 2nd value + is East - is West)
-        let cordinates = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
-        //Region is the displayed area on launch of the specified coordinates. (This is a 10 kilometers x 10 kilometers)
-        let region = MKCoordinateRegion(center: cordinates, latitudinalMeters: 10000, longitudinalMeters: 10000)
-        mapView.setRegion(region, animated: true)
-        
-        //listening for when the "tap" event happens on the mapView
-        //when it detects a tap it calls handleMapTap method
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
-        mapView.addGestureRecognizer(tapGesture)
-        
-        
-    }
-    
 }
 
-//Ideas:
+// MARK: - Ideas / Notes
 /*
  For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
@@ -284,7 +321,5 @@ class ViewController: UIViewController, MKMapViewDelegate {
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
  Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed.
  Switch print statements too UIAlertController that way you don't need a console open.
- 
- 
- */
+*/
 
