@@ -381,7 +381,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
  
  Issues:
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
- Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed.
- Switch print statements too UIAlertController that way you don't need a console open.
+ Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. Solved
+ Switch print statements too UIAlertController that way you don't need a console open. Solved
+Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route
 */
 
