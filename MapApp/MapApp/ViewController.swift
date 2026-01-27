@@ -361,6 +361,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
  Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetntially add to week 2 goals if easy enough.
+ Progress traker for route
+ Warnings for user to swtich speeds.
  
  
  Pseduo code thoughts:
@@ -369,7 +371,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
  Pros: simple to implement take a random lat and long within blank distance from the user make a point then make a route.
  Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
  
- okay talked with chatGPT it gave me a solution to try:
+ Okay talked with chatGPT it gave me a solution to try:
  take the users time or distance (if they choose time then convet that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
  Cont. on random route generation stuff:
  if/when a user is making a route and a point ends up in a location that is not possible to reach (middle of a lake, field, etc.) instead of scrapping the entire route go back a step and remake the new pin.
