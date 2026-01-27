@@ -318,7 +318,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
         } else {
             annotationView?.annotation = annotation
         }
-        
+        //makes grabbable area bigger
+        annotationView?.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
         return annotationView
     }
     
