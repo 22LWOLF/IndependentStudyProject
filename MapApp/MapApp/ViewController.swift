@@ -383,6 +383,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
  Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. Solved
  Switch print statements too UIAlertController that way you don't need a console open. Solved
-Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route
+Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route.
+        Possible solution: Make UI area for pin bigger.
+Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes.
 */
 
