@@ -24,6 +24,8 @@
   + Goal: Refine route generation, get very basic alternate route types started. Caching map data.
   + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections), [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute), and manual coordinate manipulation.
     * Objectives in detail:
+      - Can we make the pin control point larger
+      - Can we make routes that don't follow roads...
       - Ensure route generation is stable, no failures, consistent output for times and distances.
       - Implement "out-and-back" routes by just reversing the current route. A -> B reverse B -> A.
       - Begin testing logic for loops by generating mid-way points before returning to the starting position.
@@ -174,19 +176,20 @@
 
 
 ### Features:
-  1. Installed on phone [x]
-  2. displays map [x]
-  3. allows for user to insert points to generate a route [x]
-  4. allow user to insert coordinates for a location and go to it [x]
-  5. allow for dragging around of point [ ]
-  6. have time in corner [ ]
-  7. app settings [ ]
-  8. start route button [ ]
-  9. stop route boutton [ ]
-  10. Use current location [ ]
-  11. have the user insert a distance for route length [ ]
-  12. have user insert a target time for the route [ ]
-  13. updating the user speeds for the users walk, jog, run speed [ ]
+  1. [x] Installed on phone
+  2. [x] displays map
+  3. [x] allows for user to insert points to generate a route 
+  4. [x] allow user to insert coordinates for a location and go to it
+  5. [ ] allow for dragging around of point
+  6. [ ] have time in corner 
+  7. [ ] app settings
+  8. [ ] start route button
+  9. [ ] stop route boutton
+  10. [ ] Use current location
+  11. [ ] have the user insert a distance for route length
+  12. [ ] have user insert a target time for the route
+  13. [ ] updating the user speeds for the users walk, jog, run speed
+  14. [ ] Grid runs (if user is in a city or city like place make square routes instead of triangle).
 
 ### Unspecified:
   + Potentially register for the [Apple Developer Program](https://developer.apple.com/programs)
