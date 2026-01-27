@@ -176,8 +176,8 @@
 
 
 ### Features:
-  1. Installed on phone [x]
-  2. displays map [x]
+  1. [x] Installed on phone
+  2. [x] displays map
   3. allows for user to insert points to generate a route [x]
   4. allow user to insert coordinates for a location and go to it [x]
   5. allow for dragging around of point [ ]
