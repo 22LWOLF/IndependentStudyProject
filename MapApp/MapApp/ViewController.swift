@@ -77,12 +77,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
         // adding lat textfield
         alert.addTextField { textField in
             textField.placeholder = "Latitude (-90 to 90)"
-            textField.keyboardType = .decimalPad
+            textField.keyboardType = .numbersAndPunctuation
         }
         // adding long textfield
         alert.addTextField { textField in
             textField.placeholder = "Longitude (-180 to 180)"
-            textField.keyboardType = .decimalPad
+            textField.keyboardType = .numbersAndPunctuation
         }
         
         // creating the Go action
@@ -388,5 +388,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
 Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route.
         Possible solution: Make UI area for pin bigger.
 Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes.
+Have location finder have - symbol for negative coords.
 */
 
