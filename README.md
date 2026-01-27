@@ -24,6 +24,8 @@
   + Goal: Refine route generation, get very basic alternate route types started. Caching map data.
   + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections), [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute), and manual coordinate manipulation.
     * Objectives in detail:
+      - Can we make the pin control point larger
+      - Can we make routes that don't follow roads...
       - Ensure route generation is stable, no failures, consistent output for times and distances.
       - Implement "out-and-back" routes by just reversing the current route. A -> B reverse B -> A.
       - Begin testing logic for loops by generating mid-way points before returning to the starting position.
