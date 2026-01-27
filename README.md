@@ -190,6 +190,11 @@
   12. [ ] have user insert a target time for the route
   13. [ ] updating the user speeds for the users walk, jog, run speed
   14. [ ] Grid runs (if user is in a city or city like place make square routes instead of triangle).
+  15. [ ] updating the user speeds for the users walk, jog, run speed, would be in settings/account
+  16. [ ] way to check weather for your area in the app
+  17. [ ] way to look at recently and starred routes
+  18. [x] way to start a route
+  19. [ ] simple U.I.
 
 ### Unspecified:
   + Potentially register for the [Apple Developer Program](https://developer.apple.com/programs)
