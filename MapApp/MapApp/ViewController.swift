@@ -21,6 +21,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // White box at top of screen for UI
     @IBOutlet weak var headerBox: UIView!
     @IBOutlet weak var mapView: MKMapView!
+    @IBOutlet weak var routeInfoLabel: UILabel!
     
     // MARK: - Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
@@ -276,6 +277,17 @@ class ViewController: UIViewController, MKMapViewDelegate {
             // Apple might multiple route options this is saying grab the first or if there are none then stop.
             // Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
             guard let route = response?.routes.first else { return }
+            
+            // Turns distance given (meters) into miles
+            let distanceMiles = route.distance/1609.34
+            // Turns time given (seconds) into minutes
+            let timeMinutes = route.expectedTravelTime/60.0
+            
+            // The format and string that will be displayed with the given info.
+            let infoText = String(format: "%.2f miles • ~%.0f min", distanceMiles, timeMinutes)
+            // Displays info from before on the routeInfoLabel at top middle of screen.
+            self?.routeInfoLabel.text = infoText
+            
             // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
         }
