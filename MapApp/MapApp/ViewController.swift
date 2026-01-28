@@ -15,6 +15,12 @@ class RouteAnnotation: MKPointAnnotation {
     var index: Int = 0
 }
 
+// MARK: - StyledPolyline
+class StyledPolyline: MKPolyline {
+    enum Kind { case forward, backward }
+    var kind: Kind = .forward
+}
+
 class ViewController: UIViewController, MKMapViewDelegate {
     
     // MARK: - Outlets
@@ -61,7 +67,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             showInfoAlert(message: "Please place 2 pins")
             return
         }
-        generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
     }
     
     @IBAction func clearRouteBTN(_ sender: UIButton) {
@@ -240,6 +246,23 @@ class ViewController: UIViewController, MKMapViewDelegate {
         }
     }
     
+    // MARK: - Route Generation Helpers
+    
+    // Function for converting route data (time, distance, etc.)
+    func conversions(for route: MKRoute) -> (distance: String, expectedTravelTime: String) {
+        // Turns distance given (meters) into miles
+        let distanceMiles = route.distance/1609.34
+        // Turns time given (seconds) into minutes
+        let timeMinutes = route.expectedTravelTime/60.0
+        
+        // The format and string that will be displayed with the given info.
+        let infoText = String(format: "%.2f miles • ~%.0f min", distanceMiles, timeMinutes)
+        // Displays info from before on the routeInfoLabel at top middle of screen.
+        self.routeInfoLabel.text = infoText
+        
+        return (String(format: "%.2f", distanceMiles), String(format: "%.0f", timeMinutes))
+    }
+    
     // MARK: - Route Generation
     
     // For getting poly line coordinates (how the route is specifically laid out.
@@ -254,9 +277,57 @@ class ViewController: UIViewController, MKMapViewDelegate {
         for i in 0..<pointCount {
             let point = points[i]
             coordinates.append(point.coordinate)
-            print(coordinates)
         }
         return coordinates
+    }
+    
+    // This will be the function called when out-and-back route type is selected and a route is generated.
+    func generateOutAndBackRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
+        mapView.removeOverlays(mapView.overlays)
+        
+        let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
+        let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
+        
+        let request = MKDirections.Request()
+        request.source = source
+        request.destination = destination
+        request.transportType = .walking
+        
+        let directions = MKDirections(request: request)
+        
+        directions.calculate { [weak self] response, error in
+            if let error = error {
+                self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let route = response?.routes.first else { return }
+            
+            // DOUBLED for out-and-back
+            self?.conversions(for: route)
+            let totalDistance = route.distance * 2
+            let totalTime = route.expectedTravelTime * 2
+            
+            // Add forward route
+            self?.mapView.addOverlay(route.polyline)
+            
+            // Get coordinates and reverse them
+            let forwardCoords = self?.getCoordinates(from: route.polyline)
+            let backwardCoords = forwardCoords?.reversed()
+            
+            // Create backward polyline with custom style marker
+            if let backwardCoords = backwardCoords {
+                let backwardArray = Array(backwardCoords)
+                let backwardPolyline = StyledPolyline(coordinates: backwardArray, count: backwardArray.count)
+                backwardPolyline.kind = .backward
+                self?.mapView.addOverlay(backwardPolyline)
+            }
+        }
+    }
+    
+    // This will be the function called when loop route type is selected and route is generated.
+    func loopRoute () {
+        
     }
     
     // Generate a route between two coordinates and draw it on the map
@@ -296,16 +367,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             // Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
             guard let route = response?.routes.first else { return }
             
-            // Turns distance given (meters) into miles
-            let distanceMiles = route.distance/1609.34
-            // Turns time given (seconds) into minutes
-            let timeMinutes = route.expectedTravelTime/60.0
-            
-            // The format and string that will be displayed with the given info.
-            let infoText = String(format: "%.2f miles • ~%.0f min", distanceMiles, timeMinutes)
-            // Displays info from before on the routeInfoLabel at top middle of screen.
-            self?.routeInfoLabel.text = infoText
-            
+            self?.conversions(for: route)
             // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
             
@@ -318,19 +380,28 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // MKMapViewDelegate method to render the route polyline
     // The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        // Check if this overlay is specifically a polyline or something else (there are differnt types like circles or polygon's) and just to draw it with default settings.
-        // The purpose of this is in the future I might need to have other overlays like circles and this ensures that it doesn't interact with those only polylines.
-        guard let polyline = overlay as? MKPolyline else {
-            return MKOverlayRenderer(overlay: overlay)
+        if let styled = overlay as? StyledPolyline {
+            let renderer = MKPolylineRenderer(polyline: styled)
+            switch styled.kind {
+            case .forward:
+                renderer.strokeColor = .systemBlue
+                renderer.lineWidth = 5
+            case .backward:
+                renderer.strokeColor = .systemRed
+                renderer.lineWidth = 2
+                renderer.lineDashPattern = [2,5]
+            }
+            return renderer
         }
-        // create the polyline drawer object (making the artist)
-        let renderer = MKPolylineRenderer(polyline: polyline)
-        // what color the artist should use to draw
-        renderer.strokeColor = .systemBlue
-        // how thick the pen should be when he draws
-        renderer.lineWidth = 5
-        // gives the configured drawer back to the map. (gives the picture the artist drew back to the map that requested it)
-        return renderer
+
+        if let polyline = overlay as? MKPolyline {
+            let renderer = MKPolylineRenderer(polyline: polyline)
+            renderer.strokeColor = .systemBlue
+            renderer.lineWidth = 5
+            return renderer
+        }
+
+        return MKOverlayRenderer(overlay: overlay)
     }
     
     // MARK: - MKMapViewDelegate (Annotation Views)
@@ -381,6 +452,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
             
             // Automatically regenerate route if we have both points
+            // Potentially remove this, not sure yet
             if selectedCoordinates.count == 2 {
                 generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
             }
@@ -394,7 +466,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
- Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetntially add to week 2 goals if easy enough.
+ Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetially add to week 2 goals if easy enough.
  Progress traker for route
  Warnings for user to swtich speeds.
  
@@ -422,6 +494,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
 Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route.
         Possible solution: Make UI area for pin bigger.
 Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes.
-Have location finder have - symbol for negative coords.
+Have location finder have - symbol for negative coords. SOLVED
+When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think).
+ 
+ 
+ Questions for Claude:
+ 
+ Okay I ran out of prompts and I used GPT to help me walkthrough some of the stuff, but it kind of just generated me answers, but anyways. I wanted to have different color lines for A->B and B->A for the out and back route type. The method that GPT gave me was using subclasses and stuff with ".kind" and styles or something pretty lost on that so could you explain it. I also would like to redo my entire app to where it is just doing functions like we mentioned. Or idk, but I know that for simplicity and learning I should do it to where I remake all of the stuff and tweak it for each route type but I think it would look better and stuff if I just had a generate route function, that I can then call in the generateOutAndBackRoute and then just tweak what I need to just for that route type. Also I am realizing I have no idea what I'm doing I don't understand like why functions need to have the parameters or whatever or how to fix them or anything I'm just lost. I would like it if we could run through litteraly every single line of code and you explain/quiz me on what it does and why it does, using like logical examples. I just feel lost at the moment. I think the project is getting to the point where me using you guys for answers is starting to bite me in the ass since there is stuff I didn't make talking to stuff I didn't make and etc. So I just need help.
 */
+
+
 
