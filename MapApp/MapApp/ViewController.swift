@@ -17,6 +17,7 @@ class RouteAnnotation: MKPointAnnotation {
 
 // MARK: - StyledPolyline
 class StyledPolyline: MKPolyline {
+    // Switch for if a polyline is forward or backward (default is foward)
     enum Kind { case forward, backward }
     var kind: Kind = .forward
 }
@@ -249,18 +250,15 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // MARK: - Route Generation Helpers
     
     // Function for converting route data (time, distance, etc.)
-    func conversions(for route: MKRoute) -> (distance: String, expectedTravelTime: String) {
+    func updateRouteInfoLabel(distance: CLLocationDistance, time: TimeInterval) {
         // Turns distance given (meters) into miles
-        let distanceMiles = route.distance/1609.34
+        let distanceMiles = distance/1609.34
         // Turns time given (seconds) into minutes
-        let timeMinutes = route.expectedTravelTime/60.0
-        
+        let timeMinutes = time/60.0
         // The format and string that will be displayed with the given info.
         let infoText = String(format: "%.2f miles • ~%.0f min", distanceMiles, timeMinutes)
         // Displays info from before on the routeInfoLabel at top middle of screen.
-        self.routeInfoLabel.text = infoText
-        
-        return (String(format: "%.2f", distanceMiles), String(format: "%.0f", timeMinutes))
+        routeInfoLabel.text = infoText
     }
     
     // MARK: - Route Generation
@@ -304,9 +302,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
             guard let route = response?.routes.first else { return }
             
             // DOUBLED for out-and-back
-            self?.conversions(for: route)
             let totalDistance = route.distance * 2
             let totalTime = route.expectedTravelTime * 2
+            self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
             
             // Add forward route
             self?.mapView.addOverlay(route.polyline)
@@ -367,7 +365,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             // Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
             guard let route = response?.routes.first else { return }
             
-            self?.conversions(for: route)
+            self?.updateRouteInfoLabel(distance: route.distance, time: route.expectedTravelTime)
             // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
             
@@ -379,6 +377,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // MARK: - MKMapViewDelegate
     // MKMapViewDelegate method to render the route polyline
     // The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
+    // as? means try to convert this syledPolyline but it might fail.
+    // if let means that if that conversion worked then do this code.
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
