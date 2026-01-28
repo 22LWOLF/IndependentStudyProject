@@ -241,6 +241,24 @@ class ViewController: UIViewController, MKMapViewDelegate {
     }
     
     // MARK: - Route Generation
+    
+    // For getting poly line coordinates (how the route is specifically laid out.
+    func getCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D]{
+        // Grabs all the points that make up the polyline
+        let points = polyline.points()
+        // Counts all the points used in the polyline
+        let pointCount = polyline.pointCount
+        
+        var coordinates: [CLLocationCoordinate2D] = []
+        // For points 0 to pointCount-1 store the coords
+        for i in 0..<pointCount {
+            let point = points[i]
+            coordinates.append(point.coordinate)
+            print(coordinates)
+        }
+        return coordinates
+    }
+    
     // Generate a route between two coordinates and draw it on the map
     // taking 2 points (starting and ending) coordinates (lat/long)
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
@@ -290,6 +308,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
             
             // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
+            
+            self?.getCoordinates(from: route.polyline)
+            
         }
     }
     
