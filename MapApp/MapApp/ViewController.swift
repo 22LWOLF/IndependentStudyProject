@@ -600,11 +600,19 @@ Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "
 Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes. SOLVED
 Have location finder have - symbol for negative coords. SOLVED
 When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think). SOLVED
+When messing with UI stuff I found 2 problems:
+    1. The screen sizes and not having automatic adjustments for phone model launching means that stuff is not consistent between phone sizes.
+    2. The 2 different "types" of phone models Hill and Island. Hill (12 pro max) have the area around the camera come down from the top and is connected to the edge of the phone. Island (17 pro) has the area around the camera floating so screen runs inbetween it and the edge of the screen. I believe that the Hill models set there safety area/screen to the bottom (spot closest to the home "button") as the their edge, where as the Island models set the saftey area/screen to the actual edge of the screen. This is speculation but that is what I got out of it after messing around with it.
  
  
  Questions for Claude:
  
     In your pseduocode for loop generation you provided me, in the Waypoint generation section why does it matter to ensure that one point isn't too close to another point? I already added some stuff like instead of completely random the user CAN select a cardinal direction to skew towards but a random route is a random route. Wanted to know your reasoning for that.
+    Thoughts on my issues I have found out when messing with the apps UI elements and constraints. (At bottom of view controller). I know that it isn't a priority at this second but I wanted to get at least some of the concrete parts of the app situated (settings and Go To buttons, label for distance and time, Go and Cancel buttons). Currently my UI looks good for the iPhone 17 Pro. I'd like to have it at least look decent on everything after like the 13 (most common currently).
+ 
+ 1/30/2026
+ Stuff I did:
+    Added in different route type selector, works for both generate route button and also drag and drop generation. Added in basic pseduo code for generateLoop and randomCoordinateGenerator functions. Finally, I attempted to mess with constraints to make my UI more consistant across different devices and ended up running into issues with having stuff look good for more than 1 device because of not knowing/being able to have automatic adjustments for like screen sizes and stuff.
  
 */
 
