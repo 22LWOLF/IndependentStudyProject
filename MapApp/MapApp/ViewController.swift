@@ -348,9 +348,76 @@ class ViewController: UIViewController, MKMapViewDelegate {
         }
     }
     
-    // This will be the function called when loop route type is selected and route is generated.
-    func loopRoute () {
+    // MARK: - Loop Helper Functions
+    
+    func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double) -> CLLocationCoordinate2D {
+        // Purpose: Generate a random coordinate within a radius of a center point (potentially within a set angle)
+        //Inputs:
+            // center: CLLocationCoordinate2D (starting point)
+                // Eventually defualt will be user location
+            // radius: Double (max distance in meters)
         
+        // Output:
+            // CLLocationCoordinate2D (random point)
+        
+        // Algo:
+            // Generate random angle: 0 to 360 degrees (maybe change to set at bottom for more info) convert to radians
+            // Generate random distance: 0.5 * radius to radius
+            // Convert angle + distance to latitude/longitude offset
+            // Apply offset to center coordinate
+            // Return new coord.
+        
+        // Reference:
+            //Earth radius ≈ 6371000 meters
+            //Latitude offset = (distance * cos(angle)) / (Earth radius * π/180)
+            //Longitude offset = (distance * sin(angle)) / (Earth radius * π/180 * cos(centerLat))
+        return CLLocationCoordinate2D()
+    }
+    
+    
+    
+    // This will be the function called when loop route type is selected and route is generated.
+    // WIP
+    func loopRoute () {
+        /* Pseduocode:
+        // Setup:
+            // Calculate radius from desired distance: r = distance/(2pi)
+                // for now that value will just be inserted in code
+            // Generate N random waypoints around the start
+                // this will also just be in code
+        // Waypoint Generation:
+            // Generate a semi-random angle within guide lines for cardnial direction choosen (further detail at bottom)
+            // Generate a random distance from 0.5r to r
+            // Calculate the coordinate using trig
+            // Maybe validate that points aren't too close to other points.
+        // Route segement generation:
+            // Generate a route: Start (defualt should be user location when that is implemented) -> Waypoint 1
+            // Wait for completion
+            // Generate route: Waypoint 1 -> Waypoint 2
+            // Wait again
+            // Generate route: Waypoint 2 -> start
+            // Wait again
+            // This amount will change depending on the amount of points the user wants.
+        // Validation:
+            // Sum all segment distances (if user put in time instead of distance convert sum into distance)
+            // Check if total is within +10% of target
+                // Subject to change since this needs like real world testing
+            // If not, retry with new waypoints.
+            // Only allow for up to X retries
+                // Same as target forgiveness will need to be tested to get a proper #.
+            //Display:
+                // Add all route segements as overlays
+                // use different colors for each segement
+                    // Mostly for testing but can also be used later for setting tempos (walk, jog, run)
+                // Update info label with total distance and estimated time
+        // Issues/Challenges:
+            // Need asych route generation (sequential chaining)
+            // Random waypoints may land in unreachable locations (middle of a forest, water, etc.)
+            // Need retry logic for failed route segments
+                // Note this is different then retrying the ENTIRE route just a specific segement.
+            // Distance accuracy depends on waypoint placement.'
+         */
+            
     }
     
     // Generate a route between two coordinates and draw it on the map
@@ -500,11 +567,10 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
 // MARK: - Ideas / Notes
 /*
- For week 3 and the alternate route types I will need to add in a way to measure the time and distance it will take for routes to show like out and back. Also not sure if I will set up UI for that or just have it be something in code.
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
- Be able to drag around placed pins. Would be a nice feature that way you don't have to restart the entire route you planned out. Potetially add to week 2 goals if easy enough.
+ For random loop generation let the user select a cardinal direction to head in (4 90 degree angles). EX: North would be from 315 degrees - 45 degrees. East would be from 45 to 135. Etc.
  Progress traker for route
  Warnings for user to swtich speeds.
  
@@ -527,18 +593,19 @@ class ViewController: UIViewController, MKMapViewDelegate {
  
  Issues:
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
- Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. Solved
- Switch print statements too UIAlertController that way you don't need a console open. Solved
-Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route.
+ Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. SOLVED
+ Switch print statements too UIAlertController that way you don't need a console open. SOLVED
+Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route. SOLVED
         Possible solution: Make UI area for pin bigger.
-Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes.
+Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes. SOLVED
 Have location finder have - symbol for negative coords. SOLVED
-When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think).
+When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think). SOLVED
  
  
  Questions for Claude:
  
- Okay I ran out of prompts and I used GPT to help me walkthrough some of the stuff, but it kind of just generated me answers, but anyways. I wanted to have different color lines for A->B and B->A for the out and back route type. The method that GPT gave me was using subclasses and stuff with ".kind" and styles or something pretty lost on that so could you explain it. I also would like to redo my entire app to where it is just doing functions like we mentioned. Or idk, but I know that for simplicity and learning I should do it to where I remake all of the stuff and tweak it for each route type but I think it would look better and stuff if I just had a generate route function, that I can then call in the generateOutAndBackRoute and then just tweak what I need to just for that route type. Also I am realizing I have no idea what I'm doing I don't understand like why functions need to have the parameters or whatever or how to fix them or anything I'm just lost. I would like it if we could run through litteraly every single line of code and you explain/quiz me on what it does and why it does, using like logical examples. I just feel lost at the moment. I think the project is getting to the point where me using you guys for answers is starting to bite me in the ass since there is stuff I didn't make talking to stuff I didn't make and etc. So I just need help.
+    In your pseduocode for loop generation you provided me, in the Waypoint generation section why does it matter to ensure that one point isn't too close to another point? I already added some stuff like instead of completely random the user CAN select a cardinal direction to skew towards but a random route is a random route. Wanted to know your reasoning for that.
+ 
 */
 
 
