@@ -68,7 +68,21 @@ class ViewController: UIViewController, MKMapViewDelegate {
             showInfoAlert(message: "Please place 2 pins")
             return
         }
-        generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        // Check which segement is selected
+        let selectedIndex = routeTypeSelector.selectedSegmentIndex
+        
+        switch selectedIndex {
+        case 0: // One-way
+            generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        case 1: // Out-and-back
+            generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        case 2: //loop
+            //for now just print alert cause I don't got the code
+            showInfoAlert(message: "loop route is not implemented yet")
+        default:
+            break
+        }
+
     }
     
     @IBAction func clearRouteBTN(_ sender: UIButton) {
@@ -76,6 +90,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.removeAnnotations(mapView.annotations)
         mapView.removeOverlays(mapView.overlays)
     }
+    
+    // User selects the route type
+    @IBOutlet weak var routeTypeSelector: UISegmentedControl!
     
     // MARK: - Coordinate Entry UI
     @objc func showCoordinateEntry() {
@@ -262,6 +279,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
     }
     
     // MARK: - Route Generation
+    
+    // Route type cases
+    enum RouteType{
+        case oneWay
+        case outAndBack
+        case loop
+    }
+    
     
     // For getting poly line coordinates (how the route is specifically laid out.
     func getCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D]{
