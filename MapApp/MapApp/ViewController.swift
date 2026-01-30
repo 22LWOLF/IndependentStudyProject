@@ -413,7 +413,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 renderer.lineWidth = 5
             case .backward:
                 renderer.strokeColor = .systemRed
-                renderer.lineWidth = 2
+                renderer.lineWidth = 3
                 renderer.lineDashPattern = [2,5]
             }
             return renderer
@@ -479,7 +479,20 @@ class ViewController: UIViewController, MKMapViewDelegate {
             // Automatically regenerate route if we have both points
             // Potentially remove this, not sure yet
             if selectedCoordinates.count == 2 {
-                generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+                // Check which segement is selected
+                let selectedIndex = routeTypeSelector.selectedSegmentIndex
+                
+                switch selectedIndex {
+                case 0: // One-way
+                    generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+                case 1: // Out-and-back
+                    generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+                case 2: //loop
+                    //for now just print alert cause I don't got the code
+                    showInfoAlert(message: "loop route is not implemented yet")
+                default:
+                    break
+                }
             }
         }
     }
