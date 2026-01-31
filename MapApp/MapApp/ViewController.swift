@@ -48,6 +48,20 @@ class ViewController: UIViewController, MKMapViewDelegate {
         // when it detects a tap it calls handleMapTap method
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
+        
+        let testCenter = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
+        let userInputMiles = 3.1 // Value user will enter
+        let testRadius = userInputMiles * 1609.34 // ~5km
+        
+        for i in 1...5 {
+            let randomPoint = generateRandomCoordinate(around: testCenter, radius: testRadius)
+            print("Random point \(i): \(randomPoint.latitude), \(randomPoint.longitude)")
+            
+            let pin = MKPointAnnotation()
+            pin.coordinate = randomPoint
+            pin.title = "Test \(i)"
+            mapView.addAnnotation(pin)
+        }
     }
     
     override func viewDidLayoutSubviews() {
@@ -371,7 +385,28 @@ class ViewController: UIViewController, MKMapViewDelegate {
             //Earth radius ≈ 6371000 meters
             //Latitude offset = (distance * cos(angle)) / (Earth radius * π/180)
             //Longitude offset = (distance * sin(angle)) / (Earth radius * π/180 * cos(centerLat))
-        return CLLocationCoordinate2D()
+        
+        let randomAngleDegrees = Double.random(in: 0...360)
+        
+        let randomAngleRadians = randomAngleDegrees * (.pi / 180)
+        
+        
+        let randomDistance = Double.random(in: (0.5 * radius)...radius)
+        
+        let earthRadius = 6371000.0
+        let latOffset = (randomDistance * cos(randomAngleRadians)) / earthRadius
+        
+        let centerLatRadians = center.latitude * (.pi / 180)
+        let longOffset = (randomDistance * sin(randomAngleRadians)) / (earthRadius * cos(centerLatRadians))
+        
+        let latOffsetDegrees = latOffset * (180 / .pi)
+        let lonOffsetDegrees = longOffset * (180 / .pi)
+        
+        let newLatitude = center.latitude + latOffsetDegrees
+        let newLongitude = center.longitude + lonOffsetDegrees
+        
+        return CLLocationCoordinate2D(latitude: newLatitude, longitude: newLongitude)
+
     }
     
     
@@ -608,12 +643,24 @@ When messing with UI stuff I found 2 problems:
  Questions for Claude:
  
     In your pseduocode for loop generation you provided me, in the Waypoint generation section why does it matter to ensure that one point isn't too close to another point? I already added some stuff like instead of completely random the user CAN select a cardinal direction to skew towards but a random route is a random route. Wanted to know your reasoning for that.
+ 
+    Answer: So it might not be neccesarry to check distances and stuff with the cardinal direction idea, but I will have to see when I actually test it out to determine.
+ 
     Thoughts on my issues I have found out when messing with the apps UI elements and constraints. (At bottom of view controller). I know that it isn't a priority at this second but I wanted to get at least some of the concrete parts of the app situated (settings and Go To buttons, label for distance and time, Go and Cancel buttons). Currently my UI looks good for the iPhone 17 Pro. I'd like to have it at least look decent on everything after like the 13 (most common currently).
+ 
+    Answer: I'll probably use the 13 as a base when making it and kinda just hope it looks meh on other models (13 since its most common rn)
  
  1/30/2026
  Stuff I did:
     Added in different route type selector, works for both generate route button and also drag and drop generation. Added in basic pseduo code for generateLoop and randomCoordinateGenerator functions. Finally, I attempted to mess with constraints to make my UI more consistant across different devices and ended up running into issues with having stuff look good for more than 1 device because of not knowing/being able to have automatic adjustments for like screen sizes and stuff.
  
+ 1/31/2026 Saturday
+    Issue I found: when I set the radius for the user and then generate the random points they "as the crow flys" are within that bounds, but when I tested it using making a point from the center to the random point manually it was significantly longer (meaning that it obv. doesn't take into account winding roads and stuff like that). I think a potential solution for this would be when the random points are generated it takes the start position (center) places that point and attempts to make a route inbetween them. Then if succusfull grab the info about the distance for the "generated" (just created, in the BG) route and then see if that falls within the users max distance. Then this could also make getting specific times more easily done. This of course would also needs lots of testing and still require a big give and take for values but when you are putting in big values (10 mile distance) it can make that into more like a 15 mile run.
+    Thoughts for Claude and myself:
+        So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
+        I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
+        I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
+        I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
 */
 
 
