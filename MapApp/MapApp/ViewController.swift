@@ -145,6 +145,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 return
             }
             
+            
+            
             // taking string from textfield's and converting to double if it isn't a value then it will give error
             guard let lat = Double(latText) else {
                 self.showErrorAlert(message: "Latitude is not a valid number")
@@ -155,7 +157,20 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 return
             }
             
-            // checking the now double values to ensure that they fall within range possible for lat and long.
+            var safeLat = lat
+            var safeLong = long
+            var needsPoleWarning = false
+
+            // Clamp latitude to just inside valid range to avoid MapKit pole issues
+            if safeLat <= -90.0 {
+                safeLat = -89.9999
+                needsPoleWarning = true
+            } else if safeLat >= 90.0 {
+                safeLat = 89.9999
+                needsPoleWarning = true
+            }
+
+            // Validate original inputs are within allowed ranges
             guard lat >= -90.0, lat <= 90.0 else {
                 self.showErrorAlert(message: "Latitude out of range (-90 to 90)")
                 return
@@ -164,15 +179,25 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 self.showErrorAlert(message: "Longitude out of range (-180 to 180)")
                 return
             }
-            
-            // Use the coordinates: drop a pin and center the map
-            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
-            
-            // display area around pin
-            let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 10000, longitudinalMeters: 10000)
-            
-            // move to pinned area
-            self.mapView.setRegion(region, animated: true)
+
+            // Inform user if we had to clamp latitude at the poles
+            if needsPoleWarning {
+                self.showInfoAlert(title: "Adjusted Latitude", message: "Latitude at the exact pole is not supported. Adjusted to \(String(format: "%.4f", safeLat)).")
+            }
+
+            // Use the clamped coordinates to avoid crashes
+            let coordinate = CLLocationCoordinate2D(latitude: safeLat, longitude: safeLong)
+
+            // Define a reasonable region around the coordinate
+//            let region = MKCoordinateRegion(
+//                center: coordinate,
+//                latitudinalMeters: 10000,
+//                longitudinalMeters: 10000
+//            )
+//
+//            self.mapView.setRegion(region, animated: true)
+            self.safelyCenterMap(on: coordinate, distance: 10000)
+
         }
         
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
@@ -185,6 +210,16 @@ class ViewController: UIViewController, MKMapViewDelegate {
         
         // show alert on screen
         present(alert, animated: true)
+    }
+    
+    // MARK: - Map Centering Helper
+    private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
+        // Use camera-based centering to avoid invalid longitude spans near the poles
+        let camera = MKMapCamera(lookingAtCenter: coordinate,
+                                 fromDistance: max(100, distance),
+                                 pitch: 0,
+                                 heading: 0)
+        mapView.setCamera(camera, animated: true)
     }
     
     // MARK: - Gesture Handling
@@ -627,14 +662,13 @@ class ViewController: UIViewController, MKMapViewDelegate {
  
  
  
- 
  Issues:
  If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
  Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. SOLVED
  Switch print statements too UIAlertController that way you don't need a console open. SOLVED
 Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route. SOLVED
         Possible solution: Make UI area for pin bigger.
-Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swithced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes. SOLVED
+Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swichced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes. SOLVED
 Have location finder have - symbol for negative coords. SOLVED
 When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think). SOLVED
 When messing with UI stuff I found 2 problems:
@@ -663,12 +697,12 @@ When messing with UI stuff I found 2 problems:
  
     Thoughts for Claude and myself:
         So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
-        Answer: Maybe 1/6 is too small will probably do more like .35 ish.
     
         I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
         I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
 */
+
 
 
 
