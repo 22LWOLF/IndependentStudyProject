@@ -40,6 +40,7 @@
       - Use MKDirections to create multiple smaller routes that connect sequentially (EX: A->B, B->C, C->A).
       - Then combine the route segments into the full loop route.
       -  Consider if you want to build the route all at once or segment by segment.  Consider whether/how pins can be used.
+      -  Determine how to "lock" points allowing for moving points without worrying about starting a new route.
         
 ### Week 5:
   + Goal: Implement Route generation that will use user-inputted distance or time.
