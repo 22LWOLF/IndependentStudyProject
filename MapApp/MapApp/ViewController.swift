@@ -32,11 +32,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // MARK: - Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
+    private var pinsLocked: Bool = false
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         mapView.delegate = self
+        
+        pinsLocked = (pinLockSelector.selectedSegmentIndex == 1) // 1 = locked
         
         // EX Cords Milan MO (1st value + is North - is South, 2nd value + is East - is West)
         let cordinates = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
@@ -64,6 +67,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
             pin.title = "Test \(i)"
             mapView.addAnnotation(pin)
         }
+        
+        
     }
     
     override func viewDidLayoutSubviews() {
@@ -109,6 +114,19 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // User selects the route type
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
+    
+    // User selects if they want pins locked or unlocked
+    @IBOutlet weak var pinLockSelector: UISegmentedControl!
+    
+    
+    @IBAction func pinLockChanged(_ sender: UISegmentedControl) {
+        pinsLocked = (sender.selectedSegmentIndex == 1)
+        if pinsLocked {
+            showInfoAlert(message: "Pin placement is now locked")
+        } else {
+            showInfoAlert(message: "Pin placement is now unlocked")
+        }
+    }
     
     // MARK: - Coordinate Entry UI
     @objc func showCoordinateEntry() {
@@ -158,7 +176,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
             
             var safeLat = lat
-            var safeLong = long
             var needsPoleWarning = false
 
             // Clamp latitude to just inside valid range to avoid MapKit pole issues
@@ -186,7 +203,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
 
             // Use the clamped coordinates to avoid crashes
-            let coordinate = CLLocationCoordinate2D(latitude: safeLat, longitude: safeLong)
+            let coordinate = CLLocationCoordinate2D(latitude: safeLat, longitude: long)
 
             // Define a reasonable region around the coordinate
 //            let region = MKCoordinateRegion(
@@ -212,6 +229,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
         present(alert, animated: true)
     }
     
+    
+    
     // MARK: - Map Centering Helper
     private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
         // Use camera-based centering to avoid invalid longitude spans near the poles
@@ -224,6 +243,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // MARK: - Gesture Handling
     @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
+        
+        // Respect pin lock
+        if pinsLocked {
+            return
+        }
+        
         // gets the tap location in the view (screen pixels)
         // EX: tap found at 100 pixels from the top of screen and 300 pixels from right of screen.
         let locationInView = gesture.location(in: mapView)
@@ -232,8 +257,13 @@ class ViewController: UIViewController, MKMapViewDelegate {
         // it basicall takes the tap location in pixels and then converts that into the lat/long for the map.
         let coordinate = mapView.convert(locationInView, toCoordinateFrom: mapView)
         
+        // Sets the amount of max pins = to the route type
+        let selectedIndex = routeTypeSelector.selectedSegmentIndex
+        let maxPins = (selectedIndex == 2) ? 3 : 2  // loop = 3 others = 2
+        
+        
         // checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
-        if selectedCoordinates.count >= 2 {
+        if selectedCoordinates.count >= maxPins {
             // removes coordinates (lat and long)
             selectedCoordinates.removeAll()
             
@@ -241,9 +271,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             removeAnnotations()
             
             mapView.removeOverlays(mapView.overlays)
-            
-            // testing to see if coords and annotations are being removed.
-            print("Removed previous 2 pins, annotations, and old route")
+
         }
         
         // TEST TO SEE IF WORKS JUST PRINT FOR NOW
@@ -253,7 +281,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
         selectedCoordinates.append(coordinate)
         
         // alters the title of the coordinate depending if it is the 1st or 2nd annotation
-        let label = (selectedCoordinates.count == 1) ? "Start" : "Stop"
+        let label: String
+        if selectedCoordinates.count == 1 {
+            label = "Start"
+        } else if selectedIndex == 2 { // loop mode, 3rd pin is C
+            label = (selectedCoordinates.count == 2) ? "B" : "C"
+        } else {
+            label = "Stop"
+        }
         // adds annotation to the map with the coensiding name
         addAnnotation(at: coordinate, title: label)
     }
@@ -277,8 +312,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // MARK: - Alert Helpers
     // Centralized helpers for presenting feedback to the user.
-    // Use these instead of print for user-facing messages.
-    // This is for giving information to the user EX: "please place 2 pins"
     func showInfoAlert(title: String = "Info", message: String) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -450,18 +483,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // This will be the function called when loop route type is selected and route is generated.
     // WIP
-    func loopRoute () {
+    func generateLoopRoute () {
         /* Pseduocode:
-        // Setup:
-            // Calculate radius from desired distance: r = distance/(2pi)
-                // for now that value will just be inserted in code
-            // Generate N random waypoints around the start
-                // this will also just be in code
-        // Waypoint Generation:
-            // Generate a semi-random angle within guide lines for cardnial direction choosen (further detail at bottom)
-            // Generate a random distance from 0.5r to r
-            // Calculate the coordinate using trig
-            // Maybe validate that points aren't too close to other points.
         // Route segement generation:
             // Generate a route: Start (defualt should be user location when that is implemented) -> Waypoint 1
             // Wait for completion
@@ -677,6 +700,7 @@ When messing with UI stuff I found 2 problems:
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
         I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
 */
+
 
 
 
