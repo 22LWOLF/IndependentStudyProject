@@ -85,12 +85,16 @@ class ViewController: UIViewController, MKMapViewDelegate {
     }
     
     @IBAction func generateRouteBTN(_ sender: UIButton) {
-        guard selectedCoordinates.count == 2 else {
-            showInfoAlert(message: "Please place 2 pins")
+        let selectedIndex = routeTypeSelector.selectedSegmentIndex
+        let maxPins = requiredPinCount(for: selectedIndex)
+
+        // Validate exact pin count for the selected route type
+        guard selectedCoordinates.count == maxPins else {
+            let needed = (selectedIndex == 2) ? "3 pins for a loop" : "2 pins"
+            showInfoAlert(message: "Please place \(needed)")
             return
         }
         // Check which segement is selected
-        let selectedIndex = routeTypeSelector.selectedSegmentIndex
         
         switch selectedIndex {
         case 0: // One-way
@@ -99,7 +103,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
         case 2: //loop
             //for now just print alert cause I don't got the code
-            showInfoAlert(message: "loop route is not implemented yet")
+            generateLoopRoute(a: selectedCoordinates[0], b: selectedCoordinates[1], c: selectedCoordinates[2])
         default:
             break
         }
@@ -241,6 +245,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
         mapView.setCamera(camera, animated: true)
     }
     
+    // MARK: - Pin Count Helper
+    private func requiredPinCount(for selectedIndex: Int) -> Int {
+        // 0 = one-way (2 pins), 1 = out-and-back (2 pins), 2 = loop (3 pins)
+        return (selectedIndex == 2) ? 3 : 2
+    }
+    
     // MARK: - Gesture Handling
     @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
         
@@ -259,19 +269,13 @@ class ViewController: UIViewController, MKMapViewDelegate {
         
         // Sets the amount of max pins = to the route type
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
-        let maxPins = (selectedIndex == 2) ? 3 : 2  // loop = 3 others = 2
+        let maxPins = requiredPinCount(for: selectedIndex)
         
         
         // checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
         if selectedCoordinates.count >= maxPins {
-            // removes coordinates (lat and long)
-            selectedCoordinates.removeAll()
-            
-            // need to remove any previous annotations on the map
-            removeAnnotations()
-            
-            mapView.removeOverlays(mapView.overlays)
-
+            showInfoAlert(message: "You already have \(maxPins) pins for this route type. Tap Cancel to reset.")
+            return
         }
         
         // TEST TO SEE IF WORKS JUST PRINT FOR NOW
@@ -432,6 +436,32 @@ class ViewController: UIViewController, MKMapViewDelegate {
         }
     }
     
+    // MARK: - Routing Helper (single leg)
+    private func requestWalkingRoute(from start: CLLocationCoordinate2D,
+                                     to end: CLLocationCoordinate2D,
+                                     completion: @escaping (Result<MKRoute, Error>) -> Void) {
+        let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
+        let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
+
+        let request = MKDirections.Request()
+        request.source = source
+        request.destination = destination
+        request.transportType = .walking
+
+        let directions = MKDirections(request: request)
+        directions.calculate { response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let route = response?.routes.first else {
+                completion(.failure(NSError(domain: "LoopRoute", code: -1, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
+                return
+            }
+            completion(.success(route))
+        }
+    }
+    
     // MARK: - Loop Helper Functions
     
     func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double) -> CLLocationCoordinate2D {
@@ -483,7 +513,56 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // This will be the function called when loop route type is selected and route is generated.
     // WIP
-    func generateLoopRoute () {
+    func generateLoopRoute (a: CLLocationCoordinate2D,
+                            b: CLLocationCoordinate2D,
+                            c: CLLocationCoordinate2D) {
+        
+        mapView.removeOverlays(mapView.overlays)
+        
+        var totalDistance: CLLocationDistance = 0
+        var totalTime: TimeInterval = 0
+        
+        requestWalkingRoute(from: a, to: b) { [weak self] (result: Result<MKRoute, Error>) in
+            switch result {
+            case .failure(let error):
+                self?.showErrorAlert(message: "A→B failed: \(error.localizedDescription)")
+            case .success(let routeAB):
+                DispatchQueue.main.async {
+                    self?.mapView.addOverlay(routeAB.polyline)
+                }
+                totalDistance += routeAB.distance
+                totalTime += routeAB.expectedTravelTime
+
+                // Leg 2: B -> C
+                self?.requestWalkingRoute(from: b, to: c) { (result: Result<MKRoute, Error>) in
+                    switch result {
+                    case .failure(let error):
+                        self?.showErrorAlert(message: "B→C failed: \(error.localizedDescription)")
+                    case .success(let routeBC):
+                        DispatchQueue.main.async {
+                            self?.mapView.addOverlay(routeBC.polyline)
+                        }
+                        totalDistance += routeBC.distance
+                        totalTime += routeBC.expectedTravelTime
+
+                        // Leg 3: C -> A
+                        self?.requestWalkingRoute(from: c, to: a) { (result: Result<MKRoute, Error>) in
+                            switch result {
+                            case .failure(let error):
+                                self?.showErrorAlert(message: "C→A failed: \(error.localizedDescription)")
+                            case .success(let routeCA):
+                                DispatchQueue.main.async {
+                                    self?.mapView.addOverlay(routeCA.polyline)
+                                    let finalDistance = totalDistance + routeCA.distance
+                                    let finalTime = totalTime + routeCA.expectedTravelTime
+                                    self?.updateRouteInfoLabel(distance: finalDistance, time: finalTime)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         /* Pseduocode:
         // Route segement generation:
             // Generate a route: Start (defualt should be user location when that is implemented) -> Waypoint 1
@@ -512,6 +591,8 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 // Note this is different then retrying the ENTIRE route just a specific segement.
             // Distance accuracy depends on waypoint placement.'
          */
+        
+        
             
     }
     
@@ -698,10 +779,9 @@ When messing with UI stuff I found 2 problems:
         So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
         I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
-        I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
+ 
+    2/3/2026 Tuesday:
+        Added in the ability to lock pin placement (stops you from accidently starting new routes when dragging).
+        
 */
-
-
-
-
 
