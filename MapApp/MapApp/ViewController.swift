@@ -49,10 +49,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
         
-        let testCenter = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
+        let testCenter = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252) // Center point for random route generation
         let userInputMiles = 3.1 // Value user will enter
-        let testRadius = userInputMiles * 1609.34 // ~5km
+        let windingFactor = 1.5 // Value to slightly take into account actual paths and roads.
+        let testRadius = (userInputMiles * 1609.34)/(2 * .pi * windingFactor) // ~5km
         
+        // This is just the random points code. Currently making 5
         for i in 1...5 {
             let randomPoint = generateRandomCoordinate(around: testCenter, radius: testRadius)
             print("Random point \(i): \(randomPoint.latitude), \(randomPoint.longitude)")
@@ -391,7 +393,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let randomAngleRadians = randomAngleDegrees * (.pi / 180)
         
         
-        let randomDistance = Double.random(in: (0.5 * radius)...radius)
+        let randomDistance = Double.random(in: (0.35 * radius)...radius)
         
         let earthRadius = 6371000.0
         let latOffset = (randomDistance * cos(randomAngleRadians)) / earthRadius
@@ -656,8 +658,13 @@ When messing with UI stuff I found 2 problems:
  
  1/31/2026 Saturday
     Issue I found: when I set the radius for the user and then generate the random points they "as the crow flys" are within that bounds, but when I tested it using making a point from the center to the random point manually it was significantly longer (meaning that it obv. doesn't take into account winding roads and stuff like that). I think a potential solution for this would be when the random points are generated it takes the start position (center) places that point and attempts to make a route inbetween them. Then if succusfull grab the info about the distance for the "generated" (just created, in the BG) route and then see if that falls within the users max distance. Then this could also make getting specific times more easily done. This of course would also needs lots of testing and still require a big give and take for values but when you are putting in big values (10 mile distance) it can make that into more like a 15 mile run.
+    Solution: Just adjust formula and add it a "winding factor" or something that will just make random points actually closer to what the user inputted. This is to give a smaller radius that way it can slightly account for not perfectly straight pathing. I think that like 1.5 should be a decent winding factor for now.
+ 
+ 
     Thoughts for Claude and myself:
         So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
+        Answer: Maybe 1/6 is too small will probably do more like .35 ish.
+    
         I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
         I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
