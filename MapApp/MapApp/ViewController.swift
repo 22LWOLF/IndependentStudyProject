@@ -33,6 +33,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // MARK: - Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var pinsLocked: Bool = false
+    private var isGeneratingRoute: Bool = false
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -394,6 +395,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
     
     // This will be the function called when out-and-back route type is selected and a route is generated.
     func generateOutAndBackRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
+        guard !isGeneratingRoute else { return }
+        isGeneratingRoute = true
+        
         mapView.removeOverlays(mapView.overlays)
         
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
@@ -407,6 +411,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let directions = MKDirections(request: request)
         
         directions.calculate { [weak self] response, error in
+            defer { self?.isGeneratingRoute = false }
             if let error = error {
                 self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
                 return
@@ -516,16 +521,25 @@ class ViewController: UIViewController, MKMapViewDelegate {
     func generateLoopRoute (a: CLLocationCoordinate2D,
                             b: CLLocationCoordinate2D,
                             c: CLLocationCoordinate2D) {
-        
+        guard !isGeneratingRoute else { return }
+        isGeneratingRoute = true
+
         mapView.removeOverlays(mapView.overlays)
-        
+
         var totalDistance: CLLocationDistance = 0
         var totalTime: TimeInterval = 0
-        
+
+        func finish() {
+            DispatchQueue.main.async { [weak self] in
+                self?.isGeneratingRoute = false
+            }
+        }
+
         requestWalkingRoute(from: a, to: b) { [weak self] (result: Result<MKRoute, Error>) in
             switch result {
             case .failure(let error):
                 self?.showErrorAlert(message: "A→B failed: \(error.localizedDescription)")
+                finish()
             case .success(let routeAB):
                 DispatchQueue.main.async {
                     self?.mapView.addOverlay(routeAB.polyline)
@@ -538,6 +552,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                     switch result {
                     case .failure(let error):
                         self?.showErrorAlert(message: "B→C failed: \(error.localizedDescription)")
+                        finish()
                     case .success(let routeBC):
                         DispatchQueue.main.async {
                             self?.mapView.addOverlay(routeBC.polyline)
@@ -550,6 +565,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                             switch result {
                             case .failure(let error):
                                 self?.showErrorAlert(message: "C→A failed: \(error.localizedDescription)")
+                                finish()
                             case .success(let routeCA):
                                 DispatchQueue.main.async {
                                     self?.mapView.addOverlay(routeCA.polyline)
@@ -557,6 +573,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                                     let finalTime = totalTime + routeCA.expectedTravelTime
                                     self?.updateRouteInfoLabel(distance: finalDistance, time: finalTime)
                                 }
+                                finish()
                             }
                         }
                     }
@@ -599,6 +616,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // Generate a route between two coordinates and draw it on the map
     // taking 2 points (starting and ending) coordinates (lat/long)
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
+        guard !isGeneratingRoute else { return }
+        isGeneratingRoute = true
+        
         // Clear existing overlays before drawing a new route
         mapView.removeOverlays(mapView.overlays)
         
@@ -624,6 +644,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         // Go calculate route and when your done/or if something breaks, run this code
         // This is ansynchronous so that the app doesn't freeze up while waiting for directions
         directions.calculate { [weak self] response, error in
+            defer { self?.isGeneratingRoute = false }
             // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
             if let error = error {
                 self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
@@ -719,23 +740,21 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 }
             }
             
-            // Automatically regenerate route if we have both points
-            // Potentially remove this, not sure yet
-            if selectedCoordinates.count == 2 {
-                // Check which segement is selected
-                let selectedIndex = routeTypeSelector.selectedSegmentIndex
-                
-                switch selectedIndex {
-                case 0: // One-way
-                    generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-                case 1: // Out-and-back
-                    generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-                case 2: //loop
-                    //for now just print alert cause I don't got the code
-                    showInfoAlert(message: "loop route is not implemented yet")
-                default:
-                    break
-                }
+            // Automatically regenerate route if we have the required number of points and no generation is in progress
+            let selectedIndex = routeTypeSelector.selectedSegmentIndex
+            let needed = requiredPinCount(for: selectedIndex)
+            guard selectedCoordinates.count == needed else { return }
+            guard !isGeneratingRoute else { return }
+
+            switch selectedIndex {
+            case 0: // One-way
+                generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            case 1: // Out-and-back
+                generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            case 2: // loop
+                generateLoopRoute(a: selectedCoordinates[0], b: selectedCoordinates[1], c: selectedCoordinates[2])
+            default:
+                break
             }
         }
     }
