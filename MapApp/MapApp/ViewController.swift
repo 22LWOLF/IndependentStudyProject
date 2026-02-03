@@ -663,41 +663,16 @@ class ViewController: UIViewController, MKMapViewDelegate {
  
  
  Issues:
- If the user uses "Go To" button before making a route you cannot generate a route after that. SOLVED
- Need to have a way to place pins then generate a route, not just autocompleteing when 2 pins are placed. SOLVED
- Switch print statements too UIAlertController that way you don't need a console open. SOLVED
-Make dragging pins eaiser. Can be difficult to grab them and also doesn't feel "nice" or smooth if feels kinda clunky. Specifically it can be hard to grab them. Sometimes you think you grab a pin but instead it just starts a new route. SOLVED
-        Possible solution: Make UI area for pin bigger.
-Also after moving a pin/pins instead of auto generating a route only make the route after the generate route button is clicked. Meaning 2 pins no route drag around a pin place it still no route. Generate route, then select a pin to drag and then drop the route is automatically generated. Almost like a toggle that when swichced off doesn't allow for routes to be made, then once the switch is flipped then it will automatically make routes. SOLVED
-Have location finder have - symbol for negative coords. SOLVED
-When using out and back (currently just automatic after generating route with button) if you drag a pin it doesn't display the B->A line (pretty simple fix I think). SOLVED
 When messing with UI stuff I found 2 problems:
     1. The screen sizes and not having automatic adjustments for phone model launching means that stuff is not consistent between phone sizes.
     2. The 2 different "types" of phone models Hill and Island. Hill (12 pro max) have the area around the camera come down from the top and is connected to the edge of the phone. Island (17 pro) has the area around the camera floating so screen runs inbetween it and the edge of the screen. I believe that the Hill models set there safety area/screen to the bottom (spot closest to the home "button") as the their edge, where as the Island models set the saftey area/screen to the actual edge of the screen. This is speculation but that is what I got out of it after messing around with it.
  
- 
- Questions for Claude:
- 
-    In your pseduocode for loop generation you provided me, in the Waypoint generation section why does it matter to ensure that one point isn't too close to another point? I already added some stuff like instead of completely random the user CAN select a cardinal direction to skew towards but a random route is a random route. Wanted to know your reasoning for that.
- 
-    Answer: So it might not be neccesarry to check distances and stuff with the cardinal direction idea, but I will have to see when I actually test it out to determine.
- 
     Thoughts on my issues I have found out when messing with the apps UI elements and constraints. (At bottom of view controller). I know that it isn't a priority at this second but I wanted to get at least some of the concrete parts of the app situated (settings and Go To buttons, label for distance and time, Go and Cancel buttons). Currently my UI looks good for the iPhone 17 Pro. I'd like to have it at least look decent on everything after like the 13 (most common currently).
  
     Answer: I'll probably use the 13 as a base when making it and kinda just hope it looks meh on other models (13 since its most common rn)
- 
- 1/30/2026
- Stuff I did:
-    Added in different route type selector, works for both generate route button and also drag and drop generation. Added in basic pseduo code for generateLoop and randomCoordinateGenerator functions. Finally, I attempted to mess with constraints to make my UI more consistant across different devices and ended up running into issues with having stuff look good for more than 1 device because of not knowing/being able to have automatic adjustments for like screen sizes and stuff.
- 
- 1/31/2026 Saturday
-    Issue I found: when I set the radius for the user and then generate the random points they "as the crow flys" are within that bounds, but when I tested it using making a point from the center to the random point manually it was significantly longer (meaning that it obv. doesn't take into account winding roads and stuff like that). I think a potential solution for this would be when the random points are generated it takes the start position (center) places that point and attempts to make a route inbetween them. Then if succusfull grab the info about the distance for the "generated" (just created, in the BG) route and then see if that falls within the users max distance. Then this could also make getting specific times more easily done. This of course would also needs lots of testing and still require a big give and take for values but when you are putting in big values (10 mile distance) it can make that into more like a 15 mile run.
-    Solution: Just adjust formula and add it a "winding factor" or something that will just make random points actually closer to what the user inputted. This is to give a smaller radius that way it can slightly account for not perfectly straight pathing. I think that like 1.5 should be a decent winding factor for now.
- 
- 
-    Thoughts for Claude and myself:
+
+    Thoughts:
         So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
-    
         I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
         I also am not sure when I need to start implementing the other big aspects of my app. For example switching between letting the user select coordinates and then the "gamble" feature where you can still select a route type and then making the random route. Adding in a place or system to let the user select how far/long they would like to run. A lot of UI stuff like I will probably need to make drop downs and like submenu stuff, and that is something that I would like to get ahead of, not necessiarliy implementing its acutal uses but to at least get it all placed out so I can understand how I need to make stuff look. So some suggestions would be appericiated for layouts (I will send an image of how it looks)
