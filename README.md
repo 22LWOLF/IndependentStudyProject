@@ -180,11 +180,11 @@
   2. [x] displays map
   3. [x] allows for user to insert points to generate a route 
   4. [x] allow user to insert coordinates for a location and go to it
-  5. [ ] allow for dragging around of point
-  6. [ ] have time in corner 
+  5. [x] allow for dragging around of point
+  6. [x] have time in corner 
   7. [ ] app settings
-  8. [ ] start route button
-  9. [ ] stop route boutton
+  8. [x] start route button
+  9. [x] stop route boutton
   10. [ ] Use current location
   11. [ ] have the user insert a distance for route length
   12. [ ] have user insert a target time for the route
