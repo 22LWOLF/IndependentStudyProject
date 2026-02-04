@@ -762,6 +762,17 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
 // MARK: - Ideas / Notes
 /*
+ 
+ U.I. Thoughts:
+    For swipey up tab at the bottom not sure if I want it to be like a segue or just something that is smaller.
+    Would like the progress bar for the route to only appear once a route is made.
+    For all route user set specs I would like a button that opens a "tab" where they can set information (distance/time, percentage of the route they would like to be walk/jog/running, if they want the route to be randomly generated (if not then grey out the options related to it), etc.)
+    For the tab that is opened for the user route specs I don't want it to be an alert I want it to be stream lined and smooth, and something that you can close/get rid of quickly. I am almost thinking of being able to pop it out from the side and then flicking it back into the side (like a segue but coming from the left or right of the screen)
+    I want to learn how to make all my stuff feel "professional" currently everything looks and feels "loose" or like just not good.
+    I also think that currently and in the near future I'm going to have to many buttons for all the stuff I want so IDK how to fix that, but it is something I want to write down.
+ 
+ 
+ 
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
  For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
@@ -803,4 +814,6 @@ When messing with UI stuff I found 2 problems:
         Added in the ability to lock pin placement (stops you from accidently starting new routes when dragging).
         
 */
+
+
 
