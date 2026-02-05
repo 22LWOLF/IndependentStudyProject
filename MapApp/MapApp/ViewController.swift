@@ -85,6 +85,14 @@ class ViewController: UIViewController, MKMapViewDelegate {
         showCoordinateEntry()
     }
     
+    
+    @IBAction func tempGenerateRandomPointsBTN(_ sender: UIButton) {
+        let center = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
+        let coord = generateRandomCoordinate(around: center, radius: 1000)
+        print("Temp random point: \(coord.latitude), \(coord.longitude)")
+        addAnnotation(at: coord, title: "Temp")
+    }
+    
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
         let maxPins = requiredPinCount(for: selectedIndex)
@@ -814,6 +822,7 @@ When messing with UI stuff I found 2 problems:
         Added in the ability to lock pin placement (stops you from accidently starting new routes when dragging).
         
 */
+
 
 
 
