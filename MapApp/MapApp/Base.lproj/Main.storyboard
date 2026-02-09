@@ -14,11 +14,11 @@
         <scene sceneID="tne-QT-ifu">
             <objects>
                 <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="MapApp" customModuleProvider="target" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
+                    <view key="view" contentMode="scaleToFill" ambiguous="YES" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <mapView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Km5-Dh-ECB">
+                            <mapView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Km5-Dh-ECB">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <standardMapConfiguration key="preferredConfiguration"/>
                             </mapView>
@@ -150,6 +150,17 @@
                                     <action selector="tempGenerateRandomPointsBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="lGa-i2-0Ei"/>
                                 </connections>
                             </button>
+                            <segmentedControl opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="jVf-ab-6Fg">
+                                <rect key="frame" x="256" y="592" width="120" height="32"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <segments>
+                                    <segment title="Fast"/>
+                                    <segment title="Scenic"/>
+                                </segments>
+                                <connections>
+                                    <action selector="routeGenerationTypeSelector:" destination="BYZ-38-t0r" eventType="valueChanged" id="ffO-7p-0KZ"/>
+                                </connections>
+                            </segmentedControl>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>

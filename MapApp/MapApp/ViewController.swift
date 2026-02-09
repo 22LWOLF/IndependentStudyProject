@@ -20,6 +20,11 @@ class StyledPolyline: MKPolyline {
     // Switch for if a polyline is forward or backward (default is foward)
     enum Kind { case forward, backward }
     var kind: Kind = .forward
+    
+    // Identify which leg this polyline represents for styling
+    var legIndex: Int = 0
+    enum Mode { case fastest, scenic }
+    var mode: Mode = .fastest
 }
 
 class ViewController: UIViewController, MKMapViewDelegate {
@@ -61,18 +66,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let windingFactor = 1.5 // Value to slightly take into account actual paths and roads.
         let testRadius = (userInputMiles * 1609.34)/(2 * .pi * windingFactor) // ~5km
         
-        // This is just the random points code. Currently making 5
-        for i in 1...5 {
-            let randomPoint = generateRandomCoordinate(around: testCenter, radius: testRadius)
-            print("Random point \(i): \(randomPoint.latitude), \(randomPoint.longitude)")
-            
-            let pin = MKPointAnnotation()
-            pin.coordinate = randomPoint
-            pin.title = "Test \(i)"
-            mapView.addAnnotation(pin)
-        }
-        
-        
     }
     
     override func viewDidLayoutSubviews() {
@@ -100,12 +93,21 @@ class ViewController: UIViewController, MKMapViewDelegate {
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
         let maxPins = requiredPinCount(for: selectedIndex)
 
-        // Validate exact pin count for the selected route type
-        guard selectedCoordinates.count == maxPins else {
-            let needed = (selectedIndex == 2) ? "3 pins for a loop" : "2 pins"
-            showInfoAlert(message: "Please place \(needed)")
-            return
+        // Validate pin count for the selected route type
+        if selectedIndex == 2 {
+            // Loop: require at least 3 points (scalable)
+            guard selectedCoordinates.count >= 3 else {
+                showInfoAlert(message: "Please place at least 3 pins for a loop")
+                return
+            }
+        } else {
+            // One-way / Out-and-back: require exactly 2
+            guard selectedCoordinates.count == maxPins else {
+                showInfoAlert(message: "Please place 2 pins")
+                return
+            }
         }
+
         // Check which segement is selected
         
         switch selectedIndex {
@@ -114,8 +116,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         case 1: // Out-and-back
             generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
         case 2: //loop
-            //for now just print alert cause I don't got the code
-            generateLoopRoute(a: selectedCoordinates[0], b: selectedCoordinates[1], c: selectedCoordinates[2])
+            generateLoopRoute(points: selectedCoordinates)
         default:
             break
         }
@@ -141,6 +142,20 @@ class ViewController: UIViewController, MKMapViewDelegate {
             showInfoAlert(message: "Pin placement is now locked")
         } else {
             showInfoAlert(message: "Pin placement is now unlocked")
+        }
+    }
+    
+    
+    @IBAction func routeGenerationTypeSelector(_ sender: UISegmentedControl) {
+        switch sender.selectedSegmentIndex {
+        case 0:
+            useScenicRouting = false
+            showInfoAlert(message: "Routing mode: Fastest")
+        case 1:
+            useScenicRouting = true
+            showInfoAlert(message: "Routing mode: Scenic")
+        default:
+            break
         }
     }
     
@@ -285,9 +300,11 @@ class ViewController: UIViewController, MKMapViewDelegate {
         
         
         // checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
-        if selectedCoordinates.count >= maxPins {
-            showInfoAlert(message: "You already have \(maxPins) pins for this route type. Tap Cancel to reset.")
-            return
+        if selectedIndex != 2 { // not loop
+            if selectedCoordinates.count >= maxPins {
+                showInfoAlert(message: "You already have \(maxPins) pins for this route type. Tap Cancel to reset.")
+                return
+            }
         }
         
         // TEST TO SEE IF WORKS JUST PRINT FOR NOW
@@ -301,7 +318,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         if selectedCoordinates.count == 1 {
             label = "Start"
         } else if selectedIndex == 2 { // loop mode, 3rd pin is C
-            label = (selectedCoordinates.count == 2) ? "B" : "C"
+            label = String(UnicodeScalar(64 + selectedCoordinates.count)!)
         } else {
             label = "Stop"
         }
@@ -508,7 +525,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
         let fastestDistance = fastest.distance
 
-        // Score routes: prefer distance up to 1.3x of fastest, then prefer higher distance and lower avg speed
+        // Score routes: prefer distance up to 1.3x of fastest, then prefer higher distance and lower avg speeda
         struct ScoredRoute { let route: MKRoute; let score: Double }
 
         let scored = routes.map { route -> ScoredRoute in
@@ -517,21 +534,22 @@ class ViewController: UIViewController, MKMapViewDelegate {
             let avgSpeedProxy = distance / time // higher = faster; scenic prefers lower
 
             // Distance factor: favor routes longer than fastest but penalize if too long (> 1.3x)
+            // The higher the withinCap is the more "loose" the grading will get
             let lengthRatio = distance / max(fastestDistance, 1.0)
-            let withinCap = min(lengthRatio, 1.3)
-            let lengthScore = withinCap // up to 1.3
+            let withinCap = min(lengthRatio, 1.8)
+            let lengthScore = withinCap // up to 1.8
 
             // Speed factor: invert avg speed so slower (more meandering) is better
             let speedScore = 1.0 / avgSpeedProxy
 
             // Combine with weights; tweak as desired
-            let combined = (lengthScore * 0.7) + (speedScore * 0.3)
+            let combined = (lengthScore * 0.8) + (speedScore * 0.2)
             return ScoredRoute(route: route, score: combined)
         }
 
         // Prefer highest score but ensure we stay within 1.3x distance cap; if none, fall back to fastest
         let capped = scored
-            .filter { $0.route.distance <= fastestDistance * 1.3 }
+            .filter { $0.route.distance <= fastestDistance * 1.8 }
             .sorted { $0.score > $1.score }
 
         return capped.first?.route ?? fastest
@@ -584,22 +602,18 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
     }
     
-    // This will be the function called when loop route type is selected and route is generated.
     // Dispatcher: chooses fastest vs scenic for all legs based on `useScenicRouting`.
-    func generateLoopRoute (a: CLLocationCoordinate2D,
-                            b: CLLocationCoordinate2D,
-                            c: CLLocationCoordinate2D) {
+    func generateLoopRoute(points: [CLLocationCoordinate2D]) {
         if useScenicRouting {
-            generateLoopRouteScenic(a: a, b: b, c: c)
+            generateLoopRouteScenic(points: points)
         } else {
-            generateLoopRouteFastest(a: a, b: b, c: c)
+            generateLoopRouteFastest(points: points)
         }
     }
 
     // MARK: - Loop: Fastest everywhere
-    private func generateLoopRouteFastest(a: CLLocationCoordinate2D,
-                                          b: CLLocationCoordinate2D,
-                                          c: CLLocationCoordinate2D) {
+    private func generateLoopRouteFastest(points: [CLLocationCoordinate2D]) {
+        guard points.count >= 3 else { showInfoAlert(message: "Need at least 3 points for a loop"); return }
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
 
@@ -614,58 +628,51 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
         }
 
-        // Leg 1: A -> B (fastest)
-        requestWalkingRoute(from: a, to: b) { [weak self] (result: Result<MKRoute, Error>) in
-            switch result {
-            case .failure(let error):
-                self?.showErrorAlert(message: "A→B failed: \(error.localizedDescription)")
+        // Build legs: (0->1), (1->2), ..., (n-1->0)
+        let n = points.count
+
+        func routeLeg(at index: Int) {
+            if index >= n { // done
                 finish()
-            case .success(let routeAB):
-                DispatchQueue.main.async {
-                    self?.mapView.addOverlay(routeAB.polyline)
-                }
-                totalDistance += routeAB.distance
-                totalTime += routeAB.expectedTravelTime
+                return
+            }
+            let start = points[index]
+            let end = points[(index + 1) % n]
 
-                // Leg 2: B -> C (fastest)
-                self?.requestWalkingRoute(from: b, to: c) { (result: Result<MKRoute, Error>) in
-                    switch result {
-                    case .failure(let error):
-                        self?.showErrorAlert(message: "B→C failed: \(error.localizedDescription)")
+            requestWalkingRoute(from: start, to: end) { [weak self] (result: Result<MKRoute, Error>) in
+                switch result {
+                case .failure(let error):
+                    self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
+                    finish()
+                case .success(let route):
+                    DispatchQueue.main.async {
+                        // Style each leg with a different color via legIndex
+                        let coords = self?.getCoordinates(from: route.polyline) ?? []
+                        let styled = StyledPolyline(coordinates: coords, count: coords.count)
+                        styled.legIndex = index
+                        styled.mode = .fastest
+                        self?.mapView.addOverlay(styled)
+                    }
+                    totalDistance += route.distance
+                    totalTime += route.expectedTravelTime
+                    if index == n - 1 {
+                        DispatchQueue.main.async { [weak self] in
+                            self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
+                        }
                         finish()
-                    case .success(let routeBC):
-                        DispatchQueue.main.async {
-                            self?.mapView.addOverlay(routeBC.polyline)
-                        }
-                        totalDistance += routeBC.distance
-                        totalTime += routeBC.expectedTravelTime
-
-                        // Leg 3: C -> A (fastest)
-                        self?.requestWalkingRoute(from: c, to: a) { (result: Result<MKRoute, Error>) in
-                            switch result {
-                            case .failure(let error):
-                                self?.showErrorAlert(message: "C→A failed: \(error.localizedDescription)")
-                                finish()
-                            case .success(let routeCA):
-                                DispatchQueue.main.async {
-                                    self?.mapView.addOverlay(routeCA.polyline)
-                                    let finalDistance = totalDistance + routeCA.distance
-                                    let finalTime = totalTime + routeCA.expectedTravelTime
-                                    self?.updateRouteInfoLabel(distance: finalDistance, time: finalTime)
-                                }
-                                finish()
-                            }
-                        }
+                    } else {
+                        routeLeg(at: index + 1)
                     }
                 }
             }
         }
+
+        routeLeg(at: 0)
     }
 
-    // MARK: - Loop: Scenic everywhere (requests alternates and picks scenic for each leg)
-    private func generateLoopRouteScenic(a: CLLocationCoordinate2D,
-                                         b: CLLocationCoordinate2D,
-                                         c: CLLocationCoordinate2D) {
+    // MARK: - Loop: Scenic everywhere
+    private func generateLoopRouteScenic(points: [CLLocationCoordinate2D]) {
+        guard points.count >= 3 else { showInfoAlert(message: "Need at least 3 points for a loop"); return }
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
 
@@ -680,55 +687,45 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
         }
 
-        // Leg 1: A -> B (scenic)
-        requestWalkingRoutes(from: a, to: b, requestAlternates: true) { [weak self] (result: Result<[MKRoute], Error>) in
-            switch result {
-            case .failure(let error):
-                self?.showErrorAlert(message: "A→B failed: \(error.localizedDescription)")
+        let n = points.count
+
+        func routeLeg(at index: Int) {
+            if index >= n { // done
                 finish()
-            case .success(let routesAB):
-                let scenicAB = self?.pickScenicRoute(from: routesAB) ?? routesAB[0]
-                DispatchQueue.main.async {
-                    self?.mapView.addOverlay(scenicAB.polyline)
-                }
-                totalDistance += scenicAB.distance
-                totalTime += scenicAB.expectedTravelTime
+                return
+            }
+            let start = points[index]
+            let end = points[(index + 1) % n]
 
-                // Leg 2: B -> C (scenic)
-                self?.requestWalkingRoutes(from: b, to: c, requestAlternates: true) { (result: Result<[MKRoute], Error>) in
-                    switch result {
-                    case .failure(let error):
-                        self?.showErrorAlert(message: "B→C failed: \(error.localizedDescription)")
+            requestWalkingRoutes(from: start, to: end, requestAlternates: true) { [weak self] (result: Result<[MKRoute], Error>) in
+                switch result {
+                case .failure(let error):
+                    self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
+                    finish()
+                case .success(let routes):
+                    let scenic = self?.pickScenicRoute(from: routes) ?? routes[0]
+                    DispatchQueue.main.async {
+                        let coords = self?.getCoordinates(from: scenic.polyline) ?? []
+                        let styled = StyledPolyline(coordinates: coords, count: coords.count)
+                        styled.legIndex = index
+                        styled.mode = .scenic
+                        self?.mapView.addOverlay(styled)
+                    }
+                    totalDistance += scenic.distance
+                    totalTime += scenic.expectedTravelTime
+                    if index == n - 1 {
+                        DispatchQueue.main.async { [weak self] in
+                            self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
+                        }
                         finish()
-                    case .success(let routesBC):
-                        let scenicBC = self?.pickScenicRoute(from: routesBC) ?? routesBC[0]
-                        DispatchQueue.main.async {
-                            self?.mapView.addOverlay(scenicBC.polyline)
-                        }
-                        totalDistance += scenicBC.distance
-                        totalTime += scenicBC.expectedTravelTime
-
-                        // Leg 3: C -> A (scenic)
-                        self?.requestWalkingRoutes(from: c, to: a, requestAlternates: true) { (result: Result<[MKRoute], Error>) in
-                            switch result {
-                            case .failure(let error):
-                                self?.showErrorAlert(message: "C→A failed: \(error.localizedDescription)")
-                                finish()
-                            case .success(let routesCA):
-                                let scenicCA = self?.pickScenicRoute(from: routesCA) ?? routesCA[0]
-                                DispatchQueue.main.async {
-                                    self?.mapView.addOverlay(scenicCA.polyline)
-                                    let finalDistance = totalDistance + scenicCA.distance
-                                    let finalTime = totalTime + scenicCA.expectedTravelTime
-                                    self?.updateRouteInfoLabel(distance: finalDistance, time: finalTime)
-                                }
-                                finish()
-                            }
-                        }
+                    } else {
+                        routeLeg(at: index + 1)
                     }
                 }
             }
         }
+
+        routeLeg(at: 0)
     }
     
     // Generate a route between two coordinates and draw it on the map
@@ -789,13 +786,12 @@ class ViewController: UIViewController, MKMapViewDelegate {
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
-            switch styled.kind {
-            case .forward:
-                renderer.strokeColor = .systemBlue
-                renderer.lineWidth = 5
-            case .backward:
-                renderer.strokeColor = .systemRed
-                renderer.lineWidth = 3
+            // Cycle colors by leg index for visibility
+            let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
+            let color = colors[styled.legIndex % colors.count]
+            renderer.strokeColor = color
+            renderer.lineWidth = (styled.mode == .scenic) ? 6 : 5
+            if styled.kind == .backward { // retain backward styling if used elsewhere
                 renderer.lineDashPattern = [2,5]
             }
             return renderer
@@ -839,24 +835,17 @@ class ViewController: UIViewController, MKMapViewDelegate {
         // This is watching for when dragging has stopped or ended (meaning it is done being moved).
         if newState == .ending || newState == .canceling {
             view.dragState = .none
-            // When stopped moving this grabs the new coordinates and sets that new position to its new coords.
             guard let movedAnnotation = view.annotation as? RouteAnnotation else { return }
             let newCoordinate = movedAnnotation.coordinate
+            
+            // Update ANY index, not just 0 or 1
+            if movedAnnotation.index < selectedCoordinates.count {
+                selectedCoordinates[movedAnnotation.index] = newCoordinate
+            }
             
             // Update selectedCoordinates based on annotation index
             // This is to ensure that even when a start or stop pin is being moved around that the new coordinates are assigned to the correct pin.
             // For example I have start and stop. I move start pin around, and then let go. This ensures, even thought start was first pin placed, that start is the one getting assigned the coordinates and not the latest placed pin.
-            if movedAnnotation.index == 0 {
-                if selectedCoordinates.count >= 1 { selectedCoordinates[0] = newCoordinate }
-                else { selectedCoordinates.append(newCoordinate) }
-            } else if movedAnnotation.index == 1 {
-                if selectedCoordinates.count >= 2 { selectedCoordinates[1] = newCoordinate }
-                else if selectedCoordinates.count == 1 { selectedCoordinates.append(newCoordinate) }
-                else {
-                    // If somehow stop moved before start exists, insert placeholders
-                    selectedCoordinates = [newCoordinate]
-                }
-            }
             
             // Automatically regenerate route if we have the required number of points and no generation is in progress
             let selectedIndex = routeTypeSelector.selectedSegmentIndex
@@ -870,7 +859,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             case 1: // Out-and-back
                 generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
             case 2: // loop
-                generateLoopRoute(a: selectedCoordinates[0], b: selectedCoordinates[1], c: selectedCoordinates[2])
+                generateLoopRoute(points: selectedCoordinates)
             default:
                 break
             }
