@@ -35,6 +35,9 @@ class ViewController: UIViewController, MKMapViewDelegate {
     private var pinsLocked: Bool = false
     private var isGeneratingRoute: Bool = false
     
+    // Temporary toggle until UI selector is wired up
+    private var useScenicRouting: Bool = false
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -449,10 +452,11 @@ class ViewController: UIViewController, MKMapViewDelegate {
         }
     }
     
-    // MARK: - Routing Helper (single leg)
-    private func requestWalkingRoute(from start: CLLocationCoordinate2D,
-                                     to end: CLLocationCoordinate2D,
-                                     completion: @escaping (Result<MKRoute, Error>) -> Void) {
+    // MARK: - Routing Helpers
+    private func requestWalkingRoutes(from start: CLLocationCoordinate2D,
+                                      to end: CLLocationCoordinate2D,
+                                      requestAlternates: Bool,
+                                      completion: @escaping (Result<[MKRoute], Error>) -> Void) {
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
 
@@ -460,6 +464,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         request.source = source
         request.destination = destination
         request.transportType = .walking
+        request.requestsAlternateRoutes = requestAlternates
 
         let directions = MKDirections(request: request)
         directions.calculate { response, error in
@@ -467,12 +472,69 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 completion(.failure(error))
                 return
             }
-            guard let route = response?.routes.first else {
-                completion(.failure(NSError(domain: "LoopRoute", code: -1, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
+            guard let routes = response?.routes, !routes.isEmpty else {
+                completion(.failure(NSError(domain: "Route", code: -1, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
                 return
             }
-            completion(.success(route))
+            completion(.success(routes))
         }
+    }
+
+    // Convenience wrapper that returns the single fastest route (existing behavior)
+    private func requestWalkingRoute(from start: CLLocationCoordinate2D,
+                                    to end: CLLocationCoordinate2D,
+                                    completion: @escaping (Result<MKRoute, Error>) -> Void) {
+        requestWalkingRoutes(from: start, to: end, requestAlternates: false) { result in
+            switch result {
+            case .failure(let error):
+                completion(.failure(error))
+            case .success(let routes):
+                // Choose the route with minimal expected travel time
+                guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else {
+                    completion(.failure(NSError(domain: "Route", code: -2, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
+                    return
+                }
+                completion(.success(fastest))
+            }
+        }
+    }
+
+    // Simple scenic selector: prefer a longer route within a tolerance; break ties by lower avg speed
+    private func pickScenicRoute(from routes: [MKRoute]) -> MKRoute {
+        // Establish a baseline fastest route to set tolerances
+        guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else {
+            return routes[0]
+        }
+
+        let fastestDistance = fastest.distance
+
+        // Score routes: prefer distance up to 1.3x of fastest, then prefer higher distance and lower avg speed
+        struct ScoredRoute { let route: MKRoute; let score: Double }
+
+        let scored = routes.map { route -> ScoredRoute in
+            let distance = route.distance
+            let time = max(route.expectedTravelTime, 1.0)
+            let avgSpeedProxy = distance / time // higher = faster; scenic prefers lower
+
+            // Distance factor: favor routes longer than fastest but penalize if too long (> 1.3x)
+            let lengthRatio = distance / max(fastestDistance, 1.0)
+            let withinCap = min(lengthRatio, 1.3)
+            let lengthScore = withinCap // up to 1.3
+
+            // Speed factor: invert avg speed so slower (more meandering) is better
+            let speedScore = 1.0 / avgSpeedProxy
+
+            // Combine with weights; tweak as desired
+            let combined = (lengthScore * 0.7) + (speedScore * 0.3)
+            return ScoredRoute(route: route, score: combined)
+        }
+
+        // Prefer highest score but ensure we stay within 1.3x distance cap; if none, fall back to fastest
+        let capped = scored
+            .filter { $0.route.distance <= fastestDistance * 1.3 }
+            .sorted { $0.score > $1.score }
+
+        return capped.first?.route ?? fastest
     }
     
     // MARK: - Loop Helper Functions
@@ -522,13 +584,22 @@ class ViewController: UIViewController, MKMapViewDelegate {
 
     }
     
-    
-    
     // This will be the function called when loop route type is selected and route is generated.
-    // WIP
+    // Dispatcher: chooses fastest vs scenic for all legs based on `useScenicRouting`.
     func generateLoopRoute (a: CLLocationCoordinate2D,
                             b: CLLocationCoordinate2D,
                             c: CLLocationCoordinate2D) {
+        if useScenicRouting {
+            generateLoopRouteScenic(a: a, b: b, c: c)
+        } else {
+            generateLoopRouteFastest(a: a, b: b, c: c)
+        }
+    }
+
+    // MARK: - Loop: Fastest everywhere
+    private func generateLoopRouteFastest(a: CLLocationCoordinate2D,
+                                          b: CLLocationCoordinate2D,
+                                          c: CLLocationCoordinate2D) {
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
 
@@ -543,6 +614,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
         }
 
+        // Leg 1: A -> B (fastest)
         requestWalkingRoute(from: a, to: b) { [weak self] (result: Result<MKRoute, Error>) in
             switch result {
             case .failure(let error):
@@ -555,7 +627,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 totalDistance += routeAB.distance
                 totalTime += routeAB.expectedTravelTime
 
-                // Leg 2: B -> C
+                // Leg 2: B -> C (fastest)
                 self?.requestWalkingRoute(from: b, to: c) { (result: Result<MKRoute, Error>) in
                     switch result {
                     case .failure(let error):
@@ -568,7 +640,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
                         totalDistance += routeBC.distance
                         totalTime += routeBC.expectedTravelTime
 
-                        // Leg 3: C -> A
+                        // Leg 3: C -> A (fastest)
                         self?.requestWalkingRoute(from: c, to: a) { (result: Result<MKRoute, Error>) in
                             switch result {
                             case .failure(let error):
@@ -588,37 +660,75 @@ class ViewController: UIViewController, MKMapViewDelegate {
                 }
             }
         }
-        /* Pseduocode:
-        // Route segement generation:
-            // Generate a route: Start (defualt should be user location when that is implemented) -> Waypoint 1
-            // Wait for completion
-            // Generate route: Waypoint 1 -> Waypoint 2
-            // Wait again
-            // Generate route: Waypoint 2 -> start
-            // Wait again
-            // This amount will change depending on the amount of points the user wants.
-        // Validation:
-            // Sum all segment distances (if user put in time instead of distance convert sum into distance)
-            // Check if total is within +10% of target
-                // Subject to change since this needs like real world testing
-            // If not, retry with new waypoints.
-            // Only allow for up to X retries
-                // Same as target forgiveness will need to be tested to get a proper #.
-            //Display:
-                // Add all route segements as overlays
-                // use different colors for each segement
-                    // Mostly for testing but can also be used later for setting tempos (walk, jog, run)
-                // Update info label with total distance and estimated time
-        // Issues/Challenges:
-            // Need asych route generation (sequential chaining)
-            // Random waypoints may land in unreachable locations (middle of a forest, water, etc.)
-            // Need retry logic for failed route segments
-                // Note this is different then retrying the ENTIRE route just a specific segement.
-            // Distance accuracy depends on waypoint placement.'
-         */
-        
-        
-            
+    }
+
+    // MARK: - Loop: Scenic everywhere (requests alternates and picks scenic for each leg)
+    private func generateLoopRouteScenic(a: CLLocationCoordinate2D,
+                                         b: CLLocationCoordinate2D,
+                                         c: CLLocationCoordinate2D) {
+        guard !isGeneratingRoute else { return }
+        isGeneratingRoute = true
+
+        mapView.removeOverlays(mapView.overlays)
+
+        var totalDistance: CLLocationDistance = 0
+        var totalTime: TimeInterval = 0
+
+        func finish() {
+            DispatchQueue.main.async { [weak self] in
+                self?.isGeneratingRoute = false
+            }
+        }
+
+        // Leg 1: A -> B (scenic)
+        requestWalkingRoutes(from: a, to: b, requestAlternates: true) { [weak self] (result: Result<[MKRoute], Error>) in
+            switch result {
+            case .failure(let error):
+                self?.showErrorAlert(message: "A→B failed: \(error.localizedDescription)")
+                finish()
+            case .success(let routesAB):
+                let scenicAB = self?.pickScenicRoute(from: routesAB) ?? routesAB[0]
+                DispatchQueue.main.async {
+                    self?.mapView.addOverlay(scenicAB.polyline)
+                }
+                totalDistance += scenicAB.distance
+                totalTime += scenicAB.expectedTravelTime
+
+                // Leg 2: B -> C (scenic)
+                self?.requestWalkingRoutes(from: b, to: c, requestAlternates: true) { (result: Result<[MKRoute], Error>) in
+                    switch result {
+                    case .failure(let error):
+                        self?.showErrorAlert(message: "B→C failed: \(error.localizedDescription)")
+                        finish()
+                    case .success(let routesBC):
+                        let scenicBC = self?.pickScenicRoute(from: routesBC) ?? routesBC[0]
+                        DispatchQueue.main.async {
+                            self?.mapView.addOverlay(scenicBC.polyline)
+                        }
+                        totalDistance += scenicBC.distance
+                        totalTime += scenicBC.expectedTravelTime
+
+                        // Leg 3: C -> A (scenic)
+                        self?.requestWalkingRoutes(from: c, to: a, requestAlternates: true) { (result: Result<[MKRoute], Error>) in
+                            switch result {
+                            case .failure(let error):
+                                self?.showErrorAlert(message: "C→A failed: \(error.localizedDescription)")
+                                finish()
+                            case .success(let routesCA):
+                                let scenicCA = self?.pickScenicRoute(from: routesCA) ?? routesCA[0]
+                                DispatchQueue.main.async {
+                                    self?.mapView.addOverlay(scenicCA.polyline)
+                                    let finalDistance = totalDistance + scenicCA.distance
+                                    let finalTime = totalTime + scenicCA.expectedTravelTime
+                                    self?.updateRouteInfoLabel(distance: finalDistance, time: finalTime)
+                                }
+                                finish()
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // Generate a route between two coordinates and draw it on the map
@@ -803,7 +913,6 @@ class ViewController: UIViewController, MKMapViewDelegate {
  Also implement a system for maximum tries for legs and entire route generation. (so if B -> C doesn't work after 5 tries then scrap the entire route similar to route retry's as mentioned above). Also for retrying a point I can move it a couple hundred meters in a couple directions to see if something lands close enought to a road.
  
  
- 
  Issues:
 When messing with UI stuff I found 2 problems:
     1. The screen sizes and not having automatic adjustments for phone model launching means that stuff is not consistent between phone sizes.
@@ -822,7 +931,4 @@ When messing with UI stuff I found 2 problems:
         Added in the ability to lock pin placement (stops you from accidently starting new routes when dragging).
         
 */
-
-
-
 
