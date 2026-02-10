@@ -43,7 +43,7 @@
       -  Determine how to "lock" points allowing for moving points without worrying about starting a new route.
         
 ### Week 5:
-  + Goal: Implement Route generation that will use user-inputted distance or time.
+  + Goal: Implement Route generation that will use user-inputted distance or time, and implement basic user tracking and prediction. (prediction is personal time to complete a route)
   + Tools: [MKDirections](https://developer.apple.com/documentation/mapkit/mkdirections) and [MKRoute](https://developer.apple.com/documentation/mapkit/mkroute)
     * Have simple input form that asks for either a specific time or distance from the user.
     * At this stage time-based routes will have placeholder values.
