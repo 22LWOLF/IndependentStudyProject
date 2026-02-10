@@ -338,7 +338,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
         annotation.coordinate = coordinate
         annotation.title = title
         if let title = title {
-            annotation.index = (title == "Start") ? 0 : 1
+            annotation.index = max(0, selectedCoordinates.count - 1)
         }
         mapView.addAnnotation(annotation)
     }
@@ -536,20 +536,20 @@ class ViewController: UIViewController, MKMapViewDelegate {
             // Distance factor: favor routes longer than fastest but penalize if too long (> 1.3x)
             // The higher the withinCap is the more "loose" the grading will get
             let lengthRatio = distance / max(fastestDistance, 1.0)
-            let withinCap = min(lengthRatio, 1.8)
+            let withinCap = min(lengthRatio, 2.0)
             let lengthScore = withinCap // up to 1.8
 
             // Speed factor: invert avg speed so slower (more meandering) is better
             let speedScore = 1.0 / avgSpeedProxy
 
             // Combine with weights; tweak as desired
-            let combined = (lengthScore * 0.8) + (speedScore * 0.2)
+            let combined = (lengthScore * 0.9) + (speedScore * 0.1)
             return ScoredRoute(route: route, score: combined)
         }
 
         // Prefer highest score but ensure we stay within 1.3x distance cap; if none, fall back to fastest
         let capped = scored
-            .filter { $0.route.distance <= fastestDistance * 1.8 }
+            .filter { $0.route.distance <= fastestDistance * 2.0 }
             .sorted { $0.score > $1.score }
 
         return capped.first?.route ?? fastest
@@ -826,7 +826,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
             annotationView?.annotation = annotation
         }
         //makes grabbable area bigger
-        annotationView?.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
+        annotationView?.frame = CGRect(x: 0, y: 0, width: 75, height: 75)
         return annotationView
     }
     
@@ -877,6 +877,7 @@ class ViewController: UIViewController, MKMapViewDelegate {
     For the tab that is opened for the user route specs I don't want it to be an alert I want it to be stream lined and smooth, and something that you can close/get rid of quickly. I am almost thinking of being able to pop it out from the side and then flicking it back into the side (like a segue but coming from the left or right of the screen)
     I want to learn how to make all my stuff feel "professional" currently everything looks and feels "loose" or like just not good.
     I also think that currently and in the near future I'm going to have to many buttons for all the stuff I want so IDK how to fix that, but it is something I want to write down.
+    Potential object for the swipey up tab "Bottom Sheet / Detent Panel"
  
  
  
@@ -916,8 +917,5 @@ When messing with UI stuff I found 2 problems:
         I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
  
-    2/3/2026 Tuesday:
-        Added in the ability to lock pin placement (stops you from accidently starting new routes when dragging).
-        
 */
 
