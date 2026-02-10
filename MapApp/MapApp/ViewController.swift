@@ -15,6 +15,8 @@ class RouteAnnotation: MKPointAnnotation {
     var index: Int = 0
 }
 
+
+
 // MARK: - StyledPolyline
 class StyledPolyline: MKPolyline {
     // Switch for if a polyline is forward or backward (default is foward)
@@ -27,7 +29,7 @@ class StyledPolyline: MKPolyline {
     var mode: Mode = .fastest
 }
 
-class ViewController: UIViewController, MKMapViewDelegate {
+class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate {
     
     // MARK: - Outlets
     // White box at top of screen for UI
@@ -43,25 +45,35 @@ class ViewController: UIViewController, MKMapViewDelegate {
     // Temporary toggle until UI selector is wired up
     private var useScenicRouting: Bool = false
     
+    // For getting user location
+    private var locationManager: CLLocationManager!
+    private var userLocation: CLLocationCoordinate2D?
+    private var hasAlreadyCentered: Bool = false
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         mapView.delegate = self
         
+        
         pinsLocked = (pinLockSelector.selectedSegmentIndex == 1) // 1 = locked
         
-        // EX Cords Milan MO (1st value + is North - is South, 2nd value + is East - is West)
-        let cordinates = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
-        // Region is the displayed area on launch of the specified coordinates. (This is a 10 kilometers x 10 kilometers)
-        let region = MKCoordinateRegion(center: cordinates, latitudinalMeters: 10000, longitudinalMeters: 10000)
-        mapView.setRegion(region, animated: true)
+        // Set up for location tracking
+        locationManager = CLLocationManager()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyReduced
+        locationManager.requestWhenInUseAuthorization( )
+        locationManager.startUpdatingLocation()
+        
+        // Show user on map]
+        mapView.showsUserLocation = true
         
         // listening for when the "tap" event happens on the mapView
         // when it detects a tap it calls handleMapTap method
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
         
-        let testCenter = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252) // Center point for random route generation
+ 
         let userInputMiles = 3.1 // Value user will enter
         let windingFactor = 1.5 // Value to slightly take into account actual paths and roads.
         let testRadius = (userInputMiles * 1609.34)/(2 * .pi * windingFactor) // ~5km
@@ -865,7 +877,37 @@ class ViewController: UIViewController, MKMapViewDelegate {
             }
         }
     }
+    
+    // MARK: - CLLocationManagerDelegate
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // get most recent location
+        guard let location = locations.last else { return }
+
+        // save it for later
+        userLocation = location.coordinate
+
+        // Center map only the first time we get a location
+        if !hasAlreadyCentered {
+            print("Centering map on: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+            safelyCenterMap(on: location.coordinate, distance: 10000)
+            hasAlreadyCentered = true
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        // handle permission change
+        switch status {
+        case .authorizedWhenInUse, .authorizedAlways:
+            locationManager.startUpdatingLocation()
+        case .denied, .restricted:
+            showInfoAlert(message: "Using default location")
+        default:
+            break
+        }
+    }
 }
+    
+
 
 // MARK: - Ideas / Notes
 /*
