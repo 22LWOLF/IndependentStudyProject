@@ -29,7 +29,7 @@ class StyledPolyline: MKPolyline {
     var mode: Mode = .fastest
 }
 
-class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate {
+class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UITextFieldDelegate {
     
     // MARK: - Outlets
     // White box at top of screen for UI
@@ -50,11 +50,71 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var userLocation: CLLocationCoordinate2D?
     private var hasAlreadyCentered: Bool = false
     
+    // Distance input field in the slide panel
+    private var distanceTextField: UITextField?
+    
+    // actual panel
+    var slidePanel: UIView!
+    
+    // tracks if the panel is open or closed
+    var isPanelOpen = false
+    
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         mapView.delegate = self
         
+        
+        func setupSlidePanel(){
+            // grab phones width and height
+            let screenWidth = view.bounds.width
+            let screenHeight = view.bounds.height
+            
+            // create the panel
+            // CGRect is all the specs of the shape. Pos (X, Y) dimensions (W, H)
+            slidePanel = UIView(frame: CGRect(
+                x: screenWidth,     // staring off screen to the right
+                y: 165,             // how far away from top
+                width: 184,         // how wide
+                height: screenHeight - 450  // leaves room top and bottom
+            ))
+            
+            slidePanel.backgroundColor = .white
+            
+            // add it to the screen
+            view.addSubview(slidePanel)
+            
+            // adds the scrollable screen into the sliding panel
+            let scrollView = UIScrollView(frame: CGRect(
+                x: 0,       // starts at left edge
+                y: 0,       // starts at top of edge
+                width: slidePanel.frame.width,
+                height: slidePanel.frame.height
+            ))
+            scrollView.backgroundColor = .clear
+            slidePanel.addSubview(scrollView)
+            
+            // ContentView actually allows for scrolling
+            let contentView = UIView(frame: CGRect(
+                x: 0,
+                y: 0,
+                width: slidePanel.frame.width,
+                height: 500
+            ))
+            contentView.backgroundColor = .clear
+            scrollView.addSubview(contentView)
+            
+            scrollView.contentSize = CGSize(
+                width: slidePanel.frame.width,
+                height: 500         // must match the content view val
+                )
+            setupPanelContent(in: contentView)
+        }
+        
+        setupSlidePanel()
+        
+    
         
         pinsLocked = (pinLockSelector.selectedSegmentIndex == 1) // 1 = locked
         
@@ -73,10 +133,13 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
         
- 
-        let userInputMiles = 3.1 // Value user will enter
-        let windingFactor = 1.5 // Value to slightly take into account actual paths and roads.
-        let testRadius = (userInputMiles * 1609.34)/(2 * .pi * windingFactor) // ~5km
+        // Optional: read user-entered miles
+        if let miles = currentUserInputMiles() {
+            // Example of computing a radius using the entered miles
+            let windingFactor = 1.5
+            let _ = (miles * 1609.34) / (2 * .pi * windingFactor)
+            // Use this value where appropriate in your generation logic
+        }
         
     }
     
@@ -86,6 +149,61 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         headerBox.layer.cornerRadius = 44
         headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         headerBox.layer.masksToBounds = true
+    }
+    
+    func setupPanelContent(in container: UIView){
+        let padding: CGFloat = 12       // Space from edges
+        let fieldWidth = container.frame.width - (padding * 2)
+        
+        // distance label
+        let distanceLabel = UILabel(frame: CGRect(
+            x: padding,
+            y: 20,
+            width: fieldWidth,
+            height: 20
+        ))
+        distanceLabel.text = "Distance (miles)"
+        distanceLabel.font = .systemFont(ofSize: 14)
+        container.addSubview(distanceLabel)
+        
+        // Text field
+        let field = UITextField(frame: CGRect(
+            x: padding,
+            y: 48,
+            width: fieldWidth,
+            height: 36
+        ))
+        field.placeholder = "e.g. 3.1"
+        field.borderStyle = .roundedRect
+        field.keyboardType = .decimalPad
+        
+        // Add toolbar with Done button to dismiss keyboard
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let doneButton = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(self.dismissKeyboard))
+        toolbar.items = [flexible, doneButton]
+        field.inputAccessoryView = toolbar
+        
+        field.delegate = self
+        
+        container.addSubview(field)
+        
+        self.distanceTextField = field
+    }
+    
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+    
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
+    }
+    
+    private func currentUserInputMiles() -> Double? {
+        guard let text = distanceTextField?.text, !text.isEmpty else { return nil }
+        return Double(text)
     }
     
     // MARK: - User Actions (IBActions)
@@ -102,6 +220,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     }
     
     @IBAction func generateRouteBTN(_ sender: UIButton) {
+        // Optional: read user-entered miles
+        if let miles = currentUserInputMiles() {
+            // Example of computing a radius using the entered miles
+            let windingFactor = 1.5
+            let _ = (miles * 1609.34) / (2 * .pi * windingFactor)
+            // Use this value where appropriate in your generation logic
+        }
+
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
         let maxPins = requiredPinCount(for: selectedIndex)
 
@@ -170,6 +296,35 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             break
         }
     }
+    
+    @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
+        
+        if isPanelOpen {
+            closePanel()
+        } else {
+            openPanel()
+        }
+    }
+    
+    func openPanel() {
+        let screenWidth = view.bounds.width
+        
+        UIView.animate(withDuration: 0.3) {
+            self.slidePanel.frame.origin.x = screenWidth - 184
+        }
+        isPanelOpen = true
+        
+    }
+    
+    func closePanel() {
+        let screenWidth = self.view.bounds.width
+        
+        UIView.animate(withDuration: 0.3) {
+            self.slidePanel.frame.origin.x = screenWidth
+        }
+        isPanelOpen = false
+    }
+    
     
     // MARK: - Coordinate Entry UI
     @objc func showCoordinateEntry() {
