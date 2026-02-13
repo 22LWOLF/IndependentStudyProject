@@ -19,7 +19,7 @@ class RouteAnnotation: MKPointAnnotation {
 // MARK: - StyledPolyline
 class StyledPolyline: MKPolyline {
     // Switch for if a polyline is forward or backward (default is foward)
-    enum Kind { case forward, backward }
+    enum Kind { case forward, backward, walked, remaining }
     var kind: Kind = .forward
     
     // Identify which leg this polyline represents for styling
@@ -87,6 +87,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         // Setup progress view in header
         progressView.translatesAutoresizingMaskIntoConstraints = false
         progressView.progress = 0
+        progressView.progressTintColor = .systemBlue // filled part = blue
+        progressView.trackTintColor = .systemGray5  // empty part = light grey
+        progressView.layer.cornerRadius = 2
         headerBox.addSubview(progressView)
         NSLayoutConstraint.activate([
             progressView.leadingAnchor.constraint(equalTo: headerBox.leadingAnchor, constant: 16),
@@ -149,14 +152,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         // Set up for location tracking
         locationManager = CLLocationManager()
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyReduced
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.activityType = .fitness
-        locationManager.distanceFilter = 5 // meters
-        locationManager.pausesLocationUpdatesAutomatically = true
+        locationManager.distanceFilter = kCLDistanceFilterNone// meters
+        locationManager.pausesLocationUpdatesAutomatically = false // change to true when done testing
         locationManager.requestWhenInUseAuthorization( )
         locationManager.startUpdatingLocation()
         
-        // Show user on map]
+        // Show user on map
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .follow
         
@@ -388,10 +391,10 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         switch sender.selectedSegmentIndex {
         case 0:
             useScenicRouting = false
-            showInfoAlert(message: "Routing mode: Fastest")
+            // later I want to call generate appropriate route type once you pick a mode (less clunky)
         case 1:
             useScenicRouting = true
-            showInfoAlert(message: "Routing mode: Scenic")
+            // later I want to call generate appropriate route type once you pick a mode (less clunky)
         default:
             break
         }
@@ -497,9 +500,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
 
         }
         
+        // when you click cancel in the Go-To stuff it just closes the tab
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
-            self.showInfoAlert(message: "Cancelled location entry")
-            // don't need canceling code because when an action is called by default it will dismiss the alert.
         }
         
         alert.addAction(cancelAction)
@@ -558,9 +560,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             }
         }
         
-        // TEST TO SEE IF WORKS JUST PRINT FOR NOW
-        print("Tapped Lat: \(coordinate.latitude), Lon: \(coordinate.longitude)")
-        
         // store the coordinates in my array
         selectedCoordinates.append(coordinate)
         
@@ -616,6 +615,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     }
     
     private func resetProgressTracking(totalDistance: CLLocationDistance, routeCoords: [CLLocationCoordinate2D]) {
+        // test
+        print("🗺️ resetProgressTracking called - distance: \(totalDistance), coords: \(routeCoords.count)")
         totalRouteDistance = totalDistance
         currentRouteCoordinates = routeCoords
         traveledDistance = 0
@@ -680,7 +681,38 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         return bestAlongDistance
     }
     
+    private func nearestRouteIndex(to location: CLLocation) -> Int {
+        var closestIndex = 0
+        var closestDistance = CLLocationDistance.greatestFiniteMagnitude
+            // greatestFiniteMagnitude just means "start with the biggest possible number so anything real will be smaller"
+        for (index, coord) in currentRouteCoordinates.enumerated() {
+                // BLANK 1: Turn coord into a CLLocation so we can measure distance
+                // Hint: CLLocation(latitude: ..., longitude: ...)
+            let routePoint = CLLocation(latitude: coord.latitude ,longitude: coord.longitude)
+            
+                // BLANK 3: If this distance is less than closestDistance,
+                // update closestDistance and closestIndex
+            if location.distance(from: routePoint) < closestDistance {
+                closestIndex = index
+                closestDistance = location.distance(from: routePoint)
+            }
+            }
+            
+            return closestIndex
+        }
+    
     private func updateProgress(with newLocation: CLLocation) {
+        // testing
+        print("updateProgress called")
+        print("totalRouteDistance: \(totalRouteDistance)")
+        print("routeSegments count: \(routeSegments.count)")
+        
+        // test
+        guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else {
+                print("Guard failed - coords empty or distance is 0")  // ADD THIS
+                return
+            }
+        
         guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else { return }
         if let along = snappedProgress(for: newLocation) {
             traveledDistance = along
@@ -688,6 +720,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             DispatchQueue.main.async { self.progressView.setProgress(progress, animated: true) }
         }
         lastLocationForProgress = newLocation
+        let nearest = nearestRouteIndex(to: newLocation)
+        updateRouteOverlay(nearestIndex: nearest)
+        
     }
     
     private func speedMode(for speed: CLLocationSpeed) -> SpeedMode {
@@ -762,6 +797,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 backwardPolyline.kind = .backward
                 self?.mapView.addOverlay(backwardPolyline)
             }
+            
             
             // Capture for progress tracking (out-and-back)
             let forward = forwardCoords ?? []
@@ -849,7 +885,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             return ScoredRoute(route: route, score: combined)
         }
 
-        // Prefer highest score but ensure we stay within 1.3x distance cap; if none, fall back to fastest
+        // Prefer highest score but ensure we stay within 2.0x distance cap; if none, fall back to fastest
         let capped = scored
             .filter { $0.route.distance <= fastestDistance * 2.0 }
             .sorted { $0.score > $1.score }
@@ -1067,6 +1103,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             if styled.kind == .backward { // retain backward styling if used elsewhere
                 renderer.lineDashPattern = [2,5]
             }
+            if styled.kind == .walked {
+                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)  // clearish grey!
+                renderer.lineWidth = 5
+            }
+            if styled.kind == .remaining {
+                renderer.strokeColor = .systemBlue
+                renderer.lineWidth = 5
+            }
             return renderer
         }
 
@@ -1101,6 +1145,48 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         //makes grabbable area bigger
         annotationView?.frame = CGRect(x: 0, y: 0, width: 75, height: 75)
         return annotationView
+    }
+    
+    private func updateRouteOverlay(nearestIndex: Int) {
+        // Step 1: Remove existing walked/remaining overlays
+        // Hint: loop through mapView.overlays, find StyledPolylines
+        // where kind == .walked or .remaining, remove them
+        let overlaysToRemove = mapView.overlays.compactMap{ overlay in
+            if let styled = overlay as? StyledPolyline {
+                if styled.kind == .walked || styled.kind == .remaining {
+                    return overlay
+                }
+            }
+            return nil
+        }
+        mapView.removeOverlays(overlaysToRemove)
+        
+        
+        // Step 2: Guard that we have enough coordinates to split
+        guard currentRouteCoordinates.count > 1,
+              nearestIndex < currentRouteCoordinates.count else { return }
+        
+        // Step 3: Split the array
+        let walkedCoords = Array(currentRouteCoordinates[0...nearestIndex])
+        let remainingCoords = Array(currentRouteCoordinates[nearestIndex...])
+        
+        // Step 4: Make a StyledPolyline for walked portion
+        // kind = .walked
+        let walkedLine = StyledPolyline(coordinates: walkedCoords, count: walkedCoords.count)
+        walkedLine.kind = .walked
+        
+        let remainingLine = StyledPolyline(coordinates: remainingCoords, count: remainingCoords.count)
+        remainingLine.kind = .remaining
+        
+        
+        // Step 5: Make a StyledPolyline for remaining portion
+        // kind = .remaining
+        
+        // Step 6: Add both to mapView on main thread
+        DispatchQueue.main.async {
+            self.mapView.addOverlay(walkedLine)
+            self.mapView.addOverlay(remainingLine)
+        }
     }
     
     // For when pins are being dragged around
@@ -1141,6 +1227,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     // MARK: - CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // test
+        print("📍 GPS fired!")
         // get most recent location
         guard let location = locations.last else { return }
 
@@ -1149,12 +1237,11 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         
         updateProgress(with: location)
         
-        let mode = speedMode(for: max(location.speed, 0))
+        _ = speedMode(for: max(location.speed, 0))
         // TODO: use `mode` to color-code segments or collect averages later
 
         // Center map only the first time we get a location
         if !hasAlreadyCentered {
-            print("Centering map on: \(location.coordinate.latitude), \(location.coordinate.longitude)")
             safelyCenterMap(on: location.coordinate, distance: 10000)
             hasAlreadyCentered = true
         }
