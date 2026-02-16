@@ -46,6 +46,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var pinsLocked: Bool = false
     private var isGeneratingRoute: Bool = false
     
+    // Temporary display user speed label
+    private var speedLabel: UILabel = UILabel()
+    
     // Temporary toggle until UI selector is wired up
     private var useScenicRouting: Bool = false
     
@@ -97,6 +100,20 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             progressView.bottomAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: -8),
             progressView.heightAnchor.constraint(equalToConstant: 4)
         ])
+        
+        // Temporary user speed label info
+        speedLabel.translatesAutoresizingMaskIntoConstraints = false
+        speedLabel.textAlignment = .left    
+        speedLabel.font = .systemFont(ofSize: 14)
+        speedLabel.textColor = .label
+        headerBox.addSubview(speedLabel)
+        NSLayoutConstraint.activate([
+            speedLabel.leadingAnchor.constraint(equalTo: headerBox.leadingAnchor, constant: 16),
+            speedLabel.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
+            speedLabel.bottomAnchor.constraint(equalTo: progressView.topAnchor, constant: -4)
+        ])
+        
+        
         
         func setupSlidePanel(){
             // grab phones width and height
@@ -186,6 +203,22 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         headerBox.layer.masksToBounds = true
     }
+    
+    //temporary
+    private func updateSpeedLabel(speed: CLLocationSpeed) {
+        // speed comes in as meters per second, convert to mph
+        let mph = speed * 2.23694
+        
+        // below 0 means GPS doesn't have a reliable speed yet
+        guard mph >= 0 else {
+            speedLabel.text = "Speed: --"
+            return
+        }
+        
+        let category = speedMode(for: speed) // uses your existing function!
+        speedLabel.text = String(format: "%.1f mph - \(category.rawValue)", mph)
+    }
+    
     
     
     // MARK: - Panel (Slide-in Settings)
@@ -1238,6 +1271,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         userLocation = location.coordinate
         
         updateProgress(with: location)
+        updateSpeedLabel(speed: location.speed)
         
         _ = speedMode(for: max(location.speed, 0))
         // TODO: use `mode` to color-code segments or collect averages later
