@@ -248,9 +248,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         let screenWidth = view.bounds.width
         UIView.animate(withDuration: 0.3, animations: {
             self.slidePanel.frame.origin.x = screenWidth - 184
-        }) { _ in
-            self.distanceTextField?.becomeFirstResponder()
-        }
+        })
         isPanelOpen = true
     }
 
@@ -836,11 +834,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 }
                 
                 // Out of retries or within tolerance - show alert only if still off
-                if abs(ratio - 1.0) > tolerance {
-                    let actualMiles = actualMeters / 1609.34
-                    self.showInfoAlert(message: String(format: "Best route found: %.1f miles (requested %.1f)", actualMiles, targetMiles))
-                } else if retryCount > 0 {
-                    print("Accepted after \(retryCount) retries")
+                // Log acceptance
+                if retryCount > 0 {
+                    print(" Accepted after \(retryCount) retries - ratio: \(String(format: "%.2f", ratio))")
                 }
             }
             
