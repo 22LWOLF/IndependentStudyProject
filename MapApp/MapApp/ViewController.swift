@@ -63,7 +63,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     
     // MARK: - Tracking & Progress
-    private var followUser: Bool = true
+    private var followUser: Bool = false
     private var currentRouteCoordinates: [CLLocationCoordinate2D] = []
     private var traveledDistance: CLLocationDistance = 0
     private var lastLocationForProgress: CLLocation?
@@ -321,6 +321,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     // runs when generate route button tapped
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         // Optional: read user-entered miles
+        followUser = true
         if let miles = currentUserInputMiles() {
             // Example of computing a radius using the entered miles
             let windingFactor = 1.5
@@ -365,6 +366,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     // runs when clear route button tapped
     @IBAction func clearRouteBTN(_ sender: UIButton) {
+        followUser = false
         selectedCoordinates.removeAll()
         // Prevent any in-flight generation logic from reacting during clear
         isGeneratingRoute = false
@@ -1244,9 +1246,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         if !hasAlreadyCentered {
             safelyCenterMap(on: location.coordinate, distance: 10000)
             hasAlreadyCentered = true
-        }
-        
-        if followUser {
+        } else if followUser {
             safelyCenterMap(on: location.coordinate, distance: 1000)
         }
     }
