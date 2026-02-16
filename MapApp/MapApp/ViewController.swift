@@ -44,6 +44,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var locationManager: CLLocationManager!
     private var userLocation: CLLocationCoordinate2D?
     private var hasAlreadyCentered: Bool = false
+    private var isFollowingUser: Bool = false
 
     // Slide panel
     var slidePanel: UIView!
@@ -293,15 +294,26 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     @IBAction func showCoordinateEntry(_ sender: Any) { showCoordinateEntry() }
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
-        followUser = true
+        followUser = false
+        // Do a 1 time zoom after a short delay to let route render first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0){
+            if let location = self.userLocation {
+                self.safelyCenterMap(on: location, distance: 1000)
+            }
+        }
         if let miles = currentUserInputMiles() {
             let center = userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
-            let windingFactor = 1.5
-            let radius = (miles * 1609.34) / (2 * .pi * windingFactor)
+            let radius: Double
+            if useTimeInput{
+                radius = (miles * 1609.34) / 2.0
+            } else {
+                let windingFactor = 2.5
+                radius = (miles * 1609.34) / (2 * .pi * windingFactor)
+            }
             let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: selectedDirection)
             let selectedIndex = routeTypeSelector.selectedSegmentIndex
             switch selectedIndex {
-            case 0: generateRoute(from: center, to: endpoint)
+            case 0: generateRoute(from: center, to: endpoint, targetMiles: miles)
             case 1: generateOutAndBackRoute(from: center, to: endpoint)
             default: showInfoAlert(message: "Use pins for loop routes")
             }
@@ -347,6 +359,24 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     @IBAction func routeGenerationTypeSelector(_ sender: UISegmentedControl) {
         useScenicRouting = (sender.selectedSegmentIndex == 1)
     }
+    
+    @IBAction func recenterBTN(_ sender: UIButton) {
+        isFollowingUser.toggle()
+        
+        if isFollowingUser {
+            // Start following change appearance to know its on
+            sender.setImage(UIImage(systemName: "location.fill"), for: .normal)
+            sender.tintColor = .systemBlue
+            if let location = userLocation {
+                safelyCenterMap(on: location, distance: 1000)
+            }
+        } else {
+            // stop following
+            sender.setImage(UIImage(systemName: "location"), for: .normal)
+            sender.tintColor = .systemGray
+        }
+    }
+    
 
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
         isPanelOpen ? closePanel() : openPanel()
@@ -555,6 +585,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         lastLocationForProgress = newLocation
         let nearest = nearestRouteIndex(to: newLocation)
         updateRouteOverlay(nearestIndex: nearest)
+        updateLiveRouteInfo()
     }
 
     private func speedMode(for speed: CLLocationSpeed) -> SpeedMode {
@@ -742,10 +773,18 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         routeLeg(at: 0)
     }
 
-    func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
+    func generateRoute(from start: CLLocationCoordinate2D,
+                       to end: CLLocationCoordinate2D,
+                       targetMiles: Double? = nil,
+                       retryCount: Int = 0) {
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
-        mapView.removeOverlays(mapView.overlays)
+        
+        // Only clear overlays on the first attempt, not retries
+        if retryCount == 0 {
+            mapView.removeOverlays(mapView.overlays)
+        }
+        
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
         let request = MKDirections.Request()
@@ -753,24 +792,66 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         request.destination = destination
         request.transportType = .walking
         let directions = MKDirections(request: request)
+        
         directions.calculate { [weak self] response, error in
             defer { self?.isGeneratingRoute = false }
-            if let error = error { self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)"); return }
+            guard let self = self else { return }
+            
+            if let error = error {
+                self.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
+                return
+            }
             guard let route = response?.routes.first else { return }
-            if let targetMiles = self?.currentUserInputMiles() {
+            
+            // Check if route is close enough to target distance
+            if let targetMiles = targetMiles {
                 let targetMeters = targetMiles * 1609.34
                 let actualMeters = route.distance
-                let difference = abs(actualMeters - targetMeters)
-                let tolerance = targetMeters * 0.3
-                if difference > tolerance {
+                let ratio = actualMeters / targetMeters
+                let tolerance = 0.25  // 25%
+                
+                if abs(ratio - 1.0) > tolerance && retryCount < 4 {
+                    // Too far off - calculate adjusted radius and retry
+                    let currentDistance = CLLocation(latitude: start.latitude, longitude: start.longitude)
+                        .distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
+                    let adjustedRadius = currentDistance / ratio
+                    
+                    let newEndpoint = self.generateRandomCoordinate(
+                        around: start,
+                        radius: adjustedRadius,
+                        direction: self.selectedDirection
+                    )
+                    
+                    print("Retry \(retryCount + 1): ratio was \(String(format: "%.2f", ratio)), adjusting radius to \(Int(adjustedRadius))m")
+                    
+                    DispatchQueue.main.async {
+                        self.generateRoute(
+                            from: start,
+                            to: newEndpoint,
+                            targetMiles: targetMiles,
+                            retryCount: retryCount + 1
+                        )
+                    }
+                    return  // don't draw this route, wait for retry result
+                }
+                
+                // Out of retries or within tolerance - show alert only if still off
+                if abs(ratio - 1.0) > tolerance {
                     let actualMiles = actualMeters / 1609.34
-                    self?.showInfoAlert(message: String(format: "Closest route found: %.1f miles (requested %.1f)", actualMiles, targetMiles))
+                    self.showInfoAlert(message: String(format: "Best route found: %.1f miles (requested %.1f)", actualMiles, targetMiles))
+                } else if retryCount > 0 {
+                    print("Accepted after \(retryCount) retries")
                 }
             }
-            self?.updateRouteInfoLabel(distance: route.distance, time: route.expectedTravelTime)
-            self?.mapView.addOverlay(route.polyline)
-            let coords = self?.getCoordinates(from: route.polyline) ?? []
-            self?.resetProgressTracking(totalDistance: route.distance, routeCoords: coords)
+            
+            // Draw the route
+            DispatchQueue.main.async {
+                //self.mapView.removeOverlays(self.mapView.overlays)  // clear any partial overlays
+                self.updateRouteInfoLabel(distance: route.distance, time: route.expectedTravelTime)
+                self.mapView.addOverlay(route.polyline)
+                let coords = self.getCoordinates(from: route.polyline)
+                self.resetProgressTracking(totalDistance: route.distance, routeCoords: coords)
+            }
         }
     }
 
@@ -840,7 +921,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         if !hasAlreadyCentered {
             safelyCenterMap(on: location.coordinate, distance: 10000)
             hasAlreadyCentered = true
-        } else if followUser {
+        } else if isFollowingUser {
             safelyCenterMap(on: location.coordinate, distance: 1000)
         }
     }
@@ -852,6 +933,28 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         case .denied, .restricted:
             showInfoAlert(message: "Using default location")
         default: break
+        }
+    }
+    
+    private func updateLiveRouteInfo() {
+        guard totalRouteDistance > 0 else { return }
+        
+        let remainingMeters = max(0, totalRouteDistance - traveledDistance)
+        let remainingMiles = remainingMeters / 1609.34
+        
+        // Use the user's learned walking speed if we have enough samples
+        // otherwise fall back to 3.5mph default
+        let speedMPH: Double
+        if walkSampleCount >= 10 {
+            speedMPH = avgWalkingSpeed * 2.23694
+        } else {
+            speedMPH = 3.5
+        }
+        
+        let remainingMinutes = (remainingMiles / speedMPH) * 60
+        
+        DispatchQueue.main.async {
+            self.routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMiles, remainingMinutes)
         }
     }
 
