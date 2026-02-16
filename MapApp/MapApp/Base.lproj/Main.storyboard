@@ -124,26 +124,6 @@
                                     <action selector="pinLockChanged:" destination="BYZ-38-t0r" eventType="valueChanged" id="7kb-pV-diM"/>
                                 </connections>
                             </segmentedControl>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="wUs-JO-zr8">
-                                <rect key="frame" x="20" y="542" width="144" height="71"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="filled" title="Temp. Generate random points"/>
-                                <connections>
-                                    <action selector="tempGenerateRandomPointsBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="lGa-i2-0Ei"/>
-                                </connections>
-                            </button>
-                            <segmentedControl opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="jVf-ab-6Fg">
-                                <rect key="frame" x="256" y="592" width="120" height="32"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <segments>
-                                    <segment title="Fast"/>
-                                    <segment title="Scenic"/>
-                                </segments>
-                                <connections>
-                                    <action selector="routeGenerationTypeSelector:" destination="BYZ-38-t0r" eventType="valueChanged" id="ffO-7p-0KZ"/>
-                                </connections>
-                            </segmentedControl>
                             <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="KAP-wg-gfk">
                                 <rect key="frame" x="240" y="634" width="136" height="35"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>

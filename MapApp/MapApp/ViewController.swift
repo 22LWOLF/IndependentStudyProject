@@ -5,93 +5,128 @@
 //  Created by Wolf,Luke D on 1/16/26.
 //
 
-// MARK: - Imports
 import UIKit
 import MapKit
 import CoreLocation
 
 // MARK: - RouteAnnotation
 class RouteAnnotation: MKPointAnnotation {
-    // 0 for Start, 1 for Stop
+    // 0 for Start, 1 for Stop (or index for loops)
     var index: Int = 0
 }
 
 // MARK: - StyledPolyline
 class StyledPolyline: MKPolyline {
-    // Switch for if a polyline is forward or backward (default is foward)
     enum Kind { case forward, backward, walked, remaining }
     var kind: Kind = .forward
-    
-    // Identify which leg this polyline represents for styling
+
     var legIndex: Int = 0
     enum Mode { case fastest, scenic }
     var mode: Mode = .fastest
 }
 
+// MARK: - ViewController
 class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UITextFieldDelegate {
-    
-    // MARK: - Outlets
-    // stuff wired up from storyboard
+
+    // MARK: Outlets
     @IBOutlet weak var headerBox: UIView!
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var routeInfoLabel: UILabel!
-    
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
     @IBOutlet weak var pinLockSelector: UISegmentedControl!
-    
-    
-    // MARK: - Properties
-    // tracks stuff for routing
+
+    // MARK: Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var pinsLocked: Bool = false
     private var isGeneratingRoute: Bool = false
-    
-    // Temporary display user speed label
-    private var speedLabel: UILabel = UILabel()
-    
-    // Temporary toggle until UI selector is wired up
-    private var useScenicRouting: Bool = false
-    
-    // user location bits
+
+    // User location
     private var locationManager: CLLocationManager!
     private var userLocation: CLLocationCoordinate2D?
     private var hasAlreadyCentered: Bool = false
-    
-    // Distance input field in the slide panel
-    private var distanceTextField: UITextField?
-    
-    // actual panel and toggles
+
+    // Slide panel
     var slidePanel: UIView!
-    var isPanelOpen = false
-    
-    
-    // MARK: - Tracking & Progress
+    var isPanelOpen: Bool = false
+
+    // Inputs/UI helpers
+    private var distanceTextField: UITextField?
+    private var distanceOrTimeLabel: UILabel?
+    private var speedLabel: UILabel = UILabel()
+    private var selectedDirectionButton: UIButton?
+
+    // Routing preferences
+    private var useScenicRouting: Bool = false
+    private var useTimeInput: Bool = false
+    private var selectedDirection: String = "random" // "N", "NE", etc.
+
+    // Progress tracking
     private var followUser: Bool = false
     private var currentRouteCoordinates: [CLLocationCoordinate2D] = []
     private var traveledDistance: CLLocationDistance = 0
     private var lastLocationForProgress: CLLocation?
     private var totalRouteDistance: CLLocationDistance = 0
     private var progressView: UIProgressView = UIProgressView(progressViewStyle: .default)
-    
-    // For snap-to-route progress
-    private var routeSegments: [CLLocationCoordinate2D] = []
-    private var cumulativeSegmentLengths: [CLLocationDistance] = [] // same count as routeSegments
 
-    // Speed categorization thresholds in m/s (approx): walk < 2, jog < 3.5, run >= 3.5
+    // Snap-to-route data
+    private var routeSegments: [CLLocationCoordinate2D] = []
+    private var cumulativeSegmentLengths: [CLLocationDistance] = []
+
+    // Speed categorization thresholds in m/s
     private enum SpeedMode: String { case walking, jogging, running, unknown }
-    
-    
-    // MARK: - Lifecycle
-    // called after view loads - setup stuff here
+
+    // Speed learning system
+    private var walkSampleCount: Int = 0
+    private var jogSampleCount: Int = 0
+    private var runSampleCount: Int = 0
+    private var avgWalkingSpeed: Double = 1.4
+    private var avgJoggingSpeed: Double = 2.7
+    private var avgRunningSpeed: Double = 4.0
+
+    // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         mapView.delegate = self
-        
-        // Setup progress view in header
+        setupHeaderUI()
+        setupSlidePanel()
+
+        pinsLocked = (pinLockSelector.selectedSegmentIndex == 1)
+
+        // Location
+        locationManager = CLLocationManager()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.activityType = .fitness
+        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.pausesLocationUpdatesAutomatically = false
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+
+        // Map
+        mapView.showsUserLocation = true
+        mapView.userTrackingMode = .none
+
+        // Tap gesture for placing pins
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
+        mapView.addGestureRecognizer(tapGesture)
+
+        loadSavedSpeeds()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        headerBox.layer.cornerRadius = 44
+        headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        headerBox.layer.masksToBounds = true
+    }
+
+    // MARK: UI Setup
+    private func setupHeaderUI() {
+        // Progress view
         progressView.translatesAutoresizingMaskIntoConstraints = false
         progressView.progress = 0
-        progressView.progressTintColor = .systemBlue // filled part = blue
-        progressView.trackTintColor = .systemGray5  // empty part = light grey
+        progressView.progressTintColor = .systemBlue
+        progressView.trackTintColor = .systemGray5
         progressView.layer.cornerRadius = 2
         headerBox.addSubview(progressView)
         NSLayoutConstraint.activate([
@@ -100,10 +135,10 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             progressView.bottomAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: -8),
             progressView.heightAnchor.constraint(equalToConstant: 4)
         ])
-        
-        // Temporary user speed label info
+
+        // Speed label
         speedLabel.translatesAutoresizingMaskIntoConstraints = false
-        speedLabel.textAlignment = .left    
+        speedLabel.textAlignment = .left
         speedLabel.font = .systemFont(ofSize: 14)
         speedLabel.textColor = .label
         headerBox.addSubview(speedLabel)
@@ -112,197 +147,121 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             speedLabel.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
             speedLabel.bottomAnchor.constraint(equalTo: progressView.topAnchor, constant: -4)
         ])
-        
-        
-        
-        func setupSlidePanel(){
-            // grab phones width and height
-            let screenWidth = view.bounds.width
-            let screenHeight = view.bounds.height
-            
-            // create the panel
-            // CGRect is all the specs of the shape. Pos (X, Y) dimensions (W, H)
-            slidePanel = UIView(frame: CGRect(
-                x: screenWidth,     // staring off screen to the right
-                y: 165,             // how far away from top
-                width: 184,         // how wide
-                height: screenHeight - 450  // leaves room top and bottom
-            ))
-            
-            slidePanel.backgroundColor = .white
-            
-            // add it to the screen
-            view.addSubview(slidePanel)
-            
-            // adds the scrollable screen into the sliding panel
-            let scrollView = UIScrollView(frame: CGRect(
-                x: 0,       // starts at left edge
-                y: 0,       // starts at top of edge
-                width: slidePanel.frame.width,
-                height: slidePanel.frame.height
-            ))
-            scrollView.backgroundColor = .clear
-            slidePanel.addSubview(scrollView)
-            
-            // ContentView actually allows for scrolling
-            let contentView = UIView(frame: CGRect(
-                x: 0,
-                y: 0,
-                width: slidePanel.frame.width,
-                height: 600
-            ))
-            contentView.backgroundColor = .clear
-            scrollView.addSubview(contentView)
-            
-            scrollView.contentSize = CGSize(
-                width: slidePanel.frame.width,
-                height: 600         // must match the content view val
-                )
-            setupPanelContent(in: contentView)
-        }
-        
-        setupSlidePanel()
-        
-        
-        pinsLocked = (pinLockSelector.selectedSegmentIndex == 1) // 1 = locked
-        
-        // Set up for location tracking
-        locationManager = CLLocationManager()
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locationManager.activityType = .fitness
-        locationManager.distanceFilter = kCLDistanceFilterNone// meters
-        locationManager.pausesLocationUpdatesAutomatically = false // change to true when done testing
-        locationManager.requestWhenInUseAuthorization( )
-        locationManager.startUpdatingLocation()
-        
-        // Show user on map
-        mapView.showsUserLocation = true
-        mapView.userTrackingMode = .follow
-        
-        // listening for when the "tap" event happens on the mapView
-        // when it detects a tap it calls handleMapTap method
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
-        mapView.addGestureRecognizer(tapGesture)
-        
-        // Optional: read user-entered miles
-        if let miles = currentUserInputMiles() {
-            // Example of computing a radius using the entered miles
-            let windingFactor = 1.5
-            let _ = (miles * 1609.34) / (2 * .pi * windingFactor)
-            // Use this value where appropriate in your generation logic
-        }
-        
     }
-    
-    // called after view sizes and frames are set; round bottom corners of header box
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        // round only the bottom corners
-        headerBox.layer.cornerRadius = 44
-        headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-        headerBox.layer.masksToBounds = true
+
+    private func setupSlidePanel() {
+        let screenWidth = view.bounds.width
+        let screenHeight = view.bounds.height
+
+        slidePanel = UIView(frame: CGRect(x: screenWidth, y: 165, width: 184, height: screenHeight - 450))
+        slidePanel.backgroundColor = .white
+        view.addSubview(slidePanel)
+
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: slidePanel.frame.height))
+        scrollView.backgroundColor = .clear
+        slidePanel.addSubview(scrollView)
+
+        let contentView = UIView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: 600))
+        contentView.backgroundColor = .clear
+        scrollView.addSubview(contentView)
+        scrollView.contentSize = CGSize(width: slidePanel.frame.width, height: 600)
+
+        setupPanelContent(in: contentView)
     }
-    
-    //temporary
-    private func updateSpeedLabel(speed: CLLocationSpeed) {
-        // speed comes in as meters per second, convert to mph
-        let mph = speed * 2.23694
-        
-        // below 0 means GPS doesn't have a reliable speed yet
-        guard mph >= 0 else {
-            speedLabel.text = "Speed: --"
-            return
-        }
-        
-        let category = speedMode(for: speed) // uses your existing function!
-        speedLabel.text = String(format: "%.1f mph - \(category.rawValue)", mph)
-    }
-    
-    
-    
-    // MARK: - Panel (Slide-in Settings)
-    // this builds the right-side slidey panel
-    
-    func setupPanelContent(in container: UIView){
-        let padding: CGFloat = 12       // Space from edges
+
+    // MARK: Panel Content
+    func setupPanelContent(in container: UIView) {
+        let padding: CGFloat = 12
         let fieldWidth = container.frame.width - (padding * 2)
-        
-        // distance label
-        let distanceLabel = UILabel(frame: CGRect(
-            x: padding,
-            y: 20,
-            width: fieldWidth,
-            height: 20
-        ))
+
+        // Time/distance label
+        let timeToggleLabel = UILabel(frame: CGRect(x: padding, y: 150, width: fieldWidth, height: 20))
+        timeToggleLabel.text = "Use Time Instead"
+        timeToggleLabel.font = .systemFont(ofSize: 13)
+        container.addSubview(timeToggleLabel)
+
+        let timeToggle = UISwitch(frame: CGRect(x: padding, y: 175, width: fieldWidth, height: 31))
+        timeToggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
+        container.addSubview(timeToggle)
+
+        let distanceLabel = UILabel(frame: CGRect(x: padding, y: 20, width: fieldWidth, height: 20))
         distanceLabel.text = "Distance (miles)"
         distanceLabel.font = .systemFont(ofSize: 14)
         container.addSubview(distanceLabel)
-        
-        // Text field
-        let field = UITextField(frame: CGRect(
-            x: padding,
-            y: 48,
-            width: fieldWidth,
-            height: 36
-        ))
+        self.distanceOrTimeLabel = distanceLabel
+
+        let field = UITextField(frame: CGRect(x: padding, y: 48, width: fieldWidth, height: 36))
         field.placeholder = "e.g. 3.1"
         field.borderStyle = .roundedRect
         field.keyboardType = .decimalPad
-        
-        // Add toolbar with Done button to dismiss keyboard
+
+        setupDirectionGrid(in: container, startY: 270)
+
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
         let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
         let doneButton = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(self.dismissKeyboard))
         toolbar.items = [flexible, doneButton]
         field.inputAccessoryView = toolbar
-        
         field.delegate = self
-        
-        // Ensure tapping always focuses the field
         let tap = UITapGestureRecognizer(target: field, action: #selector(UITextField.becomeFirstResponder))
         field.addGestureRecognizer(tap)
         field.isUserInteractionEnabled = true
-        
         container.addSubview(field)
-        
         self.distanceTextField = field
-        
-        // Add a new routing mode segmented control inside the panel (Fastest / Scenic)
+
         let routingModeControl = UISegmentedControl(items: ["Fastest", "Scenic"])
         routingModeControl.selectedSegmentIndex = self.useScenicRouting ? 1 : 0
         routingModeControl.addTarget(self, action: #selector(self.routeGenerationTypeSelector(_:)), for: .valueChanged)
         routingModeControl.frame = CGRect(x: padding, y: 100, width: fieldWidth, height: 32)
         container.addSubview(routingModeControl)
     }
-    
+
+    private func setupDirectionGrid(in container: UIView, startY: CGFloat) {
+        let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
+        let buttonSize: CGFloat = 44
+        let gap: CGFloat = 4
+        let gridWidth = (buttonSize * 3) + (gap * 2)
+        let startX = (container.frame.width - gridWidth) / 2
+
+        for row in 0..<3 {
+            for col in 0..<3 {
+                let title = directions[row][col]
+                let button = UIButton(type: .system)
+                button.frame = CGRect(x: startX + CGFloat(col) * (buttonSize + gap), y: startY + CGFloat(row) * (buttonSize + gap), width: buttonSize, height: buttonSize)
+                button.setTitle(title, for: .normal)
+                button.backgroundColor = .systemIndigo
+                button.layer.cornerRadius = 8
+                if title == "." {
+                    button.backgroundColor = .systemPurple
+                    button.isEnabled = false
+                }
+                button.addTarget(self, action: #selector(directionButtonTapped(_:)), for: .touchUpInside)
+                container.addSubview(button)
+            }
+        }
+    }
+
+    // MARK: Panel Open/Close
     func openPanel() {
         let screenWidth = view.bounds.width
-        
         UIView.animate(withDuration: 0.3, animations: {
             self.slidePanel.frame.origin.x = screenWidth - 184
         }) { _ in
-            // Ensure the text field becomes first responder so the number pad shows
             self.distanceTextField?.becomeFirstResponder()
         }
         isPanelOpen = true
-        
     }
-    
+
     func closePanel() {
-        let screenWidth = self.view.bounds.width
-        
+        let screenWidth = view.bounds.width
         UIView.animate(withDuration: 0.3) {
             self.slidePanel.frame.origin.x = screenWidth
         }
         isPanelOpen = false
     }
-    
-    
-    // MARK: - Alerts
-    // helpers for showing alerts
-    
+
+    // MARK: Alerts
     func showInfoAlert(title: String = "Info", message: String) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -310,7 +269,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             self.present(alert, animated: true)
         }
     }
-    
+
     func showErrorAlert(title: String = "Error", message: String) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -318,14 +277,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             self.present(alert, animated: true)
         }
     }
-    
-    func showConfirmationAlert(
-        title: String,
-        message: String,
-        confirmTitle: String = "OK",
-        cancelTitle: String = "Cancel",
-        onConfirm: @escaping () -> Void
-    ) {
+
+    func showConfirmationAlert(title: String, message: String, confirmTitle: String = "OK", cancelTitle: String = "Cancel", onConfirm: @escaping () -> Void) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
             let confirm = UIAlertAction(title: confirmTitle, style: .default) { _ in onConfirm() }
@@ -335,275 +288,143 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             self.present(alert, animated: true)
         }
     }
-    
-    
-    // MARK: - User Actions (IBActions)
-    // runs when show coordinate entry button tapped
-    @IBAction func showCoordinateEntry(_ sender: Any) {
-        showCoordinateEntry()
-    }
-    
-    // runs when temp generate random points button tapped
-    @IBAction func tempGenerateRandomPointsBTN(_ sender: UIButton) {
-        let center = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
-        let coord = generateRandomCoordinate(around: center, radius: 1000)
-        print("Temp random point: \(coord.latitude), \(coord.longitude)")
-        addAnnotation(at: coord, title: "Temp")
-    }
-    
-    // runs when generate route button tapped
+
+    // MARK: IBActions
+    @IBAction func showCoordinateEntry(_ sender: Any) { showCoordinateEntry() }
+
     @IBAction func generateRouteBTN(_ sender: UIButton) {
-        // Optional: read user-entered miles
         followUser = true
         if let miles = currentUserInputMiles() {
-            // Example of computing a radius using the entered miles
+            let center = userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
             let windingFactor = 1.5
-            let _ = (miles * 1609.34) / (2 * .pi * windingFactor)
-            // Use this value where appropriate in your generation logic
+            let radius = (miles * 1609.34) / (2 * .pi * windingFactor)
+            let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: selectedDirection)
+            let selectedIndex = routeTypeSelector.selectedSegmentIndex
+            switch selectedIndex {
+            case 0: generateRoute(from: center, to: endpoint)
+            case 1: generateOutAndBackRoute(from: center, to: endpoint)
+            default: showInfoAlert(message: "Use pins for loop routes")
+            }
+            return
         }
 
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
         let maxPins = requiredPinCount(for: selectedIndex)
-
-        // Validate pin count for the selected route type
         if selectedIndex == 2 {
-            // Loop: require at least 3 points (scalable)
-            guard selectedCoordinates.count >= 3 else {
-                showInfoAlert(message: "Please place at least 3 pins for a loop")
-                return
-            }
+            guard selectedCoordinates.count >= 3 else { showInfoAlert(message: "Please place at least 3 pins for a loop"); return }
         } else {
-            // One-way / Out-and-back: require exactly 2
-            guard selectedCoordinates.count == maxPins else {
-                showInfoAlert(message: "Please place 2 pins")
-                return
-            }
+            guard selectedCoordinates.count == maxPins else { showInfoAlert(message: "Please place 2 pins"); return }
         }
-
-        // Check which segment is selected
         switch selectedIndex {
-        case 0: // One-way
+        case 0:
             guard selectedCoordinates.count >= 2 else { return }
             generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-        case 1: // Out-and-back
+        case 1:
             guard selectedCoordinates.count >= 2 else { return }
             generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-        case 2: // loop
+        case 2:
             guard selectedCoordinates.count >= 3 else { return }
             generateLoopRoute(points: selectedCoordinates)
-        default:
-            break
+        default: break
         }
-
     }
-    
-    // runs when clear route button tapped
+
     @IBAction func clearRouteBTN(_ sender: UIButton) {
         followUser = false
         selectedCoordinates.removeAll()
-        // Prevent any in-flight generation logic from reacting during clear
         isGeneratingRoute = false
-        // Remove overlays first, then annotations
         mapView.removeOverlays(mapView.overlays)
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
-        // Reset tracking/progress
         resetProgressTracking(totalDistance: 0, routeCoords: [])
         progressView.setProgress(0, animated: false)
     }
-    
-    // runs when pin lock segmented control changed
+
     @IBAction func pinLockChanged(_ sender: UISegmentedControl) {
         pinsLocked = (sender.selectedSegmentIndex == 1)
-        if pinsLocked {
-            showInfoAlert(message: "Pin placement is now locked")
-        } else {
-            showInfoAlert(message: "Pin placement is now unlocked")
-        }
+        showInfoAlert(message: pinsLocked ? "Pin placement is now locked" : "Pin placement is now unlocked")
     }
-    
-    // runs when routing mode segmented control changed
+
     @IBAction func routeGenerationTypeSelector(_ sender: UISegmentedControl) {
-        switch sender.selectedSegmentIndex {
-        case 0:
-            useScenicRouting = false
-            // later I want to call generate appropriate route type once you pick a mode (less clunky)
-        case 1:
-            useScenicRouting = true
-            // later I want to call generate appropriate route type once you pick a mode (less clunky)
-        default:
-            break
-        }
+        useScenicRouting = (sender.selectedSegmentIndex == 1)
     }
-    
-    // runs when route settings button tapped
+
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
-        
-        if isPanelOpen {
-            closePanel()
+        isPanelOpen ? closePanel() : openPanel()
+    }
+
+    // MARK: - @objc Handlers
+    @objc private func timeToggleChanged(_ sender: UISwitch) {
+        useTimeInput = sender.isOn
+        if sender.isOn {
+            distanceOrTimeLabel?.text = "Time (min)"
+            distanceTextField?.placeholder = "e.g. 30"
         } else {
-            openPanel()
+            distanceOrTimeLabel?.text = "Distance (miles)"
+            distanceTextField?.placeholder = "e.g. 3.2"
         }
+        distanceTextField?.isHidden = false
+        distanceTextField?.text = ""
     }
-    
-    // MARK: - Coordinate Entry UI
-    // shows the alert dialog for user to enter lat/lon manually
-    @objc func showCoordinateEntry() {
-        // creating the actual alert popup
-        let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and longitude (-90 to 90, -180 to 180)", preferredStyle: .alert)
-        
-        // adding lat textfield
-        alert.addTextField { textField in
-            textField.placeholder = "Latitude (-90 to 90)"
-            textField.keyboardType = .numbersAndPunctuation
-        }
-        // adding long textfield
-        alert.addTextField { textField in
-            textField.placeholder = "Longitude (-180 to 180)"
-            textField.keyboardType = .numbersAndPunctuation
-        }
-        
-        // creating the Go action
-        // Creating a button + all the code that happens when its pressed in one statement.
-        // UIAlertAction is creating a button for the alert
-        // title: "Go" is the buttons label
-        // style: .default is how it looks (.cancel for bold, .destructive for red.)
-        // {action in...} is the code that runs when the button is tapped
-        let goAction = UIAlertAction(title: "Go", style: .default) { action in
-            // this stuff runs when the user taps Go
-            
-            // looking at textfields to make sure it is not empty
-            guard let latText = alert.textFields?[0].text, !latText.isEmpty else {
-                self.showErrorAlert(message: "No latitude entered")
-                return
-            }
-            guard let longText = alert.textFields?[1].text, !longText.isEmpty else {
-                self.showErrorAlert(message: "No longitude entered")
-                return
-            }
-            
-            
-            
-            // taking string from textfield's and converting to double if it isn't a value then it will give error
-            guard let lat = Double(latText) else {
-                self.showErrorAlert(message: "Latitude is not a valid number")
-                return
-            }
-            guard let long = Double(longText) else {
-                self.showErrorAlert(message: "Longitude is not a valid number")
-                return
-            }
-            
-            var safeLat = lat
-            var needsPoleWarning = false
 
-            // Clamp latitude to just inside valid range to avoid MapKit pole issues
-            if safeLat <= -90.0 {
-                safeLat = -89.9999
-                needsPoleWarning = true
-            } else if safeLat >= 90.0 {
-                safeLat = 89.9999
-                needsPoleWarning = true
-            }
-
-            // Validate original inputs are within allowed ranges
-            guard lat >= -90.0, lat <= 90.0 else {
-                self.showErrorAlert(message: "Latitude out of range (-90 to 90)")
-                return
-            }
-            guard long >= -180.0, long <= 180.0 else {
-                self.showErrorAlert(message: "Longitude out of range (-180 to 180)")
-                return
-            }
-
-            // Inform user if we had to clamp latitude at the poles
-            if needsPoleWarning {
-                self.showInfoAlert(title: "Adjusted Latitude", message: "Latitude at the exact pole is not supported. Adjusted to \(String(format: "%.4f", safeLat)).")
-            }
-
-            // Use the clamped coordinates to avoid crashes
-            let coordinate = CLLocationCoordinate2D(latitude: safeLat, longitude: long)
-
-            // Define a reasonable region around the coordinate
-//            let region = MKCoordinateRegion(
-//                center: coordinate,
-//                latitudinalMeters: 10000,
-//                longitudinalMeters: 10000
-//            )
-//
-//            self.mapView.setRegion(region, animated: true)
-            self.safelyCenterMap(on: coordinate, distance: 10000)
-
-        }
-        
-        // when you click cancel in the Go-To stuff it just closes the tab
-        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
-        }
-        
-        alert.addAction(cancelAction)
-        alert.addAction(goAction)
-        
-        // show alert on screen
-        present(alert, animated: true)
-    }
-    
-    
-    // MARK: - Map Helpers
-    // random helper stuff for dealing with the map
-    
-    // MARK: Map Centering Helper
-    private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
-        // Use camera-based centering to avoid invalid longitude spans near the poles
-        let camera = MKMapCamera(lookingAtCenter: coordinate,
-                                 fromDistance: max(100, distance),
-                                 pitch: 0,
-                                 heading: 0)
-        mapView.setCamera(camera, animated: true)
-    }
-    
-    // MARK: Pin Count Helper
-    private func requiredPinCount(for selectedIndex: Int) -> Int {
-        // 0 = one-way (2 pins), 1 = out-and-back (2 pins), 2 = loop (3 pins)
-        return (selectedIndex == 2) ? 3 : 2
-    }
-    
-    // MARK: Gesture Handling
-    @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
-        
-        // Respect pin lock
-        if pinsLocked {
+    @objc private func directionButtonTapped(_ sender: UIButton) {
+        guard let direction = sender.title(for: .normal) else { return }
+        selectedDirectionButton?.backgroundColor = .systemIndigo
+        selectedDirectionButton?.setTitleColor(.systemBlue, for: .normal)
+        if selectedDirectionButton == sender {
+            selectedDirectionButton = nil
+            selectedDirection = "random"
             return
         }
-        
-        // gets the tap location in the view (screen pixels)
-        // EX: tap found at 100 pixels from the top of screen and 300 pixels from right of screen.
+        sender.backgroundColor = .systemBlue
+        sender.setTitleColor(.white, for: .normal)
+        selectedDirectionButton = sender
+        selectedDirection = direction
+    }
+
+    @objc func showCoordinateEntry() {
+        let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and longitude (-90 to 90, -180 to 180)", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "Latitude (-90 to 90)"; $0.keyboardType = .numbersAndPunctuation }
+        alert.addTextField { $0.placeholder = "Longitude (-180 to 180)"; $0.keyboardType = .numbersAndPunctuation }
+        let goAction = UIAlertAction(title: "Go", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            guard let latText = alert.textFields?[0].text, !latText.isEmpty else { self.showErrorAlert(message: "No latitude entered"); return }
+            guard let longText = alert.textFields?[1].text, !longText.isEmpty else { self.showErrorAlert(message: "No longitude entered"); return }
+            guard let lat = Double(latText) else { self.showErrorAlert(message: "Latitude is not a valid number"); return }
+            guard let long = Double(longText) else { self.showErrorAlert(message: "Longitude is not a valid number"); return }
+            var safeLat = lat
+            var needsPoleWarning = false
+            if safeLat <= -90.0 { safeLat = -89.9999; needsPoleWarning = true }
+            else if safeLat >= 90.0 { safeLat = 89.9999; needsPoleWarning = true }
+            guard lat >= -90.0, lat <= 90.0 else { self.showErrorAlert(message: "Latitude out of range (-90 to 90)"); return }
+            guard long >= -180.0, long <= 180.0 else { self.showErrorAlert(message: "Longitude out of range (-180 to 180)"); return }
+            if needsPoleWarning { self.showInfoAlert(title: "Adjusted Latitude", message: "Latitude adjusted to \(String(format: "%.4f", safeLat)).") }
+            let coordinate = CLLocationCoordinate2D(latitude: safeLat, longitude: long)
+            self.safelyCenterMap(on: coordinate, distance: 10000)
+        }
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        alert.addAction(cancelAction)
+        alert.addAction(goAction)
+        present(alert, animated: true)
+    }
+
+    @objc func handleMapTap(_ gesture: UITapGestureRecognizer) {
+        if pinsLocked { return }
         let locationInView = gesture.location(in: mapView)
-        
-        // convert the taps into coordinates (lat/long)
-        // it basicall takes the tap location in pixels and then converts that into the lat/long for the map.
         let coordinate = mapView.convert(locationInView, toCoordinateFrom: mapView)
-        
-        // Sets the amount of max pins = to the route type
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
         let maxPins = requiredPinCount(for: selectedIndex)
-        
-        
-        // checks too see if there are already 2 points. if so then delete all the annotations and saved coords.
-        if selectedIndex != 2 { // not loop
+        if selectedIndex != 2 {
             if selectedCoordinates.count >= maxPins {
                 showInfoAlert(message: "You already have \(maxPins) pins for this route type. Tap Cancel to reset.")
                 return
             }
         }
-        
-        // store the coordinates in my array
         selectedCoordinates.append(coordinate)
-        
-        // alters the title of the coordinate depending if it is the 1st or 2nd annotation
         let label: String
         if selectedCoordinates.count == 1 {
             label = "Start"
-        } else if selectedIndex == 2 { // loop mode, 3rd pin is C
-            let base = 64 + selectedCoordinates.count // 65 = 'A'
+        } else if selectedIndex == 2 {
+            let base = 64 + selectedCoordinates.count
             if let scalar = UnicodeScalar(base), CharacterSet.uppercaseLetters.contains(scalar) {
                 label = String(scalar)
             } else {
@@ -612,46 +433,50 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         } else {
             label = "Stop"
         }
-        // adds annotation to the map with the coensiding name
         addAnnotation(at: coordinate, title: label)
     }
-    
-    // MARK: Map Annotation Helpers
-    // Remove all annotations from the map
-    func removeAnnotations() {
-        mapView.removeAnnotations(mapView.annotations)
+
+    // MARK: Map Helpers
+    private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
+        let camera = MKMapCamera(lookingAtCenter: coordinate, fromDistance: max(100, distance), pitch: 0, heading: 0)
+        mapView.setCamera(camera, animated: true)
     }
-    
-    // Add a single annotation to the map with an optional title
+
+    private func requiredPinCount(for selectedIndex: Int) -> Int { (selectedIndex == 2) ? 3 : 2 }
+
+    func removeAnnotations() { mapView.removeAnnotations(mapView.annotations) }
+
     func addAnnotation(at coordinate: CLLocationCoordinate2D, title: String? = nil) {
         let annotation = RouteAnnotation()
         annotation.coordinate = coordinate
         annotation.title = title
-        // Index corresponds to the position just appended
         annotation.index = max(0, selectedCoordinates.count - 1)
         mapView.addAnnotation(annotation)
     }
-    
-    // MARK: - Routing
-    
-    // MARK: Route Generation Helpers
-    // math-y bits for distance and progress
-    
-    // turns distance/time into info string and shows it in label
+
+    // MARK: Routing
+    private func angleRange(for direction: String) -> ClosedRange<Double> {
+        switch direction {
+        case "N": return 337.5...360.0
+        case "NE": return 22.5...67.5
+        case "E": return 67.5...112.5
+        case "SE": return 112.5...157.5
+        case "S": return 157.5...202.5
+        case "SW": return 202.5...247.5
+        case "W": return 247.5...292.5
+        case "NW": return 292.5...337.5
+        default: return 0.0...360.0
+        }
+    }
+
     func updateRouteInfoLabel(distance: CLLocationDistance, time: TimeInterval) {
-        // Turns distance given (meters) into miles
-        let distanceMiles = distance/1609.34
-        // Turns time given (seconds) into minutes
-        let timeMinutes = time/60.0
-        // The format and string that will be displayed with the given info.
+        let distanceMiles = distance / 1609.34
+        let timeMinutes = time / 60.0
         let infoText = String(format: "%.2f miles • ~%.0f min", distanceMiles, timeMinutes)
-        // Displays info from before on the routeInfoLabel at top middle of screen.
         routeInfoLabel.text = infoText
     }
-    
+
     private func resetProgressTracking(totalDistance: CLLocationDistance, routeCoords: [CLLocationCoordinate2D]) {
-        // test
-        print("🗺️ resetProgressTracking called - distance: \(totalDistance), coords: \(routeCoords.count)")
         totalRouteDistance = totalDistance
         currentRouteCoordinates = routeCoords
         traveledDistance = 0
@@ -659,11 +484,10 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         prepareSnapToRouteData(from: routeCoords)
         DispatchQueue.main.async { self.progressView.setProgress(0, animated: true) }
     }
-    
+
     private func prepareSnapToRouteData(from coords: [CLLocationCoordinate2D]) {
         routeSegments = coords
         cumulativeSegmentLengths = Array(repeating: 0, count: coords.count)
-        // Nothing to do for 0 or 1 coordinate; no segments to measure
         guard coords.count >= 2 else { return }
         var running: CLLocationDistance = 0
         for i in 1..<coords.count {
@@ -673,21 +497,17 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             cumulativeSegmentLengths[i] = running
         }
     }
-    
+
     private func snappedProgress(for location: CLLocation) -> CLLocationDistance? {
         guard routeSegments.count >= 2 else { return nil }
         var bestDistanceToSegment = CLLocationDistance.greatestFiniteMagnitude
         var bestAlongDistance: CLLocationDistance = 0
-
         for i in 1..<routeSegments.count {
             let p0 = routeSegments[i-1]
             let p1 = routeSegments[i]
-
-            // Convert to 2D approximate meters using a local projection around p0
             let a = MKMapPoint(p0)
             let b = MKMapPoint(p1)
             let p = MKMapPoint(location.coordinate)
-
             let ab = CGPoint(x: b.x - a.x, y: b.y - a.y)
             let ap = CGPoint(x: p.x - a.x, y: p.y - a.y)
             let abLen2 = (ab.x * ab.x) + (ab.y * ab.y)
@@ -695,18 +515,13 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             var t = ((ap.x * ab.x) + (ap.y * ab.y)) / abLen2
             t = max(0, min(1, t))
             let proj = CGPoint(x: a.x + ab.x * t, y: a.y + ab.y * t)
-
             let dx = proj.x - p.x
             let dy = proj.y - p.y
             let distToSeg = sqrt(dx*dx + dy*dy)
-
             if distToSeg < bestDistanceToSegment {
                 bestDistanceToSegment = distToSeg
-                // Distance along route up to start of this segment
                 let upToPrev = cumulativeSegmentLengths[i-1]
-                // Add partial within this segment
                 let segStart = CLLocation(latitude: p0.latitude, longitude: p0.longitude)
-                // Convert proj back to coordinate
                 let projCoord = MKMapPoint(x: proj.x, y: proj.y).coordinate
                 let projLoc = CLLocation(latitude: projCoord.latitude, longitude: projCoord.longitude)
                 let partial = segStart.distance(from: projLoc)
@@ -715,39 +530,22 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
         return bestAlongDistance
     }
-    
+
     private func nearestRouteIndex(to location: CLLocation) -> Int {
         var closestIndex = 0
         var closestDistance = CLLocationDistance.greatestFiniteMagnitude
-            // greatestFiniteMagnitude just means "start with the biggest possible number so anything real will be smaller"
         for (index, coord) in currentRouteCoordinates.enumerated() {
-                // BLANK 1: Turn coord into a CLLocation so we can measure distance
-                // Hint: CLLocation(latitude: ..., longitude: ...)
-            let routePoint = CLLocation(latitude: coord.latitude ,longitude: coord.longitude)
-            
-                // BLANK 3: If this distance is less than closestDistance,
-                // update closestDistance and closestIndex
-            if location.distance(from: routePoint) < closestDistance {
+            let routePoint = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            let d = location.distance(from: routePoint)
+            if d < closestDistance {
+                closestDistance = d
                 closestIndex = index
-                closestDistance = location.distance(from: routePoint)
             }
-            }
-            
-            return closestIndex
         }
-    
+        return closestIndex
+    }
+
     private func updateProgress(with newLocation: CLLocation) {
-        // testing
-        print("updateProgress called")
-        print("totalRouteDistance: \(totalRouteDistance)")
-        print("routeSegments count: \(routeSegments.count)")
-        
-        // test
-        guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else {
-                print("Guard failed - coords empty or distance is 0")  // ADD THIS
-                return
-            }
-        
         guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else { return }
         if let along = snappedProgress(for: newLocation) {
             traveledDistance = along
@@ -757,9 +555,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         lastLocationForProgress = newLocation
         let nearest = nearestRouteIndex(to: newLocation)
         updateRouteOverlay(nearestIndex: nearest)
-        
     }
-    
+
     private func speedMode(for speed: CLLocationSpeed) -> SpeedMode {
         if speed.isNaN || speed < 0 { return .unknown }
         switch speed {
@@ -769,212 +566,117 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    
-    // MARK: Route Generation
-    // For getting poly line coordinates (how the route is specifically laid out.
-    func getCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D]{
-        // Grabs all the points that make up the polyline
+    func getCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {
         let points = polyline.points()
-        // Counts all the points used in the polyline
         let pointCount = polyline.pointCount
-        
         var coordinates: [CLLocationCoordinate2D] = []
-        // For points 0 to pointCount-1 store the coords
-        for i in 0..<pointCount {
-            let point = points[i]
-            coordinates.append(point.coordinate)
-        }
+        for i in 0..<pointCount { coordinates.append(points[i].coordinate) }
         return coordinates
     }
-    
-    // This will be the function called when out-and-back route type is selected and a route is generated.
+
     func generateOutAndBackRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
-        
         mapView.removeOverlays(mapView.overlays)
-        
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
-        
         let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .walking
-        
         let directions = MKDirections(request: request)
-        
         directions.calculate { [weak self] response, error in
             defer { self?.isGeneratingRoute = false }
-            if let error = error {
-                self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
-                return
-            }
-            
+            if let error = error { self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)"); return }
             guard let route = response?.routes.first else { return }
-            
-            // DOUBLED for out-and-back
             let totalDistance = route.distance * 2
             let totalTime = route.expectedTravelTime * 2
             self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
-            
-            // Add forward route
             self?.mapView.addOverlay(route.polyline)
-            
-            // Get coordinates and reverse them
-            let forwardCoords = self?.getCoordinates(from: route.polyline)
-            let backwardCoords = forwardCoords?.reversed()
-            
-            // Create backward polyline with custom style marker
-            if let backwardCoords = backwardCoords {
-                let backwardArray = Array(backwardCoords)
-                let backwardPolyline = StyledPolyline(coordinates: backwardArray, count: backwardArray.count)
-                backwardPolyline.kind = .backward
-                self?.mapView.addOverlay(backwardPolyline)
-            }
-            
-            
-            // Capture for progress tracking (out-and-back)
-            let forward = forwardCoords ?? []
-            let backward = Array((forwardCoords ?? []).reversed())
-            let combined = forward + backward
+            let forwardCoords = self?.getCoordinates(from: route.polyline) ?? []
+            let backward = Array(forwardCoords.reversed())
+            let backwardPolyline = StyledPolyline(coordinates: backward, count: backward.count)
+            backwardPolyline.kind = .backward
+            self?.mapView.addOverlay(backwardPolyline)
+            let combined = forwardCoords + backward
             self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: combined)
         }
     }
-    
-    // MARK: Routing Helpers
-    private func requestWalkingRoutes(from start: CLLocationCoordinate2D,
-                                      to end: CLLocationCoordinate2D,
-                                      requestAlternates: Bool,
-                                      completion: @escaping (Result<[MKRoute], Error>) -> Void) {
+
+    private func requestWalkingRoutes(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, requestAlternates: Bool, completion: @escaping (Result<[MKRoute], Error>) -> Void) {
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
-
         let request = MKDirections.Request()
         request.source = source
         request.destination = destination
         request.transportType = .walking
         request.requestsAlternateRoutes = requestAlternates
-
         let directions = MKDirections(request: request)
         directions.calculate { response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
+            if let error = error { completion(.failure(error)); return }
             guard let routes = response?.routes, !routes.isEmpty else {
-                completion(.failure(NSError(domain: "Route", code: -1, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
+                completion(.failure(NSError(domain: "Route", code: -1, userInfo: [NSLocalizedDescriptionKey: "No route found."])));
                 return
             }
             completion(.success(routes))
         }
     }
 
-    // Convenience wrapper that returns the single fastest route (existing behavior)
-    private func requestWalkingRoute(from start: CLLocationCoordinate2D,
-                                    to end: CLLocationCoordinate2D,
-                                    completion: @escaping (Result<MKRoute, Error>) -> Void) {
+    private func requestWalkingRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, completion: @escaping (Result<MKRoute, Error>) -> Void) {
         requestWalkingRoutes(from: start, to: end, requestAlternates: false) { result in
             switch result {
-            case .failure(let error):
-                completion(.failure(error))
+            case .failure(let error): completion(.failure(error))
             case .success(let routes):
-                // Choose the route with minimal expected travel time
                 guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else {
-                    completion(.failure(NSError(domain: "Route", code: -2, userInfo: [NSLocalizedDescriptionKey: "No route found."])) )
-                    return
+                    completion(.failure(NSError(domain: "Route", code: -2, userInfo: [NSLocalizedDescriptionKey: "No route found."]))); return
                 }
                 completion(.success(fastest))
             }
         }
     }
 
-    // Simple scenic selector: prefer a longer route within a tolerance; break ties by lower avg speed
     private func pickScenicRoute(from routes: [MKRoute]) -> MKRoute {
-        // Establish a baseline fastest route to set tolerances
-        guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else {
-            return routes[0]
-        }
-
+        guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else { return routes[0] }
         let fastestDistance = fastest.distance
-
-        // Score routes: prefer distance up to 1.3x of fastest, then prefer higher distance and lower avg speeda
         struct ScoredRoute { let route: MKRoute; let score: Double }
-
         let scored = routes.map { route -> ScoredRoute in
             let distance = route.distance
             let time = max(route.expectedTravelTime, 1.0)
-            let avgSpeedProxy = distance / time // higher = faster; scenic prefers lower
-
-            // Distance factor: favor routes longer than fastest but penalize if too long (> 1.3x)
-            // The higher the withinCap is the more "loose" the grading will get
+            let avgSpeedProxy = distance / time
             let lengthRatio = distance / max(fastestDistance, 1.0)
             let withinCap = min(lengthRatio, 2.0)
-            let lengthScore = withinCap // up to 1.8
-
-            // Speed factor: invert avg speed so slower (more meandering) is better
+            let lengthScore = withinCap
             let speedScore = 1.0 / avgSpeedProxy
-
-            // Combine with weights; tweak as desired
             let combined = (lengthScore * 0.9) + (speedScore * 0.1)
             return ScoredRoute(route: route, score: combined)
         }
-
-        // Prefer highest score but ensure we stay within 2.0x distance cap; if none, fall back to fastest
-        let capped = scored
-            .filter { $0.route.distance <= fastestDistance * 2.0 }
-            .sorted { $0.score > $1.score }
-
+        let capped = scored.filter { $0.route.distance <= fastestDistance * 2.0 }.sorted { $0.score > $1.score }
         return capped.first?.route ?? fastest
     }
-    
-    
-    // MARK: Loop Helpers
-    // Dispatcher: chooses fastest vs scenic for all legs based on `useScenicRouting`.
+
+    // MARK: Loop helpers
     func generateLoopRoute(points: [CLLocationCoordinate2D]) {
-        if useScenicRouting {
-            generateLoopRouteScenic(points: points)
-        } else {
-            generateLoopRouteFastest(points: points)
-        }
+        if useScenicRouting { generateLoopRouteScenic(points: points) } else { generateLoopRouteFastest(points: points) }
     }
 
-    // MARK: Loop: Fastest everywhere
     private func generateLoopRouteFastest(points: [CLLocationCoordinate2D]) {
         guard points.count >= 3 else { showInfoAlert(message: "Need at least 3 points for a loop"); return }
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
-
         mapView.removeOverlays(mapView.overlays)
-
         var totalDistance: CLLocationDistance = 0
         var totalTime: TimeInterval = 0
-
-        func finish() {
-            DispatchQueue.main.async { [weak self] in
-                self?.isGeneratingRoute = false
-            }
-        }
-
-        // Build legs: (0->1), (1->2), ..., (n-1->0)
         let n = points.count
-
+        func finish() { DispatchQueue.main.async { [weak self] in self?.isGeneratingRoute = false } }
         func routeLeg(at index: Int) {
-            if index >= n { // done
-                finish()
-                return
-            }
+            if index >= n { finish(); return }
             let start = points[index]
             let end = points[(index + 1) % n]
-
-            requestWalkingRoute(from: start, to: end) { [weak self] (result: Result<MKRoute, Error>) in
+            requestWalkingRoute(from: start, to: end) { [weak self] result in
                 switch result {
-                case .failure(let error):
-                    self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
-                    finish()
+                case .failure(let error): self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)"); finish()
                 case .success(let route):
                     DispatchQueue.main.async {
-                        // Style each leg with a different color via legIndex
                         let coords = self?.getCoordinates(from: route.polyline) ?? []
                         let styled = StyledPolyline(coordinates: coords, count: coords.count)
                         styled.legIndex = index
@@ -984,58 +686,36 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                     totalDistance += route.distance
                     totalTime += route.expectedTravelTime
                     if index == n - 1 {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
-                        }
-                        // Build combined coordinates for loop
+                        DispatchQueue.main.async { [weak self] in self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime) }
                         var allCoords: [CLLocationCoordinate2D] = []
                         for overlay in self?.mapView.overlays ?? [] {
                             if let sp = overlay as? StyledPolyline { allCoords.append(contentsOf: self?.getCoordinates(from: sp) ?? []) }
                         }
                         self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: allCoords)
                         finish()
-                    } else {
-                        routeLeg(at: index + 1)
-                    }
+                    } else { routeLeg(at: index + 1) }
                 }
             }
         }
-
         routeLeg(at: 0)
     }
 
-    // MARK: Loop: Scenic everywhere
     private func generateLoopRouteScenic(points: [CLLocationCoordinate2D]) {
         guard points.count >= 3 else { showInfoAlert(message: "Need at least 3 points for a loop"); return }
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
-
         mapView.removeOverlays(mapView.overlays)
-
         var totalDistance: CLLocationDistance = 0
         var totalTime: TimeInterval = 0
-
-        func finish() {
-            DispatchQueue.main.async { [weak self] in
-                self?.isGeneratingRoute = false
-            }
-        }
-
         let n = points.count
-
+        func finish() { DispatchQueue.main.async { [weak self] in self?.isGeneratingRoute = false } }
         func routeLeg(at index: Int) {
-            if index >= n { // done
-                finish()
-                return
-            }
+            if index >= n { finish(); return }
             let start = points[index]
             let end = points[(index + 1) % n]
-
-            requestWalkingRoutes(from: start, to: end, requestAlternates: true) { [weak self] (result: Result<[MKRoute], Error>) in
+            requestWalkingRoutes(from: start, to: end, requestAlternates: true) { [weak self] result in
                 switch result {
-                case .failure(let error):
-                    self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
-                    finish()
+                case .failure(let error): self?.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)"); finish()
                 case .success(let routes):
                     let scenic = self?.pickScenicRoute(from: routes) ?? routes[0]
                     DispatchQueue.main.async {
@@ -1048,235 +728,115 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                     totalDistance += scenic.distance
                     totalTime += scenic.expectedTravelTime
                     if index == n - 1 {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime)
-                        }
-                        // Build combined coordinates for loop
+                        DispatchQueue.main.async { [weak self] in self?.updateRouteInfoLabel(distance: totalDistance, time: totalTime) }
                         var allCoords: [CLLocationCoordinate2D] = []
                         for overlay in self?.mapView.overlays ?? [] {
                             if let sp = overlay as? StyledPolyline { allCoords.append(contentsOf: self?.getCoordinates(from: sp) ?? []) }
                         }
                         self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: allCoords)
                         finish()
-                    } else {
-                        routeLeg(at: index + 1)
-                    }
+                    } else { routeLeg(at: index + 1) }
                 }
             }
         }
-
         routeLeg(at: 0)
     }
-    
-    // Generate a route between two coordinates and draw it on the map
-    // taking 2 points (starting and ending) coordinates (lat/long)
+
     func generateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) {
         guard !isGeneratingRoute else { return }
         isGeneratingRoute = true
-        
-        // Clear existing overlays before drawing a new route
         mapView.removeOverlays(mapView.overlays)
-        
-        // Routing doesn't work based off of coordinates it needs Map Item's. So this wraps the 1st and 2nd points in a MKMapItem (they are still coordinates but they are puttin on a disguise to become Map Item's)
-        // address is nil because we aren't giving a specific street address just a location
         let source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         let destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
-        
-        // This is creating a directions request which in simple terms is saying "Apple give me directoins from here to here"
-        // First part is creating an empty request object (getting the form to fill out
         let request = MKDirections.Request()
-        // this is filling out the form to say start at the map item named "source"
         request.source = source
-        // This is filling out the form to say ending at the map item named "destination"
         request.destination = destination
-        // This is just what type of route it will make
         request.transportType = .walking
-        
-        // Create a directions calculator object and give it the form.
-        // This is the thing that is talking to apple servers to get the info.
         let directions = MKDirections(request: request)
-        
-        // Go calculate route and when your done/or if something breaks, run this code
-        // This is ansynchronous so that the app doesn't freeze up while waiting for directions
         directions.calculate { [weak self] response, error in
             defer { self?.isGeneratingRoute = false }
-            // if an error happens (no internet, middle of the ocean, etc.) it will cause an error and allow them to retry.
-            if let error = error {
-                self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)")
-                return
-            }
-            // Apple might multiple route options this is saying grab the first or if there are none then stop.
-            // Currently this is just taking the fastest route can change to "scenic" and other stuff as well.
+            if let error = error { self?.showErrorAlert(message: "Error calculating route: \(error.localizedDescription)"); return }
             guard let route = response?.routes.first else { return }
-            
+            if let targetMiles = self?.currentUserInputMiles() {
+                let targetMeters = targetMiles * 1609.34
+                let actualMeters = route.distance
+                let difference = abs(actualMeters - targetMeters)
+                let tolerance = targetMeters * 0.3
+                if difference > tolerance {
+                    let actualMiles = actualMeters / 1609.34
+                    self?.showInfoAlert(message: String(format: "Closest route found: %.1f miles (requested %.1f)", actualMiles, targetMiles))
+                }
+            }
             self?.updateRouteInfoLabel(distance: route.distance, time: route.expectedTravelTime)
-            // This is the part where the routes polyline is being pasted over the top of the map.
             self?.mapView.addOverlay(route.polyline)
-            
-            // Capture for progress tracking
             let coords = self?.getCoordinates(from: route.polyline) ?? []
             self?.resetProgressTracking(totalDistance: route.distance, routeCoords: coords)
-            
-            self?.getCoordinates(from: route.polyline)
-            
         }
     }
-    
-    // MARK: - MKMapViewDelegate
-    // MKMapViewDelegate method to render the route polyline
-    // The return type MKOverlayRenderer is giving back an object that knows how to draw the overlay
-    // as? means try to convert this syledPolyline but it might fail.
-    // if let means that if that conversion worked then do this code.
+
+    // MARK: MKMapViewDelegate
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
-            // Cycle colors by leg index for visibility
             let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
             let color = colors[styled.legIndex % colors.count]
             renderer.strokeColor = color
             renderer.lineWidth = (styled.mode == .scenic) ? 6 : 5
-            if styled.kind == .backward { // retain backward styling if used elsewhere
-                renderer.lineDashPattern = [2,5]
-            }
-            if styled.kind == .walked {
-                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)  // clearish grey!
-                renderer.lineWidth = 5
-            }
-            if styled.kind == .remaining {
-                renderer.strokeColor = .systemBlue
-                renderer.lineWidth = 5
-            }
+            if styled.kind == .backward { renderer.lineDashPattern = [2, 5] }
+            if styled.kind == .walked { renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4); renderer.lineWidth = 5 }
+            if styled.kind == .remaining { renderer.strokeColor = .systemBlue; renderer.lineWidth = 5 }
             return renderer
         }
-
         if let polyline = overlay as? MKPolyline {
             let renderer = MKPolylineRenderer(polyline: polyline)
             renderer.strokeColor = .systemBlue
             renderer.lineWidth = 5
             return renderer
         }
-
         return MKOverlayRenderer(overlay: overlay)
     }
-    
-    // MARK: - MKMapViewDelegate (Annotation Views)
+
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-        // Don't customize user location annotation
         if annotation is MKUserLocation { return nil }
-        
         let identifier = "PinAnnotation"
         var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
-        
-        // "settings" for the markers
         if annotationView == nil {
             annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-            // This line is to enable dragging around
             annotationView?.isDraggable = true
-            // If pin is tapped it will display the title of the pin
             annotationView?.canShowCallout = true
         } else {
             annotationView?.annotation = annotation
         }
-        //makes grabbable area bigger
         annotationView?.frame = CGRect(x: 0, y: 0, width: 75, height: 75)
         return annotationView
     }
-    
+
     private func updateRouteOverlay(nearestIndex: Int) {
-        // Step 1: Remove existing walked/remaining overlays
-        // Hint: loop through mapView.overlays, find StyledPolylines
-        // where kind == .walked or .remaining, remove them
-        let overlaysToRemove = mapView.overlays.compactMap{ overlay in
-            if let styled = overlay as? StyledPolyline {
-                if styled.kind == .walked || styled.kind == .remaining {
-                    return overlay
-                }
-            }
+        let overlaysToRemove = mapView.overlays.compactMap { overlay -> MKOverlay? in
+            if let styled = overlay as? StyledPolyline, (styled.kind == .walked || styled.kind == .remaining) { return overlay }
             return nil
         }
         mapView.removeOverlays(overlaysToRemove)
-        
-        
-        // Step 2: Guard that we have enough coordinates to split
-        guard currentRouteCoordinates.count > 1,
-              nearestIndex < currentRouteCoordinates.count else { return }
-        
-        // Step 3: Split the array
+        guard currentRouteCoordinates.count > 1, nearestIndex < currentRouteCoordinates.count else { return }
         let walkedCoords = Array(currentRouteCoordinates[0...nearestIndex])
         let remainingCoords = Array(currentRouteCoordinates[nearestIndex...])
-        
-        // Step 4: Make a StyledPolyline for walked portion
-        // kind = .walked
         let walkedLine = StyledPolyline(coordinates: walkedCoords, count: walkedCoords.count)
         walkedLine.kind = .walked
-        
         let remainingLine = StyledPolyline(coordinates: remainingCoords, count: remainingCoords.count)
         remainingLine.kind = .remaining
-        
-        
-        // Step 5: Make a StyledPolyline for remaining portion
-        // kind = .remaining
-        
-        // Step 6: Add both to mapView on main thread
         DispatchQueue.main.async {
             self.mapView.addOverlay(walkedLine)
             self.mapView.addOverlay(remainingLine)
         }
     }
-    
-    // For when pins are being dragged around
-    func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
-        // This is watching for when dragging has stopped or ended (meaning it is done being moved).
-        if newState == .ending || newState == .canceling {
-            view.dragState = .none
-            guard let movedAnnotation = view.annotation as? RouteAnnotation else { return }
-            let newCoordinate = movedAnnotation.coordinate
-            
-            // Update ANY index, not just 0 or 1
-            if movedAnnotation.index < selectedCoordinates.count {
-                selectedCoordinates[movedAnnotation.index] = newCoordinate
-            }
-            
-            // Update selectedCoordinates based on annotation index
-            // This is to ensure that even when a start or stop pin is being moved around that the new coordinates are assigned to the correct pin.
-            // For example I have start and stop. I move start pin around, and then let go. This ensures, even thought start was first pin placed, that start is the one getting assigned the coordinates and not the latest placed pin.
-            
-            // Automatically regenerate route if we have the required number of points and no generation is in progress
-            let selectedIndex = routeTypeSelector.selectedSegmentIndex
-            let needed = requiredPinCount(for: selectedIndex)
-            if selectedCoordinates.count < needed { return }
-            if isGeneratingRoute { return }
 
-            switch selectedIndex {
-            case 0: // One-way
-                generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-            case 1: // Out-and-back
-                generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
-            case 2: // loop
-                generateLoopRoute(points: selectedCoordinates)
-            default:
-                break
-            }
-        }
-    }
-    
-    // MARK: - CLLocationManagerDelegate
+    // MARK: CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // test
-        print("📍 GPS fired!")
-        // get most recent location
         guard let location = locations.last else { return }
-
-        // save it for later
         userLocation = location.coordinate
-        
         updateProgress(with: location)
         updateSpeedLabel(speed: location.speed)
-        
-        _ = speedMode(for: max(location.speed, 0))
-        // TODO: use `mode` to color-code segments or collect averages later
-
-        // Center map only the first time we get a location
+        updateSpeedAverages(speed: location.speed)
         if !hasAlreadyCentered {
             safelyCenterMap(on: location.coordinate, distance: 10000)
             hasAlreadyCentered = true
@@ -1286,77 +846,108 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        // handle permission change
         switch status {
         case .authorizedWhenInUse, .authorizedAlways:
             locationManager.startUpdatingLocation()
         case .denied, .restricted:
             showInfoAlert(message: "Using default location")
-        default:
-            break
+        default: break
         }
     }
-    
-    
-    // hides the keyboard when you hit Done
-    @objc private func dismissKeyboard() {
-        view.endEditing(true)
-    }
-    
-    // grabs whatever number the user typed in the panel
+
+    // MARK: Keyboard
+    @objc private func dismissKeyboard() { view.endEditing(true) }
+
+    // MARK: Inputs
     private func currentUserInputMiles() -> Double? {
         guard let text = distanceTextField?.text, !text.isEmpty else { return nil }
-        return Double(text)
+        guard let value = Double(text) else { return nil }
+        if useTimeInput {
+            let walkingSpeedMPH = 3.5
+            return (value / 60.0) * walkingSpeedMPH
+        } else {
+            return value
+        }
     }
-    
-    // picks a random point around a center within a radius (think scatter points)
-    func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double) -> CLLocationCoordinate2D {
-        // Purpose: Generate a random coordinate within a radius of a center point (potentially within a set angle)
-        //Inputs:
-            // center: CLLocationCoordinate2D (starting point)
-                // Eventually defualt will be user location
-            // radius: Double (max distance in meters)
-        
-        // Output:
-            // CLLocationCoordinate2D (random point)
-        
-        // Algo:
-            // Generate random angle: 0 to 360 degrees (maybe change to set at bottom for more info) convert to radians
-            // Generate random distance: 0.5 * radius to radius
-            // Convert angle + distance to latitude/longitude offset
-            // Apply offset to center coordinate
-            // Return new coord.
-        
-        // Reference:
-            //Earth radius ≈ 6371000 meters
-            //Latitude offset = (distance * cos(angle)) / (Earth radius * π/180)
-            //Longitude offset = (distance * sin(angle)) / (Earth radius * π/180 * cos(centerLat))
-        
-        let randomAngleDegrees = Double.random(in: 0...360)
-        
+
+    // MARK: Random coordinate
+    func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double, direction: String = "random") -> CLLocationCoordinate2D {
+        let range = angleRange(for: direction)
+        let randomAngleDegrees: Double
+        if direction == "N" {
+            randomAngleDegrees = Bool.random() ? Double.random(in: 337.5...360.0) : Double.random(in: 0.0...22.5)
+        } else {
+            randomAngleDegrees = Double.random(in: range)
+        }
         let randomAngleRadians = randomAngleDegrees * (.pi / 180)
-        
-        
-        let randomDistance = Double.random(in: (0.35 * radius)...radius)
-        
+        let randomDistance = Double.random(in: (0.7 * radius)...radius)
         let earthRadius = 6371000.0
         let latOffset = (randomDistance * cos(randomAngleRadians)) / earthRadius
-        
         let centerLatRadians = center.latitude * (.pi / 180)
         let longOffset = (randomDistance * sin(randomAngleRadians)) / (earthRadius * cos(centerLatRadians))
-        
         let latOffsetDegrees = latOffset * (180 / .pi)
         let lonOffsetDegrees = longOffset * (180 / .pi)
-        
         let newLatitude = center.latitude + latOffsetDegrees
         let newLongitude = center.longitude + lonOffsetDegrees
-        
         return CLLocationCoordinate2D(latitude: newLatitude, longitude: newLongitude)
+    }
 
+    // MARK: Speed UI/Averages
+    private func updateSpeedLabel(speed: CLLocationSpeed) {
+        let mph = speed * 2.23694
+        guard mph >= 0 else { speedLabel.text = "Speed: --"; return }
+        let category = speedMode(for: speed)
+        speedLabel.text = String(format: "%.1f mph - \(category.rawValue)", mph)
+    }
+
+    private func updateSpeedAverages(speed: CLLocationSpeed) {
+        guard speed > 0 else { return }
+        let mode = speedMode(for: speed)
+        switch mode {
+        case .walking:
+            avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
+            walkSampleCount += 1
+        case .jogging:
+            avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
+            jogSampleCount += 1
+        case .running:
+            avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
+            runSampleCount += 1
+        case .unknown:
+            return
+        }
+        let totalSamples = walkSampleCount + jogSampleCount + runSampleCount
+        if totalSamples % 10 == 0 { saveSpeeds() }
+    }
+
+    private func loadSavedSpeeds() {
+        let defaults = UserDefaults.standard
+        if defaults.double(forKey: "avgWalkingSpeed") > 0 {
+            avgWalkingSpeed = defaults.double(forKey: "avgWalkingSpeed")
+            walkSampleCount = defaults.integer(forKey: "walkSampleCount")
+        }
+        if defaults.double(forKey: "avgJoggingSpeed") > 0 {
+            avgJoggingSpeed = defaults.double(forKey: "avgJoggingSpeed")
+            jogSampleCount = defaults.integer(forKey: "jogSampleCount")
+        }
+        if defaults.double(forKey: "avgRunningSpeed") > 0 {
+            avgRunningSpeed = defaults.double(forKey: "avgRunningSpeed")
+            runSampleCount = defaults.integer(forKey: "runSampleCount")
+        }
+        print("Loaded speeds - Walk: \(avgWalkingSpeed) | Jog: \(avgJoggingSpeed) | Run: \(avgRunningSpeed)")
+    }
+
+    private func saveSpeeds() {
+        let defaults = UserDefaults.standard
+        defaults.set(avgWalkingSpeed, forKey: "avgWalkingSpeed")
+        defaults.set(avgJoggingSpeed, forKey: "avgJoggingSpeed")
+        defaults.set(avgRunningSpeed, forKey: "avgRunningSpeed")
+        defaults.set(walkSampleCount, forKey: "walkSampleCount")
+        defaults.set(jogSampleCount, forKey: "jogSampleCount")
+        defaults.set(runSampleCount, forKey: "runSampleCount")
+        print("💾 Saved speeds - Walk: \(String(format: "%.2f", avgWalkingSpeed)) | Jog: \(String(format: "%.2f", avgJoggingSpeed)) | Run: \(String(format: "%.2f", avgRunningSpeed))")
     }
 }
-    
-
 
 // MARK: - Ideas / Notes
 /*
@@ -1409,5 +1000,10 @@ When messing with UI stuff I found 2 problems:
         I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
  
         Have the ability to change accuracy of tracking (either in settings) or if route is super long distance/time then it will automatically switch to help with effeiency.
+ 
+ 
+ 
+  Feb 16: Stuff that needs done/refined
+    I need to add in a better way of using the users inputted times when calculating a random route, it seems to be only going a little distance and I also keep getting a pop up that says: "Info closest route found: 0.0 miles (requested 0.6)" when I put in that I want a 10 miniute long route.
 */
 
