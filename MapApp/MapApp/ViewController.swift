@@ -582,7 +582,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             selectedDirection = "random"
             return
         }
-        sender.backgroundColor = .systemGreen
+        sender.backgroundColor = .appPrimary
         sender.setTitleColor(.black, for: .normal)
         selectedDirectionButton = sender
         selectedDirection = direction
