@@ -1337,6 +1337,7 @@ When messing with UI stuff I found 2 problems:
  
  Feb 20 Friday: When tracking/center button is clicked on it doesn't have user as the starting point, and still requires 2 pins to be placed because of the logic that needs to be their for when it isn't turned on. So need to make it to where there is another case that if center button is on 1 then it only requires 1 point.
     Also need to start doing constraints for all of my stuff that way it can look more presentible on different device models. Also probably add the super duper basics of having the swipey tab at the bottom.
+    Would also be nice to have system in place (maybe just on dev side or something for now) to reset calced avrg's for different speeds, cause mine are all messed up from me sitting and launching the app over and over again, and also driving my car to test spedometer.
  
  
  
