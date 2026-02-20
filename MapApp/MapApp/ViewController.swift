@@ -39,7 +39,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var routeInfoLabel: UILabel!
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
-    @IBOutlet weak var pinLockSelector: UISegmentedControl!
 
     // MARK: Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
@@ -54,13 +53,19 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
 
     // Slide panel
     var slidePanel: UIView!
+    private var panelScrollView: UIScrollView!
     var isPanelOpen: Bool = false
 
-    // Inputs/UI helpers
+    // Inputs/UI helpers for slide panel
     private var distanceTextField: UITextField?
     private var distanceOrTimeLabel: UILabel?
     private var speedLabel: UILabel = UILabel()
     private var selectedDirectionButton: UIButton?
+    private var loopPointStepper: UIStepper?
+    private var loopPointLabel: UILabel?
+    private var timeToggle: UISwitch?
+    private var selectedLoopPoints: Int = 3  // default
+    
 
     // Routing preferences
     private var useScenicRouting: Bool = false
@@ -97,8 +102,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         setupHeaderUI()
         setupSlidePanel()
 
-        pinsLocked = (pinLockSelector.selectedSegmentIndex == 1)
-
         // Location
         locationManager = CLLocationManager()
         locationManager.delegate = self
@@ -108,6 +111,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         locationManager.pausesLocationUpdatesAutomatically = false
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
+        
+        // Route type selector
+        // Initialize loop controls visibility based on default selection
+        let isLoop = (routeTypeSelector.selectedSegmentIndex == 2)
+        loopPointStepper?.isEnabled = false
+        loopPointStepper?.alpha = 0.4
+        loopPointLabel?.isEnabled = false
+        loopPointLabel?.alpha = 0.4
 
         // Map
         mapView.showsUserLocation = true
@@ -164,14 +175,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         slidePanel.backgroundColor = .white
         view.addSubview(slidePanel)
 
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: slidePanel.frame.height))
-        scrollView.backgroundColor = .clear
-        slidePanel.addSubview(scrollView)
+        panelScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: slidePanel.frame.height))
+        panelScrollView.backgroundColor = .clear
+        slidePanel.addSubview(panelScrollView)
 
         let contentView = UIView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: 600))
         contentView.backgroundColor = .clear
-        scrollView.addSubview(contentView)
-        scrollView.contentSize = CGSize(width: slidePanel.frame.width, height: 600)
+        panelScrollView.addSubview(contentView)
+        panelScrollView.contentSize = CGSize(width: slidePanel.frame.width, height: 500)
 
         setupPanelContent(in: contentView)
     }
@@ -180,30 +191,62 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     func setupPanelContent(in container: UIView) {
         let padding: CGFloat = 12
         let fieldWidth = container.frame.width - (padding * 2)
-
-        // Time/distance label
-        let timeToggleLabel = UILabel(frame: CGRect(x: padding, y: 150, width: fieldWidth, height: 20))
-        timeToggleLabel.text = "Use Time Instead"
-        timeToggleLabel.font = .systemFont(ofSize: 13)
-        container.addSubview(timeToggleLabel)
-
-        let timeToggle = UISwitch(frame: CGRect(x: padding, y: 175, width: fieldWidth, height: 31))
-        timeToggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
-        container.addSubview(timeToggle)
-
-        let distanceLabel = UILabel(frame: CGRect(x: padding, y: 20, width: fieldWidth, height: 20))
+        var currentY: CGFloat = 20  // Track vertical position
+        
+        // ========== SECTION 1: ROUTE STYLE (Always Visible) ==========
+        
+        
+        let clearRandomButton = UIButton(type: .system)
+        clearRandomButton.frame = CGRect(x: padding, y: currentY, width: fieldWidth, height: 36)
+        clearRandomButton.setTitle("Clear Settings", for: .normal)
+        clearRandomButton.backgroundColor = .systemRed.withAlphaComponent(0.1)
+        clearRandomButton.setTitleColor(.systemRed, for: .normal)
+        clearRandomButton.layer.cornerRadius = 8
+        clearRandomButton.addTarget(self, action: #selector(clearRandomSettings), for: .touchUpInside)
+        container.addSubview(clearRandomButton)
+        currentY += 40
+        
+        let styleHeader = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
+        styleHeader.text = "ROUTE STYLE"
+        styleHeader.font = .systemFont(ofSize: 11, weight: .semibold)
+        styleHeader.textColor = .systemGray
+        container.addSubview(styleHeader)
+        currentY += 25
+        
+        let routingVibeControl = UISegmentedControl(items: ["Fastest", "Scenic"])
+        routingVibeControl.selectedSegmentIndex = self.useScenicRouting ? 1 : 0
+        routingVibeControl.addTarget(self, action: #selector(self.routeVibeSelector(_:)), for: .valueChanged)
+        routingVibeControl.frame = CGRect(x: padding, y: currentY, width: fieldWidth, height: 32)
+        container.addSubview(routingVibeControl)
+        currentY += 45
+        
+        // Divider line
+        let divider1 = UIView(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 1))
+        divider1.backgroundColor = .systemGray4
+        container.addSubview(divider1)
+        currentY += 15
+        
+        // ========== SECTION 2: RANDOM GENERATION (Optional) ==========
+        let randomHeader = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
+        randomHeader.text = "RANDOM GENERATION"
+        randomHeader.font = .systemFont(ofSize: 11, weight: .semibold)
+        randomHeader.textColor = .systemGray
+        container.addSubview(randomHeader)
+        currentY += 25
+        
+        // Distance/Time label
+        let distanceLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
         distanceLabel.text = "Distance (miles)"
         distanceLabel.font = .systemFont(ofSize: 14)
         container.addSubview(distanceLabel)
         self.distanceOrTimeLabel = distanceLabel
-
-        let field = UITextField(frame: CGRect(x: padding, y: 48, width: fieldWidth, height: 36))
+        currentY += 25
+        
+        // Distance Text field
+        let field = UITextField(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 36))
         field.placeholder = "e.g. 3.1"
         field.borderStyle = .roundedRect
         field.keyboardType = .decimalPad
-
-        setupDirectionGrid(in: container, startY: 270)
-
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
         let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
@@ -216,14 +259,70 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         field.isUserInteractionEnabled = true
         container.addSubview(field)
         self.distanceTextField = field
-
-        let routingModeControl = UISegmentedControl(items: ["Fastest", "Scenic"])
-        routingModeControl.selectedSegmentIndex = self.useScenicRouting ? 1 : 0
-        routingModeControl.addTarget(self, action: #selector(self.routeGenerationTypeSelector(_:)), for: .valueChanged)
-        routingModeControl.frame = CGRect(x: padding, y: 100, width: fieldWidth, height: 32)
-        container.addSubview(routingModeControl)
+        currentY += 45
+        
+        // Time toggle label
+        let timeToggleLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth - 50, height: 20))
+        timeToggleLabel.text = "Use Time Instead"
+        timeToggleLabel.font = .systemFont(ofSize: 13)
+        container.addSubview(timeToggleLabel)
+        
+        // Time toggle switch (aligned to right)
+        let timeToggle = UISwitch(frame: CGRect(x: fieldWidth + padding - 51, y: currentY - 4, width: 51, height: 31))
+        timeToggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
+        container.addSubview(timeToggle)
+        self.timeToggle = timeToggle
+        currentY += 40
+        
+        // Direction label
+        let dirLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
+        dirLabel.text = "Direction"
+        dirLabel.font = .systemFont(ofSize: 14)
+        dirLabel.textAlignment = .center
+        container.addSubview(dirLabel)
+        currentY += 25
+        
+        // Direction grid
+        setupDirectionGrid(in: container, startY: currentY)
+        currentY += 150  // grid height
+        
+        // Divider line
+        let divider2 = UIView(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 1))
+        divider2.backgroundColor = .systemGray4
+        container.addSubview(divider2)
+        currentY += 15
+        
+        // ========== SECTION 3: LOOP OPTIONS (Only when Loop selected) ==========
+        let loopHeader = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
+        loopHeader.text = "LOOP OPTIONS"
+        loopHeader.font = .systemFont(ofSize: 11, weight: .semibold)
+        loopHeader.textColor = .systemGray
+        container.addSubview(loopHeader)
+        currentY += 25
+        
+        // Loop point count
+        let loopLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: fieldWidth, height: 20))
+        loopLabel.text = "Loop Points: 4"
+        loopLabel.font = .systemFont(ofSize: 14)
+        loopLabel.textAlignment = .center
+        loopLabel.isEnabled = false  // Grey'd by default
+        container.addSubview(loopLabel)
+        self.loopPointLabel = loopLabel
+        currentY += 25
+        
+        let stepper = UIStepper(frame: CGRect(x: (container.frame.width - 94) / 2, y: currentY, width: 94, height: 29))
+        stepper.minimumValue = 3
+        stepper.maximumValue = 8
+        stepper.value = 4
+        stepper.isEnabled = false  // Grey'd by default
+        stepper.addTarget(self, action: #selector(loopPointStepperChanged(_:)), for: .valueChanged)
+        container.addSubview(stepper)
+        self.loopPointStepper = stepper
+        currentY += 40
+        
+        // Update scroll content size
+        panelScrollView.contentSize = CGSize(width: slidePanel.frame.width, height: currentY + 20)
     }
-
     private func setupDirectionGrid(in container: UIView, startY: CGFloat) {
         let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
         let buttonSize: CGFloat = 44
@@ -308,20 +407,69 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             }
         }
         if let miles = currentUserInputMiles() {
-            let center = userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
-            let radius: Double
-            if useTimeInput{
-                radius = (miles * 1609.34) / 2.0
+            selectedCoordinates.removeAll()
+            mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
+            
+            // Use actual user location if tracking is on, otherwise use saved location or default
+            let center: CLLocationCoordinate2D
+            if isFollowingUser, let loc = userLocation {
+                center = loc  // Use live location
+            } else if let loc = userLocation {
+                center = loc  // Use last known location
             } else {
-                let windingFactor = 2.5
-                radius = (miles * 1609.34) / (2 * .pi * windingFactor)
+                center = CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)  // Fallback
             }
-            let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: selectedDirection)
             let selectedIndex = routeTypeSelector.selectedSegmentIndex
-            switch selectedIndex {
-            case 0: generateRoute(from: center, to: endpoint, targetMiles: miles)
-            case 1: generateOutAndBackRoute(from: center, to: endpoint)
-            default: showInfoAlert(message: "Use pins for loop routes")
+            
+            if selectedIndex == 2 {
+                // LOOP: Generate multiple random points
+                let perimeter = miles * 1609.34  // total loop distance in meters
+                let averageRadius = perimeter / (Double(selectedLoopPoints) * 2)  // rough estimate
+                
+                let loopPoints = generateRandomLoopPoints(
+                    count: selectedLoopPoints,
+                    center: center,
+                    averageRadius: averageRadius,
+                    direction: selectedDirection
+                )
+                
+                // Place pins at generated points
+                for (index, point) in loopPoints.enumerated() {
+                    selectedCoordinates.append(point)
+                    let label: String
+                    if index == 0 {
+                        label = "Start"
+                    } else {
+                        let base = 64 + index  // 65='A', 66='B', etc
+                        if let scalar = UnicodeScalar(base) {
+                            label = String(scalar)
+                        } else {
+                            label = "P\(index)"
+                        }
+                    }
+                    addAnnotation(at: point, title: label)
+                }
+                
+                // Generate the actual route using these points
+                generateLoopRoute(points: loopPoints)
+                
+            } else {
+                // ONE-WAY or OUT-AND-BACK: Single endpoint
+                let radius: Double
+                if useTimeInput {
+                    radius = (miles * 1609.34) / 2.0
+                } else {
+                    let windingFactor = 2.5
+                    radius = (miles * 1609.34) / (2 * .pi * windingFactor)
+                }
+                
+                let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: selectedDirection)
+                
+                switch selectedIndex {
+                case 0: generateRoute(from: center, to: endpoint, targetMiles: miles)
+                case 1: generateOutAndBackRoute(from: center, to: endpoint)
+                default: break
+                }
             }
             return
         }
@@ -357,13 +505,36 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         progressView.setProgress(0, animated: false)
     }
 
-    @IBAction func pinLockChanged(_ sender: UISegmentedControl) {
-        pinsLocked = (sender.selectedSegmentIndex == 1)
-        showInfoAlert(message: pinsLocked ? "Pin placement is now locked" : "Pin placement is now unlocked")
+    @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
+        let isLoop = (sender.selectedSegmentIndex == 2)
+        // Show/hide loop-specific controls
+        loopPointStepper?.isEnabled = isLoop
+        loopPointLabel?.isEnabled = isLoop
+        
+        // Grey out when disabled
+        loopPointStepper?.alpha = isLoop ? 1.0 : 0.4
+        loopPointLabel?.alpha = isLoop ? 1.0 : 0.4
     }
 
-    @IBAction func routeGenerationTypeSelector(_ sender: UISegmentedControl) {
+    // Is wired to slide panel version so can't have filled circle.
+    @IBAction func routeVibeSelector(_ sender: UISegmentedControl) {
         useScenicRouting = (sender.selectedSegmentIndex == 1)
+        // If there's already a route, regenerate it with new style
+        if !selectedCoordinates.isEmpty {
+            let selectedIndex = routeTypeSelector.selectedSegmentIndex
+            switch selectedIndex {
+            case 0:
+                guard selectedCoordinates.count >= 2 else { return }
+                generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            case 1:
+                guard selectedCoordinates.count >= 2 else { return }
+                generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+            case 2:
+                guard selectedCoordinates.count >= 3 else { return }
+                generateLoopRoute(points: selectedCoordinates)
+            default: break
+            }
+        }
     }
     
     @IBAction func recenterBTN(_ sender: UIButton) {
@@ -467,9 +638,38 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 label = "P\(selectedCoordinates.count)"
             }
         } else {
-            label = "Stop"
+            label = "End"
         }
         addAnnotation(at: coordinate, title: label)
+    }
+    
+    // Slide Panel Handlers
+    
+    @objc private func loopPointStepperChanged(_ sender: UIStepper) {
+        selectedLoopPoints = Int(sender.value)
+        loopPointLabel?.text = "Loop Points: \(selectedLoopPoints)"
+    }
+    
+    @objc private func clearRandomSettings() {
+        // Clear text field
+        distanceTextField?.text = ""
+        
+        // Reset direction to random
+        selectedDirectionButton?.backgroundColor = .systemGray3
+        selectedDirectionButton?.setTitleColor(.black, for: .normal)
+        selectedDirectionButton = nil
+        selectedDirection = "random"
+        
+        // Reset time toggle
+        useTimeInput = false
+        distanceOrTimeLabel?.text = "Distance (miles)"
+        distanceTextField?.placeholder = "e.g. 3.1"
+        
+        // Reset Time toggle switch itself
+        if let toggle = self.timeToggle {
+            toggle.setOn(false, animated: true)
+            self.timeToggleChanged(toggle)
+        }
     }
 
     // MARK: Map Helpers
@@ -998,6 +1198,28 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         let newLongitude = center.longitude + lonOffsetDegrees
         return CLLocationCoordinate2D(latitude: newLatitude, longitude: newLongitude)
     }
+    
+    private func generateRandomLoopPoints(count: Int, center: CLLocationCoordinate2D, averageRadius: Double, direction: String) -> [CLLocationCoordinate2D] {
+        var points: [CLLocationCoordinate2D] = []
+        
+        // First point is always the center (user's location)
+        points.append(center)
+        
+        // Generate (count - 1) additional points since start counts as one
+        for _ in 1..<count {
+            let radiusVariation = Double.random(in: 0.7...1.3)
+            let pointRadius = averageRadius * radiusVariation
+            
+            let point = generateRandomCoordinate(
+                around: center,
+                radius: pointRadius,
+                direction: direction
+            )
+            points.append(point)
+        }
+        
+        return points
+    }
 
     // MARK: Speed UI/Averages
     private func updateSpeedLabel(speed: CLLocationSpeed) {
@@ -1108,9 +1330,16 @@ When messing with UI stuff I found 2 problems:
  
         Have the ability to change accuracy of tracking (either in settings) or if route is super long distance/time then it will automatically switch to help with effeiency.
  
+ Potential addition:
+    Turn on a "Free run" mode that just tracks you as you go and then when you click a stop button of some sort it gives you all the information about your run. Distance, time, average of all speed types, etc.
  
  
-  Feb 16: Stuff that needs done/refined
-    I need to add in a better way of using the users inputted times when calculating a random route, it seems to be only going a little distance and I also keep getting a pop up that says: "Info closest route found: 0.0 miles (requested 0.6)" when I put in that I want a 10 miniute long route.
+ 
+ Feb 20 Friday: When tracking/center button is clicked on it doesn't have user as the starting point, and still requires 2 pins to be placed because of the logic that needs to be their for when it isn't turned on. So need to make it to where there is another case that if center button is on 1 then it only requires 1 point.
+    Also need to start doing constraints for all of my stuff that way it can look more presentible on different device models. Also probably add the super duper basics of having the swipey tab at the bottom.
+ 
+ 
+ 
 */
+
 
