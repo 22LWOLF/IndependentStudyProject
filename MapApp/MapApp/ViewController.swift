@@ -9,6 +9,12 @@ import UIKit
 import MapKit
 import CoreLocation
 
+// MARK: - Color Scheme
+extension UIColor {
+    static let appPrimary = UIColor(red: 152.0/255.0, green: 168.0/255.0, blue: 105.0/255.0, alpha: 1.0)
+}
+
+
 // MARK: - RouteAnnotation
 class RouteAnnotation: MKPointAnnotation {
     // 0 for Start, 1 for Stop (or index for loops)
@@ -231,10 +237,12 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 let button = UIButton(type: .system)
                 button.frame = CGRect(x: startX + CGFloat(col) * (buttonSize + gap), y: startY + CGFloat(row) * (buttonSize + gap), width: buttonSize, height: buttonSize)
                 button.setTitle(title, for: .normal)
-                button.backgroundColor = .systemIndigo
+                button.setTitleColor(.black, for: .normal)
+                button.backgroundColor = .systemGray3
                 button.layer.cornerRadius = 8
                 if title == "." {
-                    button.backgroundColor = .systemPurple
+                    button.backgroundColor = .systemGray3
+                    button.setTitleColor(.clear, for: .normal)
                     button.isEnabled = false
                 }
                 button.addTarget(self, action: #selector(directionButtonTapped(_:)), for: .touchUpInside)
@@ -396,15 +404,15 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
 
     @objc private func directionButtonTapped(_ sender: UIButton) {
         guard let direction = sender.title(for: .normal) else { return }
-        selectedDirectionButton?.backgroundColor = .systemIndigo
-        selectedDirectionButton?.setTitleColor(.systemBlue, for: .normal)
+        selectedDirectionButton?.backgroundColor = .systemGray3
+        selectedDirectionButton?.setTitleColor(.black, for: .normal)
         if selectedDirectionButton == sender {
             selectedDirectionButton = nil
             selectedDirection = "random"
             return
         }
-        sender.backgroundColor = .systemBlue
-        sender.setTitleColor(.white, for: .normal)
+        sender.backgroundColor = .systemGreen
+        sender.setTitleColor(.black, for: .normal)
         selectedDirectionButton = sender
         selectedDirection = direction
     }
