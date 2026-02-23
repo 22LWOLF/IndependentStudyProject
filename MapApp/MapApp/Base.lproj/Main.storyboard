@@ -14,43 +14,14 @@
         <scene sceneID="tne-QT-ifu">
             <objects>
                 <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="MapApp" customModuleProvider="target" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
+                    <view key="view" contentMode="scaleToFill" ambiguous="YES" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <mapView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Km5-Dh-ECB">
-                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                            <mapView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Km5-Dh-ECB">
+                                <rect key="frame" x="0.0" y="31" width="414" height="896"/>
                                 <standardMapConfiguration key="preferredConfiguration"/>
                             </mapView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Swipey up tab" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="daS-Jt-VIb">
-                                <rect key="frame" x="153" y="807" width="108" height="21"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <nil key="textColor"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oYZ-YX-7KV">
-                                <rect key="frame" x="27" y="728" width="100" height="100"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="filled" title="Cancel" cornerStyle="capsule">
-                                    <color key="baseBackgroundColor" systemColor="systemRedColor"/>
-                                </buttonConfiguration>
-                                <connections>
-                                    <action selector="clearRouteBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="5w1-ay-2Ak"/>
-                                </connections>
-                            </button>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="zaf-Wt-aAi">
-                                <rect key="frame" x="288" y="728" width="100" height="100"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="filled" title="Generate" cornerStyle="capsule">
-                                    <color key="baseBackgroundColor" systemColor="systemGreenColor"/>
-                                </buttonConfiguration>
-                                <connections>
-                                    <action selector="generateRouteBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="vp4-9r-yOJ"/>
-                                </connections>
-                            </button>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="nR2-kL-pkI">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="140"/>
                                 <subviews>
@@ -97,8 +68,7 @@
                                         </constraints>
                                     </stackView>
                                 </subviews>
-                                <color key="backgroundColor" red="0.0" green="0.0" blue="0.0" alpha="0.10000000000000001" colorSpace="custom" customColorSpace="displayP3"/>
-                                <color key="tintColor" systemColor="systemGrayColor"/>
+                                <color key="backgroundColor" white="0.0" alpha="0.14235805457746478" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
                                     <constraint firstAttribute="bottom" secondItem="Psu-8x-qz8" secondAttribute="bottom" constant="16" id="RpI-ky-Q4A"/>
                                     <constraint firstAttribute="trailing" secondItem="Psu-8x-qz8" secondAttribute="trailing" constant="8" id="Ylg-Im-7Rg"/>
@@ -107,59 +77,121 @@
                                     <constraint firstAttribute="height" constant="140" id="o2Y-fu-PGA"/>
                                 </constraints>
                             </view>
-                            <segmentedControl opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="Bdg-6c-prn">
-                                <rect key="frame" x="20" y="689" width="374" height="32"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <segments>
-                                    <segment title="One-Way"/>
-                                    <segment title="OAB"/>
-                                    <segment title="Loop"/>
-                                </segments>
-                                <connections>
-                                    <action selector="routeTypeChanged:" destination="BYZ-38-t0r" eventType="valueChanged" id="phI-sP-LjL"/>
-                                </connections>
-                            </segmentedControl>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Yo3-b4-0E8">
-                                <rect key="frame" x="20" y="630" width="40" height="40"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="gray" image="location" catalog="system" cornerStyle="capsule">
-                                    <backgroundConfiguration key="background">
-                                        <color key="strokeColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                    </backgroundConfiguration>
-                                </buttonConfiguration>
-                                <connections>
-                                    <action selector="recenterBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="RsO-EL-M6z"/>
-                                </connections>
-                            </button>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="KAP-wg-gfk">
-                                <rect key="frame" x="348" y="630" width="40" height="40"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="gray" image="gearshape" catalog="system" imagePadding="0.0" cornerStyle="capsule">
-                                    <backgroundConfiguration key="background">
-                                        <color key="strokeColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                    </backgroundConfiguration>
-                                </buttonConfiguration>
-                                <connections>
-                                    <action selector="routeSettingsBTNTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="jf0-qo-zBz"/>
-                                </connections>
-                            </button>
+                            <view contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="GTg-cZ-Eue">
+                                <rect key="frame" x="0.0" y="646" width="414" height="250"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oYZ-YX-7KV">
+                                        <rect key="frame" x="45" y="130" width="100" height="100"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="100" id="8Un-Hz-kEi"/>
+                                            <constraint firstAttribute="width" constant="100" id="cim-PC-nIE"/>
+                                        </constraints>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="filled" title="Cancel" cornerStyle="capsule">
+                                            <color key="baseBackgroundColor" systemColor="systemRedColor"/>
+                                        </buttonConfiguration>
+                                        <connections>
+                                            <action selector="clearRouteBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="5w1-ay-2Ak"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="zaf-Wt-aAi">
+                                        <rect key="frame" x="269" y="130" width="100" height="100"/>
+                                        <constraints>
+                                            <constraint firstAttribute="width" constant="100" id="CbQ-pc-OaC"/>
+                                            <constraint firstAttribute="height" constant="100" id="UsC-vG-FKh"/>
+                                        </constraints>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="filled" title="Generate" cornerStyle="capsule">
+                                            <color key="baseBackgroundColor" systemColor="systemGreenColor"/>
+                                        </buttonConfiguration>
+                                        <connections>
+                                            <action selector="generateRouteBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="vp4-9r-yOJ"/>
+                                        </connections>
+                                    </button>
+                                    <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="Bdg-6c-prn">
+                                        <rect key="frame" x="15" y="60" width="384" height="33"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="32" id="leA-xa-hEi"/>
+                                        </constraints>
+                                        <segments>
+                                            <segment title="One-Way"/>
+                                            <segment title="OAB"/>
+                                            <segment title="Loop"/>
+                                        </segments>
+                                        <connections>
+                                            <action selector="routeTypeChanged:" destination="BYZ-38-t0r" eventType="valueChanged" id="phI-sP-LjL"/>
+                                        </connections>
+                                    </segmentedControl>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Yo3-b4-0E8">
+                                        <rect key="frame" x="50" y="8" width="40" height="40"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="40" id="1gf-Yf-Ovg"/>
+                                            <constraint firstAttribute="width" constant="40" id="XgC-vv-dXR"/>
+                                        </constraints>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="gray" image="location" catalog="system" cornerStyle="capsule">
+                                            <backgroundConfiguration key="background">
+                                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                                <color key="strokeColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                            </backgroundConfiguration>
+                                        </buttonConfiguration>
+                                        <connections>
+                                            <action selector="recenterBTN:" destination="BYZ-38-t0r" eventType="touchUpInside" id="RsO-EL-M6z"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="KAP-wg-gfk">
+                                        <rect key="frame" x="324" y="8" width="40" height="40"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="40" id="F6z-3A-J7H"/>
+                                            <constraint firstAttribute="width" constant="40" id="oaF-83-NYr"/>
+                                        </constraints>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="gray" image="gearshape" catalog="system" imagePadding="0.0" cornerStyle="capsule">
+                                            <backgroundConfiguration key="background">
+                                                <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
+                                                <color key="strokeColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                            </backgroundConfiguration>
+                                        </buttonConfiguration>
+                                        <connections>
+                                            <action selector="routeSettingsBTNTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="jf0-qo-zBz"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                                <color key="backgroundColor" white="0.0" alpha="0.14999999999999999" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <constraints>
+                                    <constraint firstItem="Bdg-6c-prn" firstAttribute="top" secondItem="Yo3-b4-0E8" secondAttribute="bottom" constant="12" id="7Ct-X4-xfX"/>
+                                    <constraint firstAttribute="trailing" secondItem="Bdg-6c-prn" secondAttribute="trailing" constant="15" id="BGM-yC-ThG"/>
+                                    <constraint firstAttribute="bottom" secondItem="oYZ-YX-7KV" secondAttribute="bottom" constant="30" id="DDG-dE-d8c"/>
+                                    <constraint firstItem="Bdg-6c-prn" firstAttribute="leading" secondItem="GTg-cZ-Eue" secondAttribute="leading" constant="15" id="Ibp-PO-BSL"/>
+                                    <constraint firstItem="Yo3-b4-0E8" firstAttribute="leading" secondItem="GTg-cZ-Eue" secondAttribute="leading" constant="50" id="KIE-z6-Hsx"/>
+                                    <constraint firstItem="oYZ-YX-7KV" firstAttribute="leading" secondItem="GTg-cZ-Eue" secondAttribute="leading" constant="45" id="XKu-iN-hNh"/>
+                                    <constraint firstAttribute="bottom" secondItem="zaf-Wt-aAi" secondAttribute="bottom" constant="30" id="ZWc-Qp-4sk"/>
+                                    <constraint firstAttribute="trailing" secondItem="KAP-wg-gfk" secondAttribute="trailing" constant="50" id="dGj-UN-A1e"/>
+                                    <constraint firstAttribute="height" constant="260" id="fMh-zA-xUL"/>
+                                    <constraint firstItem="KAP-wg-gfk" firstAttribute="top" secondItem="GTg-cZ-Eue" secondAttribute="top" constant="8" id="wGZ-We-lcq"/>
+                                    <constraint firstItem="Yo3-b4-0E8" firstAttribute="top" secondItem="GTg-cZ-Eue" secondAttribute="top" constant="8" id="yAW-dn-v0j"/>
+                                    <constraint firstAttribute="trailing" secondItem="zaf-Wt-aAi" secondAttribute="trailing" constant="45" id="yFQ-IB-Om9"/>
+                                </constraints>
+                            </view>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
+                            <constraint firstAttribute="bottom" secondItem="GTg-cZ-Eue" secondAttribute="bottom" id="HDk-nj-4vr"/>
                             <constraint firstAttribute="bottom" secondItem="Km5-Dh-ECB" secondAttribute="bottom" id="Lis-Xe-bxt"/>
                             <constraint firstItem="nR2-kL-pkI" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="PS9-pG-0wg"/>
                             <constraint firstItem="nR2-kL-pkI" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="Qu3-0A-ONq"/>
+                            <constraint firstItem="GTg-cZ-Eue" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" id="Umj-7j-9ud"/>
                             <constraint firstAttribute="bottom" secondItem="nR2-kL-pkI" secondAttribute="bottom" constant="700" id="XQF-rz-qgy"/>
                             <constraint firstItem="Km5-Dh-ECB" firstAttribute="top" secondItem="8bC-Xf-vdC" secondAttribute="top" id="YtN-sV-KyP"/>
                             <constraint firstItem="Km5-Dh-ECB" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="a7Q-mx-pSH"/>
                             <constraint firstItem="Km5-Dh-ECB" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="bjA-6L-vF8"/>
                             <constraint firstItem="nR2-kL-pkI" firstAttribute="top" secondItem="8bC-Xf-vdC" secondAttribute="top" id="muN-3U-O9o"/>
+                            <constraint firstAttribute="trailing" secondItem="GTg-cZ-Eue" secondAttribute="trailing" id="tsu-rO-3Hn"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="bottomTabContainer" destination="GTg-cZ-Eue" id="gTI-S1-hXW"/>
                         <outlet property="headerBox" destination="nR2-kL-pkI" id="Nkz-qo-Jxb"/>
                         <outlet property="mapView" destination="Km5-Dh-ECB" id="4M1-0u-Rc9"/>
                         <outlet property="routeInfoLabel" destination="hmn-d1-uvR" id="wgL-ee-pcz"/>
@@ -186,8 +218,11 @@
         <systemColor name="linkColor">
             <color red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
-        <systemColor name="systemGrayColor">
-            <color red="0.5568627451" green="0.5568627451" blue="0.57647058819999997" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        <systemColor name="secondarySystemGroupedBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="systemGreenColor">
             <color red="0.20392156859999999" green="0.78039215689999997" blue="0.34901960780000002" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>

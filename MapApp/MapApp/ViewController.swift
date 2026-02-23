@@ -39,7 +39,10 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var routeInfoLabel: UILabel!
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
-
+    
+    @IBOutlet weak var bottomTabContainer: UIView!
+       
+      
     // MARK: Properties
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var pinsLocked: Bool = false
@@ -50,6 +53,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var userLocation: CLLocationCoordinate2D?
     private var hasAlreadyCentered: Bool = false
     private var isFollowingUser: Bool = false
+    private var isActivelyWalkingRoute: Bool = false
 
     // Slide panel
     var slidePanel: UIView!
@@ -136,6 +140,12 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         headerBox.layer.cornerRadius = 44
         headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         headerBox.layer.masksToBounds = true
+        
+        // bottom tab
+        bottomTabContainer.layer.cornerRadius = 44
+        bottomTabContainer.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        bottomTabContainer.layer.masksToBounds = true
+
     }
 
     // MARK: UI Setup
@@ -152,18 +162,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             progressView.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
             progressView.bottomAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: -8),
             progressView.heightAnchor.constraint(equalToConstant: 4)
-        ])
-
-        // Speed label
-        speedLabel.translatesAutoresizingMaskIntoConstraints = false
-        speedLabel.textAlignment = .left
-        speedLabel.font = .systemFont(ofSize: 14)
-        speedLabel.textColor = .label
-        headerBox.addSubview(speedLabel)
-        NSLayoutConstraint.activate([
-            speedLabel.leadingAnchor.constraint(equalTo: headerBox.leadingAnchor, constant: 16),
-            speedLabel.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
-            speedLabel.bottomAnchor.constraint(equalTo: progressView.topAnchor, constant: -4)
         ])
     }
 
@@ -401,24 +399,28 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     @IBAction func settingsBTN(_ sender: UIButton) {
 
-            // Temporary - wire this to your Settings button for demo
-            UserDefaults.standard.removeObject(forKey: "avgWalkingSpeed")
-            UserDefaults.standard.removeObject(forKey: "avgJoggingSpeed")
-            UserDefaults.standard.removeObject(forKey: "avgRunningSpeed")
-            UserDefaults.standard.removeObject(forKey: "walkSampleCount")
-            UserDefaults.standard.removeObject(forKey: "jogSampleCount")
-            UserDefaults.standard.removeObject(forKey: "runSampleCount")
-            showInfoAlert(message: "Speed data reset")
+        // Reset to default human speeds instead of wiping them temporary
+            avgWalkingSpeed = 1.4  // ~3.1 mph
+            avgJoggingSpeed = 2.7  // ~6.0 mph
+            avgRunningSpeed = 4.0  // ~8.9 mph
+            walkSampleCount = 0
+            jogSampleCount = 0
+            runSampleCount = 0
+            
+            // Save the defaults
+            saveSpeeds()
+            
+            showInfoAlert(message: "Speed data reset to defaults")
         }
     
     @IBAction func generateRouteBTN(_ sender: UIButton) {
-        followUser = false
+     /*   followUser = false
         // Do a 1 time zoom after a short delay to let route render first
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0){
             if let location = self.userLocation {
-                self.safelyCenterMap(on: location, distance: 1000)
+                self.safelyCenterMap(on: location, distance: 3000)
             }
-        }
+       */ //}
         if let miles = currentUserInputMiles() {
             selectedCoordinates.removeAll()
             mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
@@ -516,6 +518,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         resetProgressTracking(totalDistance: 0, routeCoords: [])
         progressView.setProgress(0, animated: false)
+        isActivelyWalkingRoute = false
         }
 
     @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
@@ -558,7 +561,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             sender.setImage(UIImage(systemName: "location.fill"), for: .normal)
             sender.tintColor = .systemBlue
             if let location = userLocation {
-                safelyCenterMap(on: location, distance: 1000)
+                safelyCenterMap(on: location, distance: 3000)
             }
         } else {
             // stop following
@@ -748,6 +751,16 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         traveledDistance = 0
         lastLocationForProgress = nil
         prepareSnapToRouteData(from: routeCoords)
+        
+        // Remove any existing walked/remaining overlays from previous route
+        let oldOverlays = mapView.overlays.compactMap { overlay -> MKOverlay? in
+            if let styled = overlay as? StyledPolyline, (styled.kind == .walked || styled.kind == .remaining) {
+                return overlay
+            }
+            return nil
+        }
+        mapView.removeOverlays(oldOverlays)
+        
         DispatchQueue.main.async { self.progressView.setProgress(0, animated: true) }
     }
 
@@ -867,6 +880,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             self?.mapView.addOverlay(backwardPolyline)
             let combined = forwardCoords + backward
             self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: combined)
+            self?.isActivelyWalkingRoute = true
         }
     }
 
@@ -959,6 +973,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                             if let sp = overlay as? StyledPolyline { allCoords.append(contentsOf: self?.getCoordinates(from: sp) ?? []) }
                         }
                         self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: allCoords)
+                        self?.isActivelyWalkingRoute = true
                         finish()
                     } else { routeLeg(at: index + 1) }
                 }
@@ -1001,6 +1016,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                             if let sp = overlay as? StyledPolyline { allCoords.append(contentsOf: self?.getCoordinates(from: sp) ?? []) }
                         }
                         self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: allCoords)
+                        self?.isActivelyWalkingRoute = true
                         finish()
                     } else { routeLeg(at: index + 1) }
                 }
@@ -1085,6 +1101,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 self.mapView.addOverlay(route.polyline)
                 let coords = self.getCoordinates(from: route.polyline)
                 self.resetProgressTracking(totalDistance: route.distance, routeCoords: coords)
+                self.isActivelyWalkingRoute = true
             }
         }
     }
@@ -1149,14 +1166,16 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         userLocation = location.coordinate
-        updateProgress(with: location)
+        if isActivelyWalkingRoute {
+            updateProgress(with: location)
+        }
         updateSpeedLabel(speed: location.speed)
         updateSpeedAverages(speed: location.speed)
         if !hasAlreadyCentered {
             safelyCenterMap(on: location.coordinate, distance: 10000)
             hasAlreadyCentered = true
         } else if isFollowingUser {
-            safelyCenterMap(on: location.coordinate, distance: 1000)
+            safelyCenterMap(on: location.coordinate, distance: 3000)
         }
     }
 
@@ -1365,9 +1384,7 @@ When messing with UI stuff I found 2 problems:
  
  
  
- Feb 20 Friday: When tracking/center button is clicked on it doesn't have user as the starting point, and still requires 2 pins to be placed because of the logic that needs to be their for when it isn't turned on. So need to make it to where there is another case that if center button is on 1 then it only requires 1 point.
-    Also need to start doing constraints for all of my stuff that way it can look more presentible on different device models. Also probably add the super duper basics of having the swipey tab at the bottom.
-    Would also be nice to have system in place (maybe just on dev side or something for now) to reset calced avrg's for different speeds, cause mine are all messed up from me sitting and launching the app over and over again, and also driving my car to test spedometer.
+When I come back, I need to figure out Swipey tab and UI stuff. I want the Viewcontroller they are in to also be the swipey up. I want the UI stuff like buttons and route type selector and all that within the Swipey up tab that way they are not just free floating. Current issue is that when I had that for some reason everything inside the viewcontroller dissapears (I am assuming below the bottom of the screen) or something like that and IDK how to fix it.
  
  
  
