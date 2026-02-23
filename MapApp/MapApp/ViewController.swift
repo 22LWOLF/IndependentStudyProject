@@ -397,7 +397,20 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
 
     // MARK: IBActions
     @IBAction func showCoordinateEntry(_ sender: Any) { showCoordinateEntry() }
+    
+    
+    @IBAction func settingsBTN(_ sender: UIButton) {
 
+            // Temporary - wire this to your Settings button for demo
+            UserDefaults.standard.removeObject(forKey: "avgWalkingSpeed")
+            UserDefaults.standard.removeObject(forKey: "avgJoggingSpeed")
+            UserDefaults.standard.removeObject(forKey: "avgRunningSpeed")
+            UserDefaults.standard.removeObject(forKey: "walkSampleCount")
+            UserDefaults.standard.removeObject(forKey: "jogSampleCount")
+            UserDefaults.standard.removeObject(forKey: "runSampleCount")
+            showInfoAlert(message: "Speed data reset")
+        }
+    
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         followUser = false
         // Do a 1 time zoom after a short delay to let route render first
@@ -503,7 +516,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         resetProgressTracking(totalDistance: 0, routeCoords: [])
         progressView.setProgress(0, animated: false)
-    }
+        }
 
     @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
         let isLoop = (sender.selectedSegmentIndex == 2)
@@ -619,6 +632,23 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         let locationInView = gesture.location(in: mapView)
         let coordinate = mapView.convert(locationInView, toCoordinateFrom: mapView)
         let selectedIndex = routeTypeSelector.selectedSegmentIndex
+        
+        // Special case: if tracking is on and this is first tap , use suer location as start.
+        if isFollowingUser && selectedCoordinates.isEmpty {
+            // add user location as start
+            if let userLoc = userLocation {
+                selectedCoordinates.append(userLoc)
+                addAnnotation(at: userLoc, title: "Start")
+            }
+            // add tapped point as end
+            selectedCoordinates.append(coordinate)
+            
+            // label depends on route type
+            let selectedIndex = routeTypeSelector.selectedSegmentIndex
+            let label = (selectedIndex == 2) ? "A" : "End"
+            addAnnotation(at: coordinate, title: label)
+            return
+        }
         let maxPins = requiredPinCount(for: selectedIndex)
         if selectedIndex != 2 {
             if selectedCoordinates.count >= maxPins {
