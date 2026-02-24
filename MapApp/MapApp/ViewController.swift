@@ -16,6 +16,34 @@ extension UIColor {
     static let darkColor = UIColor(red: 51.0/255.0, green: 35.0/255.0, blue: 51.0/255.0, alpha: 1.0)
 }
 
+// MARK: - Database design (Attempt 1)
+struct SavedRoute {
+    // Identity
+    var id: UUID
+    var createdDate: Date
+    var name: String?  // User can name favorite routes
+    
+    // Route Config
+    var routeType: Int  // 0=one-way, 1=OAB, 2=loop
+    var isScenicMode: Bool
+    var targetDistance: Double  // miles
+    var direction: String?  // "N", "SE", "random", nil for manual
+    
+    // Coordinates
+    var waypoints: [CLLocationCoordinate2D]  // Start, stops, endpoints
+    var fullRouteCoordinates: [CLLocationCoordinate2D]?  // Optional: full path
+    
+    // Performance Data (if they actually walked it)
+    var wasCompleted: Bool
+    var actualDistance: Double?  // meters
+    var actualDuration: TimeInterval?  // seconds
+    var avgSpeed: Double?  // m/s
+    var completedDate: Date?
+    
+    // UI
+    var isFavorite: Bool
+}
+
 
 // MARK: - RouteAnnotation
 class RouteAnnotation: MKPointAnnotation {
@@ -472,14 +500,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 
             } else {
                 // ONE-WAY or OUT-AND-BACK: Single endpoint
-                let radius: Double
-                if useTimeInput {
-                    radius = (miles * 1609.34) / 2.0
-                } else {
-                    let windingFactor = 2.5
-                    radius = (miles * 1609.34) / (2 * .pi * windingFactor)
-                }
-                
+                let windingFactor = 2.5
+                let radius = (miles * 1609.34) / (2 * .pi * windingFactor)
                 let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: selectedDirection)
                 
                 switch selectedIndex {
@@ -574,7 +596,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
 
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
+        // Spin animation
+            UIView.animate(withDuration: 0.3) {
+                sender.transform = CGAffineTransform(rotationAngle: .pi)
+            } completion: { _ in
+                sender.transform = .identity
+            }
         isPanelOpen ? closePanel() : openPanel()
+        
     }
 
     // MARK: - @objc Handlers
@@ -1136,6 +1165,34 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
         return MKOverlayRenderer(overlay: overlay)
     }
+    
+    // for drag and drop
+    func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
+        // Only act when drag is complete
+        guard newState == .ending else { return }
+        guard let annotation = view.annotation as? RouteAnnotation else { return }
+        
+        // Update the coordinate in selectedCoordinates array
+        let index = annotation.index
+        if index < selectedCoordinates.count {
+            selectedCoordinates[index] = annotation.coordinate
+        }
+        
+        // Regenerate the route with new coordinates
+        let selectedIndex = routeTypeSelector.selectedSegmentIndex
+        switch selectedIndex {
+        case 0: // One-way
+            guard selectedCoordinates.count >= 2 else { return }
+            generateRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        case 1: // Out-and-back
+            guard selectedCoordinates.count >= 2 else { return }
+            generateOutAndBackRoute(from: selectedCoordinates[0], to: selectedCoordinates[1])
+        case 2: // Loop
+            guard selectedCoordinates.count >= 3 else { return }
+            generateLoopRoute(points: selectedCoordinates)
+        default: break
+        }
+    }
 
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         if annotation is MKUserLocation { return nil }
@@ -1221,7 +1278,11 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     }
 
     // MARK: Keyboard
-    @objc private func dismissKeyboard() { view.endEditing(true) }
+    @objc private func dismissKeyboard(){
+        view.endEditing(true)
+        closePanel()
+    }
+    
 
     // MARK: Inputs
     private func currentUserInputMiles() -> Double? {
