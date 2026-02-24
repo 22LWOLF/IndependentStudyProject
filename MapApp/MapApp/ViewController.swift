@@ -1392,8 +1392,17 @@ When messing with UI stuff I found 2 problems:
     Turn on a "Free run" mode that just tracks you as you go and then when you click a stop button of some sort it gives you all the information about your run. Distance, time, average of all speed types, etc.
  
  
-When I come back, I need to figure out Swipey tab and UI stuff. I want the Viewcontroller they are in to also be the swipey up. I want the UI stuff like buttons and route type selector and all that within the Swipey up tab that way they are not just free floating. Current issue is that when I had that for some reason everything inside the viewcontroller dissapears (I am assuming below the bottom of the screen) or something like that and IDK how to fix it.
+TO-DO:
  
+Look into "squishing" header area is akwardly big on certain models of phone.
+
+Make user tracking more smooth and less jerky. Also implement a way for the user to zoom in and out while tracking is on.
+ 
+When you click route settings have cog go to full cog for a sec to show you clicked it.
+ 
+See if battery usage is good or not.
+
+Flesh out colors
  
 */
 
