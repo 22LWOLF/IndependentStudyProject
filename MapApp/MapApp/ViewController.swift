@@ -18,29 +18,49 @@ extension UIColor {
 
 // MARK: - Database design (Attempt 1)
 struct SavedRoute {
-    // Identity
+    /// Unique identifier for the saved route
     var id: UUID
+    
+    /// Date the route was created
     var createdDate: Date
+    
+    /// Optional user-defined name for the route
     var name: String?  // User can name favorite routes
     
-    // Route Config
-    var routeType: Int  // 0=one-way, 1=OAB, 2=loop
+    /// Route type: 0=one-way, 1=out-and-back, 2=loop
+    var routeType: Int
+    
+    /// Flag indicating if scenic mode routing is enabled
     var isScenicMode: Bool
-    var targetDistance: Double  // miles
-    var direction: String?  // "N", "SE", "random", nil for manual
     
-    // Coordinates
-    var waypoints: [CLLocationCoordinate2D]  // Start, stops, endpoints
-    var fullRouteCoordinates: [CLLocationCoordinate2D]?  // Optional: full path
+    /// Target distance for the route in miles
+    var targetDistance: Double
     
-    // Performance Data (if they actually walked it)
+    /// Direction preference ("N", "SE", "random", or nil for manual)
+    var direction: String?
+    
+    /// Waypoints coordinates: start, stops, and endpoints
+    var waypoints: [CLLocationCoordinate2D]
+    
+    /// Optional full route path coordinates
+    var fullRouteCoordinates: [CLLocationCoordinate2D]?
+    
+    /// Flag indicating if the route was completed
     var wasCompleted: Bool
-    var actualDistance: Double?  // meters
-    var actualDuration: TimeInterval?  // seconds
-    var avgSpeed: Double?  // m/s
+    
+    /// Actual distance walked in meters (if completed)
+    var actualDistance: Double?
+    
+    /// Actual duration of walk in seconds (if completed)
+    var actualDuration: TimeInterval?
+    
+    /// Average speed during the walk in meters per second (if completed)
+    var avgSpeed: Double?
+    
+    /// Date the route was completed (if applicable)
     var completedDate: Date?
     
-    // UI
+    /// Flag indicating if the route is marked as favorite
     var isFavorite: Bool
 }
 
@@ -64,7 +84,7 @@ class StyledPolyline: MKPolyline {
 // MARK: - ViewController
 class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UITextFieldDelegate {
 
-    // MARK: Outlets
+    // MARK: - Outlets
     @IBOutlet weak var headerBox: UIView!
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var routeInfoLabel: UILabel!
@@ -72,13 +92,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     @IBOutlet weak var bottomTabContainer: UIView!
        
-      
-    // MARK: Properties
+    // MARK: - Properties
+    
+    // State
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var pinsLocked: Bool = false
     private var isGeneratingRoute: Bool = false
 
-    // User location
+    // Location
     private var locationManager: CLLocationManager!
     private var userLocation: CLLocationCoordinate2D?
     private var hasAlreadyCentered: Bool = false
@@ -99,7 +120,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
     private var selectedLoopPoints: Int = 3  // default
-    
 
     // Routing preferences
     private var useScenicRouting: Bool = false
@@ -129,7 +149,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     private var avgJoggingSpeed: Double = 2.7
     private var avgRunningSpeed: Double = 4.0
 
-    // MARK: Lifecycle
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         mapView.delegate = self
@@ -175,10 +195,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         bottomTabContainer.layer.cornerRadius = 44
         bottomTabContainer.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         bottomTabContainer.layer.masksToBounds = true
-
     }
 
-    // MARK: UI Setup
+    // MARK: - UI Setup
     private func setupHeaderUI() {
         // Progress view
         progressView.translatesAutoresizingMaskIntoConstraints = false
@@ -215,14 +234,13 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         setupPanelContent(in: contentView)
     }
 
-    // MARK: Panel Content
+    // MARK: - Panel Content
     func setupPanelContent(in container: UIView) {
         let padding: CGFloat = 12
         let fieldWidth = container.frame.width - (padding * 2)
         var currentY: CGFloat = 20  // Track vertical position
         
         // ========== SECTION 1: ROUTE STYLE (Always Visible) ==========
-        
         
         let clearRandomButton = UIButton(type: .system)
         clearRandomButton.frame = CGRect(x: padding, y: currentY, width: fieldWidth, height: 36)
@@ -378,7 +396,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: Panel Open/Close
+    // MARK: - Panel Open/Close
     func openPanel() {
         let screenWidth = view.bounds.width
         UIView.animate(withDuration: 0.3, animations: {
@@ -395,7 +413,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         isPanelOpen = false
     }
 
-    // MARK: Alerts
+    // MARK: - Alerts
     func showInfoAlert(title: String = "Info", message: String) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -423,34 +441,35 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: IBActions
+    // MARK: - IBActions
     @IBAction func showCoordinateEntry(_ sender: Any) { showCoordinateEntry() }
-    
     
     @IBAction func settingsBTN(_ sender: UIButton) {
 
         // Reset to default human speeds instead of wiping them temporary
-            avgWalkingSpeed = 1.4  // ~3.1 mph
-            avgJoggingSpeed = 2.7  // ~6.0 mph
-            avgRunningSpeed = 4.0  // ~8.9 mph
-            walkSampleCount = 50
-           jogSampleCount = 50
-           runSampleCount = 50
-            
-            // Save the defaults
-            saveSpeeds()
-            
-            showInfoAlert(message: "Speed data reset to defaults")
-        }
+        avgWalkingSpeed = 1.4  // ~3.1 mph
+        avgJoggingSpeed = 2.7  // ~6.0 mph
+        avgRunningSpeed = 4.0  // ~8.9 mph
+        walkSampleCount = 50
+        jogSampleCount = 50
+        runSampleCount = 50
+        
+        // Save the defaults
+        saveSpeeds()
+        
+        showInfoAlert(message: "Speed data reset to defaults")
+    }
     
     @IBAction func generateRouteBTN(_ sender: UIButton) {
-     /*   followUser = false
+        /*   
+        followUser = false
         // Do a 1 time zoom after a short delay to let route render first
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0){
             if let location = self.userLocation {
                 self.safelyCenterMap(on: location, distance: 3000)
             }
-       */ //}
+        } 
+        */
         if let miles = currentUserInputMiles() {
             selectedCoordinates.removeAll()
             mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
@@ -543,7 +562,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         resetProgressTracking(totalDistance: 0, routeCoords: [])
         progressView.setProgress(0, animated: false)
         isActivelyWalkingRoute = false
-        }
+    }
 
     @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
         let isLoop = (sender.selectedSegmentIndex == 2)
@@ -597,13 +616,12 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
 
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
         // Spin animation
-            UIView.animate(withDuration: 0.3) {
-                sender.transform = CGAffineTransform(rotationAngle: .pi)
-            } completion: { _ in
-                sender.transform = .identity
-            }
+        UIView.animate(withDuration: 0.3) {
+            sender.transform = CGAffineTransform(rotationAngle: .pi)
+        } completion: { _ in
+            sender.transform = .identity
+        }
         isPanelOpen ? closePanel() : openPanel()
-        
     }
 
     // MARK: - @objc Handlers
@@ -736,7 +754,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: Map Helpers
+    // MARK: - Map Helpers
     private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
         let camera = MKMapCamera(lookingAtCenter: coordinate, fromDistance: max(100, distance), pitch: 0, heading: 0)
         mapView.setCamera(camera, animated: true)
@@ -754,7 +772,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         mapView.addAnnotation(annotation)
     }
 
-    // MARK: Routing
+    // MARK: - Routing
     private func angleRange(for direction: String) -> ClosedRange<Double> {
         switch direction {
         case "N": return 337.5...360.0
@@ -1135,7 +1153,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: MKMapViewDelegate
+    // MARK: - MKMapViewDelegate
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
@@ -1228,7 +1246,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: CLLocationManagerDelegate
+    // MARK: - CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         userLocation = location.coordinate
@@ -1255,6 +1273,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
     
+    // MARK: - Live Route Info
     private func updateLiveRouteInfo() {
         guard totalRouteDistance > 0 else { return }
         
@@ -1277,14 +1296,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: Keyboard
+    // MARK: - Keyboard
     @objc private func dismissKeyboard(){
         view.endEditing(true)
         closePanel()
     }
     
 
-    // MARK: Inputs
+    // MARK: - Inputs
     private func currentUserInputMiles() -> Double? {
         guard let text = distanceTextField?.text, !text.isEmpty else { return nil }
         guard let value = Double(text) else { return nil }
@@ -1296,7 +1315,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         }
     }
 
-    // MARK: Random coordinate
+    // MARK: - Random coordinate
     func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double, direction: String = "random") -> CLLocationCoordinate2D {
         let range = angleRange(for: direction)
         let randomAngleDegrees: Double
@@ -1340,7 +1359,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         return points
     }
 
-    // MARK: Speed UI/Averages
+    // MARK: - Speed UI/Averages
     private func updateSpeedLabel(speed: CLLocationSpeed) {
         let mph = speed * 2.23694
         guard mph >= 0 else { speedLabel.text = "Speed: --"; return }
@@ -1412,11 +1431,11 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
  
  
  Possible solution for making loops is do same logic as out and back but use alternate route type like scenic or those other types, but I also need to keep in mind how i'm going to randomly generate a route with multiple points.
- For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnessarcy work)
+ For battery usage use kcLLocationAccuracyBestForNaviagation and also set appropriate distance filters to make sure that the GPS isn't having to update every 1 inch you move. Use locationManager.activityType = .fitness this optimizes phone for fitness and stuff. Ensure that location updates are paused when the user is not moving (stops unnecessary work)
  Instead of having a button to start a route have it to where the user holds down with like a shaking then like realse feeling. (ssshhhhhhhwwwwwwwwooop). This clears up UI and also gives a cool little gimic feeling. Probably still have a cancel route button though.
  For random loop generation let the user select a cardinal direction to head in (4 90 degree angles). EX: North would be from 315 degrees - 45 degrees. East would be from 45 to 135. Etc.
- Progress traker for route
- Warnings for user to swtich speeds.
+ Progress tracker for route
+ Warnings for user to switch speeds.
  
  
  Pseduo code thoughts:
@@ -1426,7 +1445,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
  Cons: Could be super intensive because it could take theoretically millions of tries, could drain phone super fast.
  
  Okay talked with chatGPT it gave me a solution to try:
- take the users time or distance (if they choose time then convet that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
+ take the users time or distance (if they choose time then convert that to distance using their personal values. Then do formula of r = distance/(2pi) to get an approximate radius around your starting position. Then generate x random points within that radius then add the distance together then see if that value is within a certain range of the user given distance/converted time. After X times of generation keep the best attempt (even if it is still slightly outside the "required" value).
  Cont. on random route generation stuff:
  if/when a user is making a route and a point ends up in a location that is not possible to reach (middle of a lake, field, etc.) instead of scrapping the entire route go back a step and remake the new pin.
  EX: A -> B works, B -> C (lake), B -> C2 (good), C2 -> A
@@ -1436,18 +1455,18 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
  Issues:
 When messing with UI stuff I found 2 problems:
     1. The screen sizes and not having automatic adjustments for phone model launching means that stuff is not consistent between phone sizes.
-    2. The 2 different "types" of phone models Hill and Island. Hill (12 pro max) have the area around the camera come down from the top and is connected to the edge of the phone. Island (17 pro) has the area around the camera floating so screen runs inbetween it and the edge of the screen. I believe that the Hill models set there safety area/screen to the bottom (spot closest to the home "button") as the their edge, where as the Island models set the saftey area/screen to the actual edge of the screen. This is speculation but that is what I got out of it after messing around with it.
+    2. The 2 different "types" of phone models Hill and Island. Hill (12 pro max) have the area around the camera come down from the top and is connected to the edge of the phone. Island (17 pro) has the area around the camera floating so screen runs inbetween it and the edge of the screen. I believe that the Hill models set their safety area/screen to the bottom (spot closest to the home "button") as the their edge, whereas the Island models set the safety area/screen to the actual edge of the screen. This is speculation but that is what I got out of it after messing around with it.
  
     Thoughts on my issues I have found out when messing with the apps UI elements and constraints. (At bottom of view controller). I know that it isn't a priority at this second but I wanted to get at least some of the concrete parts of the app situated (settings and Go To buttons, label for distance and time, Go and Cancel buttons). Currently my UI looks good for the iPhone 17 Pro. I'd like to have it at least look decent on everything after like the 13 (most common currently).
  
     Answer: I'll probably use the 13 as a base when making it and kinda just hope it looks meh on other models (13 since its most common rn)
 
     Thoughts:
-        So the points do spread themselves out correctly, but I know mathmatically it needs to be .5 * radius for the minimum point for the distance but it seems idk like to far. I don't rememeber if this was one of the numbers that we can tweak without throwing the math of much or not but I think maybe more like 1/6 of the radius min would be better.
-        I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will proabably need some weird/unique looking UI for it to look good.
-        I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usuable on the other models.
+        So the points do spread themselves out correctly, but I know mathematically it needs to be .5 * radius for the minimum point for the distance but it seems idk like too far. I don't remember if this was one of the numbers that we can tweak without throwing the math off much or not but I think maybe more like 1/6 of the radius min would be better.
+        I also haven't implemented in the cardinal direction picker but I think it'll be pretty simple. (will probably need some weird/unique looking UI for it to look good.
+        I also think that for my UI issue I will just build it around how the iPhone 13 since its the most commonly used right now and then just kinda hope that it is usable on the other models.
  
-        Have the ability to change accuracy of tracking (either in settings) or if route is super long distance/time then it will automatically switch to help with effeiency.
+        Have the ability to change accuracy of tracking (either in settings) or if route is super long distance/time then it will automatically switch to help with efficiency.
  
  Potential addition:
     Turn on a "Free run" mode that just tracks you as you go and then when you click a stop button of some sort it gives you all the information about your run. Distance, time, average of all speed types, etc.
@@ -1455,7 +1474,7 @@ When messing with UI stuff I found 2 problems:
  
 TO-DO:
  
-Look into "squishing" header area is akwardly big on certain models of phone.
+Look into "squishing" header area is awkwardly big on certain models of phone.
 
 Make user tracking more smooth and less jerky. Also implement a way for the user to zoom in and out while tracking is on.
  
