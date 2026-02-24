@@ -12,6 +12,8 @@ import CoreLocation
 // MARK: - Color Scheme
 extension UIColor {
     static let appPrimary = UIColor(red: 152.0/255.0, green: 168.0/255.0, blue: 105.0/255.0, alpha: 1.0)
+    static let compColor = UIColor(red: 105.0/255.0, green: 120.0/255.0, blue: 168.0/255.0, alpha: 1.0)
+    static let darkColor = UIColor(red: 51.0/255.0, green: 35.0/255.0, blue: 51.0/255.0, alpha: 1.0)
 }
 
 
@@ -153,8 +155,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         // Progress view
         progressView.translatesAutoresizingMaskIntoConstraints = false
         progressView.progress = 0
-        progressView.progressTintColor = .systemBlue
-        progressView.trackTintColor = .systemGray5
+        progressView.progressTintColor = .compColor
+        progressView.trackTintColor = .darkColor
         progressView.layer.cornerRadius = 2
         headerBox.addSubview(progressView)
         NSLayoutConstraint.activate([
@@ -403,9 +405,9 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             avgWalkingSpeed = 1.4  // ~3.1 mph
             avgJoggingSpeed = 2.7  // ~6.0 mph
             avgRunningSpeed = 4.0  // ~8.9 mph
-            walkSampleCount = 0
-            jogSampleCount = 0
-            runSampleCount = 0
+            walkSampleCount = 50
+           jogSampleCount = 50
+           runSampleCount = 50
             
             // Save the defaults
             saveSpeeds()
@@ -1110,7 +1112,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             let renderer = MKPolylineRenderer(polyline: styled)
             let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
             if styled.kind == .walked {
-                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)
+                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.7)
                 renderer.lineWidth = 5
             } else if styled.kind == .remaining {
                 renderer.strokeColor = .systemBlue
@@ -1390,11 +1392,8 @@ When messing with UI stuff I found 2 problems:
     Turn on a "Free run" mode that just tracks you as you go and then when you click a stop button of some sort it gives you all the information about your run. Distance, time, average of all speed types, etc.
  
  
- 
 When I come back, I need to figure out Swipey tab and UI stuff. I want the Viewcontroller they are in to also be the swipey up. I want the UI stuff like buttons and route type selector and all that within the Swipey up tab that way they are not just free floating. Current issue is that when I had that for some reason everything inside the viewcontroller dissapears (I am assuming below the bottom of the screen) or something like that and IDK how to fix it.
  
  
- 
 */
-
 
