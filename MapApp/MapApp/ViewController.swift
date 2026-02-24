@@ -832,8 +832,6 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             DispatchQueue.main.async { self.progressView.setProgress(progress, animated: true) }
         }
         lastLocationForProgress = newLocation
-        let nearest = nearestRouteIndex(to: newLocation)
-        updateRouteOverlay(nearestIndex: nearest)
         updateLiveRouteInfo()
     }
 
@@ -1111,12 +1109,21 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
             let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
-            let color = colors[styled.legIndex % colors.count]
-            renderer.strokeColor = color
-            renderer.lineWidth = (styled.mode == .scenic) ? 6 : 5
-            if styled.kind == .backward { renderer.lineDashPattern = [2, 5] }
-            if styled.kind == .walked { renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4); renderer.lineWidth = 5 }
-            if styled.kind == .remaining { renderer.strokeColor = .systemBlue; renderer.lineWidth = 5 }
+            if styled.kind == .walked {
+                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)
+                renderer.lineWidth = 5
+            } else if styled.kind == .remaining {
+                renderer.strokeColor = .systemBlue
+                renderer.lineWidth = 5
+            } else {
+                let color = colors[styled.legIndex % colors.count]
+                renderer.strokeColor = color
+                renderer.lineWidth = (styled.mode == .scenic) ? 6 : 5
+                
+                if styled.kind == .backward {
+                    renderer.lineDashPattern = [2, 5]
+                }
+            }
             return renderer
         }
         if let polyline = overlay as? MKPolyline {
