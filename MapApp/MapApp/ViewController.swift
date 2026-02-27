@@ -468,6 +468,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         showInfoAlert(message: "Speed data reset to defaults + ")
     }
     
+    
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         /*   
         followUser = false
