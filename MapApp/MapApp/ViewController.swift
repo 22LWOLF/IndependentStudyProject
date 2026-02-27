@@ -446,6 +446,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
     
     @IBAction func settingsBTN(_ sender: UIButton) {
 
+        
+        // In settingsBTN, add this to test:
+        let routes = CoreDataManager.shared.fetchAllRoutes()
+        print("📊 Total saved routes: \(routes.count)")
+        for route in routes {
+            print("  - \(route.targetDistance) miles, created \(route.createdDate)")
+        }
+        
         // Reset to default human speeds instead of wiping them temporary
         avgWalkingSpeed = 1.4  // ~3.1 mph
         avgJoggingSpeed = 2.7  // ~6.0 mph
@@ -928,6 +936,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             let combined = forwardCoords + backward
             self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: combined)
             self?.isActivelyWalkingRoute = true
+            
+            CoreDataManager.shared.saveRoute(
+                routeType: 1,  // Out-and-back
+                isScenicMode: self?.useScenicRouting ?? false,
+                targetDistance: totalDistance / 1609.34,
+                direction: self?.selectedDirection,
+                waypoints: self?.selectedCoordinates ?? [],
+                fullRoute: combined)
         }
     }
 
@@ -1021,6 +1037,16 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                         }
                         self?.resetProgressTracking(totalDistance: totalDistance, routeCoords: allCoords)
                         self?.isActivelyWalkingRoute = true
+                        
+                        CoreDataManager.shared.saveRoute(
+                            routeType: 2,  // Loop
+                            isScenicMode: self?.useScenicRouting ?? false,
+                            targetDistance: totalDistance / 1609.34,
+                            direction: self?.selectedDirection,
+                            waypoints: self?.selectedCoordinates ?? [],
+                            fullRoute: allCoords
+                        )
+                        
                         finish()
                     } else { routeLeg(at: index + 1) }
                 }
@@ -1141,6 +1167,8 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 }
             }
             
+            
+            
             // Draw the route
             DispatchQueue.main.async {
                 //self.mapView.removeOverlays(self.mapView.overlays)  // clear any partial overlays
@@ -1149,6 +1177,14 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
                 let coords = self.getCoordinates(from: route.polyline)
                 self.resetProgressTracking(totalDistance: route.distance, routeCoords: coords)
                 self.isActivelyWalkingRoute = true
+                
+                CoreDataManager.shared.saveRoute(
+                        routeType: self.routeTypeSelector.selectedSegmentIndex,
+                        isScenicMode: self.useScenicRouting,
+                        targetDistance: route.distance / 1609.34,  // Convert meters to miles
+                        direction: self.selectedDirection,
+                        waypoints: self.selectedCoordinates,
+                        fullRoute: coords)
             }
         }
     }
