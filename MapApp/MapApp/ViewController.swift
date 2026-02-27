@@ -17,7 +17,7 @@ extension UIColor {
 }
 
 // MARK: - Database design (Attempt 1)
-struct SavedRoute {
+struct RouteData {
     /// Unique identifier for the saved route
     var id: UUID
     
@@ -465,7 +465,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         // Save the defaults
         saveSpeeds()
         
-        showInfoAlert(message: "Speed data reset to defaults")
+        showInfoAlert(message: "Speed data reset to defaults + ")
     }
     
     @IBAction func generateRouteBTN(_ sender: UIButton) {
