@@ -98,7 +98,7 @@ class CoreDataManager {
         
         // Write to disk
         saveContext()
-        print("✅ Saved route: \(targetDistance) miles")
+        print("Saved route: \(targetDistance) miles")
     }
     
     // MARK: - Fetch Routes

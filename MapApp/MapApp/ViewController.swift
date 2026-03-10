@@ -449,7 +449,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
         
         // In settingsBTN, add this to test:
         let routes = CoreDataManager.shared.fetchAllRoutes()
-        print("📊 Total saved routes: \(routes.count)")
+        print("Total saved routes: \(routes.count)")
         for route in routes {
             print("  - \(route.targetDistance) miles, created \(route.createdDate)")
         }
