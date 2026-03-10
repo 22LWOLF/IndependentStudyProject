@@ -1509,7 +1509,1367 @@ When messing with UI stuff I found 2 problems:
     Turn on a "Free run" mode that just tracks you as you go and then when you click a stop button of some sort it gives you all the information about your run. Distance, time, average of all speed types, etc.
  
  
-TO-DO:
 
+ REFACTORED VERSION ADD AND TRY TO SEE IF THIS WORKS LATER:
+ 
+ //
+ //  ViewController.swift
+ //  MapApp - REFACTORED
+ //
+ //  Rebuilt for simplicity and zero redundancy
+ //
+
+ import UIKit
+ import MapKit
+ import CoreLocation
+
+ // MARK: - Color Scheme
+ extension UIColor {
+     static let appPrimary = UIColor(red: 152.0/255.0, green: 168.0/255.0, blue: 105.0/255.0, alpha: 1.0)
+     static let compColor = UIColor(red: 105.0/255.0, green: 120.0/255.0, blue: 168.0/255.0, alpha: 1.0)
+     static let darkColor = UIColor(red: 51.0/255.0, green: 35.0/255.0, blue: 51.0/255.0, alpha: 1.0)
+ }
+
+ // MARK: - Custom Classes
+ class RouteAnnotation: MKPointAnnotation {
+     var index: Int = 0
+ }
+
+ class StyledPolyline: MKPolyline {
+     enum Kind { case forward, backward, walked, remaining }
+     var kind: Kind = .forward
+     var legIndex: Int = 0
+     enum Mode { case fastest, scenic }
+     var mode: Mode = .fastest
+ }
+
+ // MARK: - Route Configuration
+ struct RouteConfig {
+     enum RouteType: Int {
+         case oneWay = 0
+         case outAndBack = 1
+         case loop = 2
+     }
+     
+     var type: RouteType
+     var isScenic: Bool
+     var waypoints: [CLLocationCoordinate2D]
+     var targetDistance: Double? // in miles
+     var direction: String?
+ }
+
+ // MARK: - ViewController
+ class ViewController: UIViewController {
+     
+     // MARK: - Outlets
+     @IBOutlet weak var headerBox: UIView!
+     @IBOutlet weak var mapView: MKMapView!
+     @IBOutlet weak var routeInfoLabel: UILabel!
+     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
+     @IBOutlet weak var bottomTabContainer: UIView!
+     
+     // MARK: - UI Components
+     private var slidePanel: UIView!
+     private var panelScrollView: UIScrollView!
+     private var distanceTextField: UITextField?
+     private var distanceOrTimeLabel: UILabel?
+     private var selectedDirectionButton: UIButton?
+     private var loopPointStepper: UIStepper?
+     private var loopPointLabel: UILabel?
+     private var timeToggle: UISwitch?
+     private var progressView = UIProgressView(progressViewStyle: .default)
+     
+     // MARK: - State
+     private var selectedCoordinates: [CLLocationCoordinate2D] = []
+     private var isPanelOpen = false
+     private var isGeneratingRoute = false
+     private var isFollowingUser = false
+     private var isActivelyWalkingRoute = false
+     private var hasAlreadyCentered = false
+     
+     // MARK: - User Preferences
+     private var useScenicRouting = false
+     private var useTimeInput = false
+     private var selectedDirection = "random"
+     private var selectedLoopPoints = 3
+     
+     // MARK: - Location
+     private var locationManager: CLLocationManager!
+     private var userLocation: CLLocationCoordinate2D?
+     
+     // MARK: - Route Tracking
+     private var currentRouteCoordinates: [CLLocationCoordinate2D] = []
+     private var totalRouteDistance: CLLocationDistance = 0
+     private var traveledDistance: CLLocationDistance = 0
+     private var routeSegments: [CLLocationCoordinate2D] = []
+     private var cumulativeSegmentLengths: [CLLocationDistance] = []
+     
+     // MARK: - Speed Learning
+     private var avgWalkingSpeed: Double = 1.4
+     private var avgJoggingSpeed: Double = 2.7
+     private var avgRunningSpeed: Double = 4.0
+     private var walkSampleCount = 0
+     private var jogSampleCount = 0
+     private var runSampleCount = 0
+     
+     // MARK: - Lifecycle
+     override func viewDidLoad() {
+         super.viewDidLoad()
+         setupMap()
+         setupLocation()
+         setupUI()
+         loadSavedSpeeds()
+     }
+     
+     override func viewDidLayoutSubviews() {
+         super.viewDidLayoutSubviews()
+         headerBox.layer.cornerRadius = 44
+         headerBox.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+         headerBox.layer.masksToBounds = true
+         
+         bottomTabContainer.layer.cornerRadius = 44
+         bottomTabContainer.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+         bottomTabContainer.layer.masksToBounds = true
+     }
+ }
+
+ // MARK: - Setup Methods
+ extension ViewController {
+     
+     private func setupMap() {
+         mapView.delegate = self
+         mapView.showsUserLocation = true
+         mapView.userTrackingMode = .none
+         
+         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap))
+         mapView.addGestureRecognizer(tapGesture)
+     }
+     
+     private func setupLocation() {
+         locationManager = CLLocationManager()
+         locationManager.delegate = self
+         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+         locationManager.activityType = .fitness
+         locationManager.distanceFilter = kCLDistanceFilterNone
+         locationManager.pausesLocationUpdatesAutomatically = false
+         locationManager.requestWhenInUseAuthorization()
+         locationManager.startUpdatingLocation()
+     }
+     
+     private func setupUI() {
+         setupProgressBar()
+         setupSlidePanel()
+         setupLoopControls()
+     }
+     
+     private func setupProgressBar() {
+         progressView.translatesAutoresizingMaskIntoConstraints = false
+         progressView.progress = 0
+         progressView.progressTintColor = .compColor
+         progressView.trackTintColor = .darkColor
+         progressView.layer.cornerRadius = 2
+         headerBox.addSubview(progressView)
+         
+         NSLayoutConstraint.activate([
+             progressView.leadingAnchor.constraint(equalTo: headerBox.leadingAnchor, constant: 16),
+             progressView.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
+             progressView.bottomAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: -8),
+             progressView.heightAnchor.constraint(equalToConstant: 4)
+         ])
+     }
+     
+     private func setupLoopControls() {
+         loopPointStepper?.isEnabled = false
+         loopPointStepper?.alpha = 0.4
+         loopPointLabel?.isEnabled = false
+         loopPointLabel?.alpha = 0.4
+     }
+ }
+
+ // MARK: - Slide Panel Setup
+ extension ViewController {
+     
+     private func setupSlidePanel() {
+         let screenWidth = view.bounds.width
+         let screenHeight = view.bounds.height
+         
+         slidePanel = UIView(frame: CGRect(x: screenWidth, y: 165, width: 184, height: screenHeight - 450))
+         slidePanel.backgroundColor = .white
+         view.addSubview(slidePanel)
+         
+         panelScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: slidePanel.frame.height))
+         panelScrollView.backgroundColor = .clear
+         slidePanel.addSubview(panelScrollView)
+         
+         let contentView = UIView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: 600))
+         contentView.backgroundColor = .clear
+         panelScrollView.addSubview(contentView)
+         
+         setupPanelContent(in: contentView)
+     }
+     
+     private func setupPanelContent(in container: UIView) {
+         let padding: CGFloat = 12
+         let fieldWidth = container.frame.width - (padding * 2)
+         var currentY: CGFloat = 20
+         
+         // Section 1: Route Style
+         currentY = addClearSettingsButton(to: container, y: currentY, width: fieldWidth, padding: padding)
+         currentY = addSectionHeader(to: container, text: "ROUTE STYLE", y: currentY, width: fieldWidth, padding: padding)
+         currentY = addRoutingModeSelector(to: container, y: currentY, width: fieldWidth, padding: padding)
+         currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
+         
+         // Section 2: Random Generation
+         currentY = addSectionHeader(to: container, text: "RANDOM GENERATION", y: currentY, width: fieldWidth, padding: padding)
+         currentY = addDistanceInput(to: container, y: currentY, width: fieldWidth, padding: padding)
+         currentY = addTimeToggle(to: container, y: currentY, width: fieldWidth, padding: padding)
+         currentY = addDirectionGrid(to: container, y: currentY, width: fieldWidth)
+         currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
+         
+         // Section 3: Loop Options
+         currentY = addSectionHeader(to: container, text: "LOOP OPTIONS", y: currentY, width: fieldWidth, padding: padding)
+         currentY = addLoopPointControls(to: container, y: currentY, width: fieldWidth, padding: padding)
+         
+         panelScrollView.contentSize = CGSize(width: slidePanel.frame.width, height: currentY + 20)
+     }
+     
+     // Panel component builders
+     private func addClearSettingsButton(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         let button = UIButton(type: .system)
+         button.frame = CGRect(x: padding, y: y, width: width, height: 36)
+         button.setTitle("Clear Settings", for: .normal)
+         button.backgroundColor = .systemRed.withAlphaComponent(0.1)
+         button.setTitleColor(.systemRed, for: .normal)
+         button.layer.cornerRadius = 8
+         button.addTarget(self, action: #selector(clearRandomSettings), for: .touchUpInside)
+         container.addSubview(button)
+         return y + 40
+     }
+     
+     private func addSectionHeader(to container: UIView, text: String, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         let label = UILabel(frame: CGRect(x: padding, y: y, width: width, height: 20))
+         label.text = text
+         label.font = .systemFont(ofSize: 11, weight: .semibold)
+         label.textColor = .systemGray
+         container.addSubview(label)
+         return y + 25
+     }
+     
+     private func addRoutingModeSelector(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         let control = UISegmentedControl(items: ["Fastest", "Scenic"])
+         control.selectedSegmentIndex = useScenicRouting ? 1 : 0
+         control.addTarget(self, action: #selector(routeVibeSelector), for: .valueChanged)
+         control.frame = CGRect(x: padding, y: y, width: width, height: 32)
+         container.addSubview(control)
+         return y + 45
+     }
+     
+     private func addDistanceInput(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         var currentY = y
+         
+         let label = UILabel(frame: CGRect(x: padding, y: currentY, width: width, height: 20))
+         label.text = "Distance (miles)"
+         label.font = .systemFont(ofSize: 14)
+         container.addSubview(label)
+         distanceOrTimeLabel = label
+         currentY += 25
+         
+         let field = UITextField(frame: CGRect(x: padding, y: currentY, width: width, height: 36))
+         field.placeholder = "e.g. 3.1"
+         field.borderStyle = .roundedRect
+         field.keyboardType = .decimalPad
+         field.delegate = self
+         
+         let toolbar = UIToolbar()
+         toolbar.sizeToFit()
+         let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+         let doneButton = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(dismissKeyboard))
+         toolbar.items = [flexSpace, doneButton]
+         field.inputAccessoryView = toolbar
+         
+         container.addSubview(field)
+         distanceTextField = field
+         
+         return currentY + 45
+     }
+     
+     private func addTimeToggle(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         let label = UILabel(frame: CGRect(x: padding, y: y, width: width - 50, height: 20))
+         label.text = "Use Time Instead"
+         label.font = .systemFont(ofSize: 13)
+         container.addSubview(label)
+         
+         let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
+         toggle.addTarget(self, action: #selector(timeToggleChanged), for: .valueChanged)
+         container.addSubview(toggle)
+         timeToggle = toggle
+         
+         return y + 40
+     }
+     
+     private func addDirectionGrid(to container: UIView, y: CGFloat, width: CGFloat) -> CGFloat {
+         var currentY = y
+         
+         let label = UILabel(frame: CGRect(x: 12, y: currentY, width: width - 24, height: 20))
+         label.text = "Direction"
+         label.font = .systemFont(ofSize: 14)
+         label.textAlignment = .center
+         container.addSubview(label)
+         currentY += 25
+         
+         let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
+         let buttonSize: CGFloat = 44
+         let gap: CGFloat = 4
+         let gridWidth = (buttonSize * 3) + (gap * 2)
+         let startX = (container.frame.width - gridWidth) / 2
+         
+         for row in 0..<3 {
+             for col in 0..<3 {
+                 let title = directions[row][col]
+                 let button = UIButton(type: .system)
+                 button.frame = CGRect(
+                     x: startX + CGFloat(col) * (buttonSize + gap),
+                     y: currentY + CGFloat(row) * (buttonSize + gap),
+                     width: buttonSize,
+                     height: buttonSize
+                 )
+                 button.setTitle(title, for: .normal)
+                 button.setTitleColor(.black, for: .normal)
+                 button.backgroundColor = .systemGray3
+                 button.layer.cornerRadius = 8
+                 
+                 if title == "." {
+                     button.setTitleColor(.clear, for: .normal)
+                     button.isEnabled = false
+                 } else {
+                     button.addTarget(self, action: #selector(directionButtonTapped), for: .touchUpInside)
+                 }
+                 
+                 container.addSubview(button)
+             }
+         }
+         
+         return currentY + 150
+     }
+     
+     private func addLoopPointControls(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         var currentY = y
+         
+         let label = UILabel(frame: CGRect(x: padding, y: currentY, width: width, height: 20))
+         label.text = "Loop Points: 4"
+         label.font = .systemFont(ofSize: 14)
+         label.textAlignment = .center
+         label.isEnabled = false
+         container.addSubview(label)
+         loopPointLabel = label
+         currentY += 25
+         
+         let stepper = UIStepper(frame: CGRect(x: (container.frame.width - 94) / 2, y: currentY, width: 94, height: 29))
+         stepper.minimumValue = 3
+         stepper.maximumValue = 8
+         stepper.value = 4
+         stepper.isEnabled = false
+         stepper.addTarget(self, action: #selector(loopPointStepperChanged), for: .valueChanged)
+         container.addSubview(stepper)
+         loopPointStepper = stepper
+         
+         return currentY + 40
+     }
+     
+     private func addDivider(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+         let divider = UIView(frame: CGRect(x: padding, y: y, width: width, height: 1))
+         divider.backgroundColor = .systemGray4
+         container.addSubview(divider)
+         return y + 15
+     }
+ }
+
+ // MARK: - IBActions
+ extension ViewController {
+     
+     @IBAction func generateRouteBTN(_ sender: UIButton) {
+         let config = buildRouteConfig()
+         
+         if let targetMiles = config.targetDistance {
+             // Random route generation
+             generateRandomRoute(config: config, targetMiles: targetMiles)
+         } else {
+             // Manual pin-based route
+             generateManualRoute(config: config)
+         }
+     }
+     
+     @IBAction func clearRouteBTN(_ sender: UIButton) {
+         clearAllRoutes()
+     }
+     
+     @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
+         updateLoopControlsVisibility(isLoop: sender.selectedSegmentIndex == 2)
+     }
+     
+     @IBAction func routeVibeSelector(_ sender: UISegmentedControl) {
+         useScenicRouting = (sender.selectedSegmentIndex == 1)
+         regenerateCurrentRoute()
+     }
+     
+     @IBAction func recenterBTN(_ sender: UIButton) {
+         toggleFollowUser(button: sender)
+     }
+     
+     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
+         animateSettingsCog(sender)
+         isPanelOpen ? closePanel() : openPanel()
+     }
+     
+     @IBAction func settingsBTN(_ sender: UIButton) {
+         resetSpeedData()
+         printSavedRoutes()
+     }
+     
+     @IBAction func showCoordinateEntry(_ sender: Any) {
+         presentCoordinateEntryDialog()
+     }
+ }
+
+ // MARK: - Route Building
+ extension ViewController {
+     
+     private func buildRouteConfig() -> RouteConfig {
+         let type = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
+         
+         return RouteConfig(
+             type: type,
+             isScenic: useScenicRouting,
+             waypoints: selectedCoordinates,
+             targetDistance: getUserInputMiles(),
+             direction: selectedDirection
+         )
+     }
+     
+     private func generateRandomRoute(config: RouteConfig, targetMiles: Double) {
+         clearPinsAndOverlays()
+         
+         let center = determineStartLocation()
+         let waypoints = generateWaypoints(for: config, center: center, targetMiles: targetMiles)
+         
+         selectedCoordinates = waypoints
+         placeAnnotations(for: waypoints, routeType: config.type)
+         
+         requestRoutes(for: waypoints, config: config)
+     }
+     
+     private func generateManualRoute(config: RouteConfig) {
+         guard validatePinCount(for: config.type) else { return }
+         requestRoutes(for: config.waypoints, config: config)
+     }
+     
+     private func generateWaypoints(for config: RouteConfig, center: CLLocationCoordinate2D, targetMiles: Double) -> [CLLocationCoordinate2D] {
+         switch config.type {
+         case .oneWay, .outAndBack:
+             let radius = calculateRadius(targetMiles: targetMiles, windingFactor: 2.5)
+             let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: config.direction ?? "random")
+             return [center, endpoint]
+             
+         case .loop:
+             let perimeter = targetMiles * 1609.34
+             let averageRadius = perimeter / (Double(selectedLoopPoints) * .pi)
+             return generateLoopPoints(count: selectedLoopPoints, center: center, averageRadius: averageRadius, direction: config.direction ?? "random")
+         }
+     }
+     
+     private func calculateRadius(targetMiles: Double, windingFactor: Double) -> Double {
+         return (targetMiles * 1609.34) / (2 * .pi * windingFactor)
+     }
+ }
+
+ // MARK: - Core Route Request (Single Responsibility!)
+ extension ViewController {
+     
+     /// The ONE function that handles ALL route requests
+     private func requestRoutes(for waypoints: [CLLocationCoordinate2D], config: RouteConfig) {
+         guard !isGeneratingRoute else { return }
+         isGeneratingRoute = true
+         
+         // Clear old routes only for new generation
+         if config.targetDistance != nil {
+             mapView.removeOverlays(mapView.overlays)
+         }
+         
+         switch config.type {
+         case .oneWay:
+             requestSingleLeg(
+                 from: waypoints[0],
+                 to: waypoints[1],
+                 config: config,
+                 targetMiles: config.targetDistance
+             )
+             
+         case .outAndBack:
+             requestSingleLeg(
+                 from: waypoints[0],
+                 to: waypoints[1],
+                 config: config,
+                 targetMiles: config.targetDistance,
+                 isOutAndBack: true
+             )
+             
+         case .loop:
+             requestMultiLegLoop(waypoints: waypoints, config: config)
+         }
+     }
+     
+     private func requestSingleLeg(
+         from start: CLLocationCoordinate2D,
+         to end: CLLocationCoordinate2D,
+         config: RouteConfig,
+         targetMiles: Double?,
+         isOutAndBack: Bool = false,
+         retryCount: Int = 0
+     ) {
+         let request = buildDirectionsRequest(from: start, to: end, requestAlternates: config.isScenic)
+         
+         MKDirections(request: request).calculate { [weak self] response, error in
+             guard let self = self else { return }
+             
+             if let error = error {
+                 self.showErrorAlert(message: "Route failed: \(error.localizedDescription)")
+                 self.isGeneratingRoute = false
+                 return
+             }
+             
+             guard let routes = response?.routes, !routes.isEmpty else {
+                 self.isGeneratingRoute = false
+                 return
+             }
+             
+             let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
+             
+             // Handle distance retry logic for random routes
+             if let targetMiles = targetMiles, retryCount < 4 {
+                 let actualDistance = isOutAndBack ? selectedRoute.distance * 2 : selectedRoute.distance
+                 let targetMeters = targetMiles * 1609.34
+                 let ratio = actualDistance / targetMeters
+                 
+                 if abs(ratio - 1.0) > 0.25 {
+                     let currentDistance = CLLocation(latitude: start.latitude, longitude: start.longitude)
+                         .distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
+                     let adjustedRadius = currentDistance / ratio
+                     let newEndpoint = self.generateRandomCoordinate(around: start, radius: adjustedRadius, direction: config.direction ?? "random")
+                     
+                     DispatchQueue.main.async {
+                         self.requestSingleLeg(
+                             from: start,
+                             to: newEndpoint,
+                             config: config,
+                             targetMiles: targetMiles,
+                             isOutAndBack: isOutAndBack,
+                             retryCount: retryCount + 1
+                         )
+                     }
+                     return
+                 }
+             }
+             
+             // Route accepted - draw it
+             self.drawSingleLegRoute(selectedRoute, isOutAndBack: isOutAndBack, config: config)
+         }
+     }
+     
+     private func drawSingleLegRoute(_ route: MKRoute, isOutAndBack: Bool, config: RouteConfig) {
+         let coords = getCoordinates(from: route.polyline)
+         var allCoords = coords
+         var totalDistance = route.distance
+         var totalTime = route.expectedTravelTime
+         
+         DispatchQueue.main.async {
+             self.mapView.addOverlay(route.polyline)
+             
+             if isOutAndBack {
+                 let backward = Array(coords.reversed())
+                 let backwardPolyline = StyledPolyline(coordinates: backward, count: backward.count)
+                 backwardPolyline.kind = .backward
+                 self.mapView.addOverlay(backwardPolyline)
+                 allCoords += backward
+                 totalDistance *= 2
+                 totalTime *= 2
+             }
+             
+             self.finishRouteGeneration(
+                 coordinates: allCoords,
+                 totalDistance: totalDistance,
+                 totalTime: totalTime,
+                 config: config
+             )
+         }
+     }
+     
+     private func requestMultiLegLoop(waypoints: [CLLocationCoordinate2D], config: RouteConfig) {
+         var totalDistance: CLLocationDistance = 0
+         var totalTime: TimeInterval = 0
+         let n = waypoints.count
+         
+         func requestLeg(at index: Int) {
+             if index >= n {
+                 // All legs complete
+                 var allCoords: [CLLocationCoordinate2D] = []
+                 for overlay in self.mapView.overlays {
+                     if let sp = overlay as? StyledPolyline {
+                         allCoords.append(contentsOf: self.getCoordinates(from: sp))
+                     }
+                 }
+                 
+                 self.finishRouteGeneration(
+                     coordinates: allCoords,
+                     totalDistance: totalDistance,
+                     totalTime: totalTime,
+                     config: config
+                 )
+                 return
+             }
+             
+             let start = waypoints[index]
+             let end = waypoints[(index + 1) % n]
+             let request = buildDirectionsRequest(from: start, to: end, requestAlternates: config.isScenic)
+             
+             MKDirections(request: request).calculate { [weak self] response, error in
+                 guard let self = self else { return }
+                 
+                 if let error = error {
+                     self.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
+                     self.isGeneratingRoute = false
+                     return
+                 }
+                 
+                 guard let routes = response?.routes, !routes.isEmpty else {
+                     self.isGeneratingRoute = false
+                     return
+                 }
+                 
+                 let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
+                 
+                 DispatchQueue.main.async {
+                     let coords = self.getCoordinates(from: selectedRoute.polyline)
+                     let styled = StyledPolyline(coordinates: coords, count: coords.count)
+                     styled.legIndex = index
+                     styled.mode = config.isScenic ? .scenic : .fastest
+                     self.mapView.addOverlay(styled)
+                 }
+                 
+                 totalDistance += selectedRoute.distance
+                 totalTime += selectedRoute.expectedTravelTime
+                 
+                 requestLeg(at: index + 1)
+             }
+         }
+         
+         requestLeg(at: 0)
+     }
+     
+     private func buildDirectionsRequest(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, requestAlternates: Bool) -> MKDirections.Request {
+         let request = MKDirections.Request()
+         request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+         request.transportType = .walking
+         request.requestsAlternateRoutes = requestAlternates
+         return request
+     }
+ }
+
+ // MARK: - Route Completion
+ extension ViewController {
+     
+     private func finishRouteGeneration(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, totalTime: TimeInterval, config: RouteConfig) {
+         updateRouteInfoLabel(distance: totalDistance, time: totalTime)
+         resetProgressTracking(totalDistance: totalDistance, routeCoords: coordinates)
+         isActivelyWalkingRoute = true
+         isGeneratingRoute = false
+         
+         saveRouteToDatabase(coordinates: coordinates, totalDistance: totalDistance, config: config)
+     }
+     
+     private func saveRouteToDatabase(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, config: RouteConfig) {
+         CoreDataManager.shared.saveRoute(
+             routeType: config.type.rawValue,
+             isScenicMode: config.isScenic,
+             targetDistance: totalDistance / 1609.34,
+             direction: config.direction,
+             waypoints: config.waypoints,
+             fullRoute: coordinates
+         )
+     }
+ }
+
+ // MARK: - Route Utilities
+ extension ViewController {
+     
+     private func pickScenicRoute(from routes: [MKRoute]) -> MKRoute {
+         guard let fastest = routes.min(by: { $0.expectedTravelTime < $1.expectedTravelTime }) else {
+             return routes[0]
+         }
+         
+         let fastestDistance = fastest.distance
+         
+         struct ScoredRoute {
+             let route: MKRoute
+             let score: Double
+         }
+         
+         let scored = routes.map { route -> ScoredRoute in
+             let lengthRatio = min(route.distance / max(fastestDistance, 1.0), 2.0)
+             let speedScore = 1.0 / max(route.distance / max(route.expectedTravelTime, 1.0), 1.0)
+             let combinedScore = (lengthRatio * 0.9) + (speedScore * 0.1)
+             return ScoredRoute(route: route, score: combinedScore)
+         }
+         
+         return scored
+             .filter { $0.route.distance <= fastestDistance * 2.0 }
+             .max(by: { $0.score < $1.score })?.route ?? fastest
+     }
+     
+     private func getCoordinates(from polyline: MKPolyline) -> [CLLocationCoordinate2D] {
+         let points = polyline.points()
+         return (0..<polyline.pointCount).map { points[$0].coordinate }
+     }
+     
+     private func updateRouteInfoLabel(distance: CLLocationDistance, time: TimeInterval) {
+         let miles = distance / 1609.34
+         let minutes = time / 60.0
+         routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", miles, minutes)
+     }
+ }
+
+ // MARK: - Random Coordinate Generation
+ extension ViewController {
+     
+     private func generateRandomCoordinate(around center: CLLocationCoordinate2D, radius: Double, direction: String) -> CLLocationCoordinate2D {
+         let range = angleRangeForDirection(direction)
+         let randomAngle = direction == "N"
+             ? (Bool.random() ? Double.random(in: 337.5...360.0) : Double.random(in: 0.0...22.5))
+             : Double.random(in: range)
+         
+         let randomAngleRadians = randomAngle * (.pi / 180)
+         let randomDistance = Double.random(in: (0.7 * radius)...radius)
+         
+         let earthRadius = 6371000.0
+         let latOffset = (randomDistance * cos(randomAngleRadians)) / earthRadius
+         let centerLatRadians = center.latitude * (.pi / 180)
+         let longOffset = (randomDistance * sin(randomAngleRadians)) / (earthRadius * cos(centerLatRadians))
+         
+         let newLatitude = center.latitude + (latOffset * (180 / .pi))
+         let newLongitude = center.longitude + (longOffset * (180 / .pi))
+         
+         return CLLocationCoordinate2D(latitude: newLatitude, longitude: newLongitude)
+     }
+     
+     private func generateLoopPoints(count: Int, center: CLLocationCoordinate2D, averageRadius: Double, direction: String) -> [CLLocationCoordinate2D] {
+         var points = [center]
+         
+         for _ in 1..<count {
+             let radiusVariation = Double.random(in: 0.7...1.3)
+             let pointRadius = averageRadius * radiusVariation
+             let point = generateRandomCoordinate(around: center, radius: pointRadius, direction: direction)
+             points.append(point)
+         }
+         
+         return points
+     }
+     
+     private func angleRangeForDirection(_ direction: String) -> ClosedRange<Double> {
+         switch direction {
+         case "N": return 337.5...360.0
+         case "NE": return 22.5...67.5
+         case "E": return 67.5...112.5
+         case "SE": return 112.5...157.5
+         case "S": return 157.5...202.5
+         case "SW": return 202.5...247.5
+         case "W": return 247.5...292.5
+         case "NW": return 292.5...337.5
+         default: return 0.0...360.0
+         }
+     }
+ }
+
+ // MARK: - Progress Tracking
+ extension ViewController {
+     
+     private func resetProgressTracking(totalDistance: CLLocationDistance, routeCoords: [CLLocationCoordinate2D]) {
+         totalRouteDistance = totalDistance
+         currentRouteCoordinates = routeCoords
+         traveledDistance = 0
+         
+         prepareSnapToRouteData(from: routeCoords)
+         
+         // Remove old walked/remaining overlays
+         let oldOverlays = mapView.overlays.compactMap { overlay -> MKOverlay? in
+             guard let styled = overlay as? StyledPolyline else { return nil }
+             return (styled.kind == .walked || styled.kind == .remaining) ? overlay : nil
+         }
+         mapView.removeOverlays(oldOverlays)
+         
+         DispatchQueue.main.async {
+             self.progressView.setProgress(0, animated: true)
+         }
+     }
+     
+     private func prepareSnapToRouteData(from coords: [CLLocationCoordinate2D]) {
+         routeSegments = coords
+         cumulativeSegmentLengths = Array(repeating: 0, count: coords.count)
+         
+         guard coords.count >= 2 else { return }
+         
+         var runningDistance: CLLocationDistance = 0
+         for i in 1..<coords.count {
+             let a = CLLocation(latitude: coords[i-1].latitude, longitude: coords[i-1].longitude)
+             let b = CLLocation(latitude: coords[i].latitude, longitude: coords[i].longitude)
+             runningDistance += a.distance(from: b)
+             cumulativeSegmentLengths[i] = runningDistance
+         }
+     }
+     
+     private func updateProgress(with location: CLLocation) {
+         guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else { return }
+         
+         if let snappedDistance = calculateSnappedProgress(for: location) {
+             traveledDistance = snappedDistance
+             let progress = Float(min(max(traveledDistance / totalRouteDistance, 0), 1))
+             
+             DispatchQueue.main.async {
+                 self.progressView.setProgress(progress, animated: true)
+             }
+         }
+         
+         updateLiveRouteInfo()
+     }
+     
+     private func calculateSnappedProgress(for location: CLLocation) -> CLLocationDistance? {
+         guard routeSegments.count >= 2 else { return nil }
+         
+         var bestDistance: CLLocationDistance = 0
+         var bestDistanceToSegment = CLLocationDistance.greatestFiniteMagnitude
+         
+         for i in 1..<routeSegments.count {
+             let p0 = routeSegments[i-1]
+             let p1 = routeSegments[i]
+             
+             let a = MKMapPoint(p0)
+             let b = MKMapPoint(p1)
+             let p = MKMapPoint(location.coordinate)
+             
+             let ab = CGPoint(x: b.x - a.x, y: b.y - a.y)
+             let ap = CGPoint(x: p.x - a.x, y: p.y - a.y)
+             let abLengthSquared = (ab.x * ab.x) + (ab.y * ab.y)
+             
+             guard abLengthSquared > 0 else { continue }
+             
+             var t = ((ap.x * ab.x) + (ap.y * ab.y)) / abLengthSquared
+             t = max(0, min(1, t))
+             
+             let projection = CGPoint(x: a.x + ab.x * t, y: a.y + ab.y * t)
+             let dx = projection.x - p.x
+             let dy = projection.y - p.y
+             let distanceToSegment = sqrt(dx*dx + dy*dy)
+             
+             if distanceToSegment < bestDistanceToSegment {
+                 bestDistanceToSegment = distanceToSegment
+                 
+                 let upToPreviousPoint = cumulativeSegmentLengths[i-1]
+                 let segmentStart = CLLocation(latitude: p0.latitude, longitude: p0.longitude)
+                 let projectedCoord = MKMapPoint(x: projection.x, y: projection.y).coordinate
+                 let projectedLocation = CLLocation(latitude: projectedCoord.latitude, longitude: projectedCoord.longitude)
+                 let partialSegmentDistance = segmentStart.distance(from: projectedLocation)
+                 
+                 bestDistance = upToPreviousPoint + partialSegmentDistance
+             }
+         }
+         
+         return bestDistance
+     }
+     
+     private func updateLiveRouteInfo() {
+         guard totalRouteDistance > 0 else { return }
+         
+         let remainingMeters = max(0, totalRouteDistance - traveledDistance)
+         let remainingMiles = remainingMeters / 1609.34
+         
+         let speedMPH = walkSampleCount >= 10
+             ? avgWalkingSpeed * 2.23694
+             : 3.5
+         
+         let remainingMinutes = (remainingMiles / speedMPH) * 60
+         
+         DispatchQueue.main.async {
+             self.routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMiles, remainingMinutes)
+         }
+     }
+ }
+
+ // MARK: - Map Helpers
+ extension ViewController {
+     
+     private func clearAllRoutes() {
+         selectedCoordinates.removeAll()
+         isGeneratingRoute = false
+         isActivelyWalkingRoute = false
+         
+         mapView.removeOverlays(mapView.overlays)
+         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
+         
+         resetProgressTracking(totalDistance: 0, routeCoords: [])
+         progressView.setProgress(0, animated: false)
+     }
+     
+     private func clearPinsAndOverlays() {
+         selectedCoordinates.removeAll()
+         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
+         mapView.removeOverlays(mapView.overlays)
+     }
+     
+     private func placeAnnotations(for waypoints: [CLLocationCoordinate2D], routeType: RouteConfig.RouteType) {
+         for (index, coordinate) in waypoints.enumerated() {
+             let label: String
+             if index == 0 {
+                 label = "Start"
+             } else if routeType == .loop {
+                 let base = 64 + index
+                 label = UnicodeScalar(base).map { String($0) } ?? "P\(index)"
+             } else {
+                 label = "End"
+             }
+             
+             addAnnotation(at: coordinate, title: label, index: index)
+         }
+     }
+     
+     private func addAnnotation(at coordinate: CLLocationCoordinate2D, title: String, index: Int) {
+         let annotation = RouteAnnotation()
+         annotation.coordinate = coordinate
+         annotation.title = title
+         annotation.index = index
+         mapView.addAnnotation(annotation)
+     }
+     
+     private func safelyCenterMap(on coordinate: CLLocationCoordinate2D, distance: CLLocationDistance = 10000) {
+         let camera = MKMapCamera(lookingAtCenter: coordinate, fromDistance: max(100, distance), pitch: 0, heading: 0)
+         mapView.setCamera(camera, animated: true)
+     }
+ }
+
+ // MARK: - UI Helpers
+ extension ViewController {
+     
+     private func determineStartLocation() -> CLLocationCoordinate2D {
+         if isFollowingUser, let location = userLocation {
+             return location
+         }
+         return userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)
+     }
+     
+     private func validatePinCount(for type: RouteConfig.RouteType) -> Bool {
+         let required = type == .loop ? 3 : 2
+         guard selectedCoordinates.count >= required else {
+             showInfoAlert(message: "Please place \(required) pins")
+             return false
+         }
+         return true
+     }
+     
+     private func regenerateCurrentRoute() {
+         guard !selectedCoordinates.isEmpty else { return }
+         
+         let config = buildRouteConfig()
+         requestRoutes(for: selectedCoordinates, config: config)
+     }
+     
+     private func updateLoopControlsVisibility(isLoop: Bool) {
+         loopPointStepper?.isEnabled = isLoop
+         loopPointLabel?.isEnabled = isLoop
+         loopPointStepper?.alpha = isLoop ? 1.0 : 0.4
+         loopPointLabel?.alpha = isLoop ? 1.0 : 0.4
+     }
+     
+     private func toggleFollowUser(button: UIButton) {
+         isFollowingUser.toggle()
+         
+         if isFollowingUser {
+             button.setImage(UIImage(systemName: "location.fill"), for: .normal)
+             button.tintColor = .systemBlue
+             if let location = userLocation {
+                 safelyCenterMap(on: location, distance: 3000)
+             }
+         } else {
+             button.setImage(UIImage(systemName: "location"), for: .normal)
+             button.tintColor = .systemGray
+         }
+     }
+     
+     private func animateSettingsCog(_ button: UIButton) {
+         UIView.animate(withDuration: 0.3) {
+             button.transform = CGAffineTransform(rotationAngle: .pi)
+         } completion: { _ in
+             button.transform = .identity
+         }
+     }
+     
+     private func openPanel() {
+         UIView.animate(withDuration: 0.3) {
+             self.slidePanel.frame.origin.x = self.view.bounds.width - 184
+         }
+         isPanelOpen = true
+     }
+     
+     private func closePanel() {
+         UIView.animate(withDuration: 0.3) {
+             self.slidePanel.frame.origin.x = self.view.bounds.width
+         }
+         isPanelOpen = false
+     }
+ }
+
+ // MARK: - Input Helpers
+ extension ViewController {
+     
+     private func getUserInputMiles() -> Double? {
+         guard let text = distanceTextField?.text, !text.isEmpty else { return nil }
+         guard let value = Double(text) else { return nil }
+         
+         if useTimeInput {
+             let walkingSpeedMPH = 3.5
+             return (value / 60.0) * walkingSpeedMPH
+         }
+         
+         return value
+     }
+ }
+
+ // MARK: - @objc Handlers
+ extension ViewController {
+     
+     @objc private func handleMapTap(_ gesture: UITapGestureRecognizer) {
+         let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
+         let routeType = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
+         
+         // Auto-add user location as start if following
+         if isFollowingUser && selectedCoordinates.isEmpty, let userLoc = userLocation {
+             selectedCoordinates.append(userLoc)
+             addAnnotation(at: userLoc, title: "Start", index: 0)
+         }
+         
+         // Check max pins for non-loop routes
+         if routeType != .loop && selectedCoordinates.count >= 2 {
+             showInfoAlert(message: "You already have 2 pins. Tap Clear to reset.")
+             return
+         }
+         
+         selectedCoordinates.append(coordinate)
+         
+         let label: String
+         if selectedCoordinates.count == 1 {
+             label = "Start"
+         } else if routeType == .loop {
+             let base = 64 + selectedCoordinates.count
+             label = UnicodeScalar(base).map { String($0) } ?? "P\(selectedCoordinates.count)"
+         } else {
+             label = "End"
+         }
+         
+         addAnnotation(at: coordinate, title: label, index: selectedCoordinates.count - 1)
+     }
+     
+     @objc private func timeToggleChanged(_ sender: UISwitch) {
+         useTimeInput = sender.isOn
+         distanceOrTimeLabel?.text = sender.isOn ? "Time (min)" : "Distance (miles)"
+         distanceTextField?.placeholder = sender.isOn ? "e.g. 30" : "e.g. 3.1"
+         distanceTextField?.text = ""
+     }
+     
+     @objc private func directionButtonTapped(_ sender: UIButton) {
+         guard let direction = sender.title(for: .normal) else { return }
+         
+         // Deselect previous
+         selectedDirectionButton?.backgroundColor = .systemGray3
+         selectedDirectionButton?.setTitleColor(.black, for: .normal)
+         
+         // Toggle if same button
+         if selectedDirectionButton == sender {
+             selectedDirectionButton = nil
+             selectedDirection = "random"
+             return
+         }
+         
+         // Select new direction
+         sender.backgroundColor = .appPrimary
+         sender.setTitleColor(.black, for: .normal)
+         selectedDirectionButton = sender
+         selectedDirection = direction
+     }
+     
+     @objc private func loopPointStepperChanged(_ sender: UIStepper) {
+         selectedLoopPoints = Int(sender.value)
+         loopPointLabel?.text = "Loop Points: \(selectedLoopPoints)"
+     }
+     
+     @objc private func clearRandomSettings() {
+         distanceTextField?.text = ""
+         
+         selectedDirectionButton?.backgroundColor = .systemGray3
+         selectedDirectionButton?.setTitleColor(.black, for: .normal)
+         selectedDirectionButton = nil
+         selectedDirection = "random"
+         
+         useTimeInput = false
+         distanceOrTimeLabel?.text = "Distance (miles)"
+         distanceTextField?.placeholder = "e.g. 3.1"
+         timeToggle?.setOn(false, animated: true)
+     }
+     
+     @objc private func dismissKeyboard() {
+         view.endEditing(true)
+         closePanel()
+     }
+     
+     private func presentCoordinateEntryDialog() {
+         let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and Longitude", preferredStyle: .alert)
+         alert.addTextField { $0.placeholder = "Latitude (-90 to 90)"; $0.keyboardType = .numbersAndPunctuation }
+         alert.addTextField { $0.placeholder = "Longitude (-180 to 180)"; $0.keyboardType = .numbersAndPunctuation }
+         
+         let goAction = UIAlertAction(title: "Go", style: .default) { [weak self] _ in
+             guard let self = self,
+                   let latText = alert.textFields?[0].text, !latText.isEmpty,
+                   let longText = alert.textFields?[1].text, !longText.isEmpty,
+                   let lat = Double(latText),
+                   let long = Double(longText),
+                   lat >= -90, lat <= 90,
+                   long >= -180, long <= 180 else {
+                 self?.showErrorAlert(message: "Invalid coordinates")
+                 return
+             }
+             
+             let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
+             self.safelyCenterMap(on: coordinate, distance: 10000)
+         }
+         
+         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+         alert.addAction(goAction)
+         present(alert, animated: true)
+     }
+ }
+
+ // MARK: - Speed Learning
+ extension ViewController {
+     
+     private func updateSpeedAverages(speed: CLLocationSpeed) {
+         guard speed > 0 else { return }
+         
+         enum SpeedCategory {
+             case walking, jogging, running
+         }
+         
+         let category: SpeedCategory
+         switch speed {
+         case ..<2.0: category = .walking
+         case 2.0..<3.5: category = .jogging
+         default: category = .running
+         }
+         
+         switch category {
+         case .walking:
+             avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
+             walkSampleCount += 1
+         case .jogging:
+             avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
+             jogSampleCount += 1
+         case .running:
+             avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
+             runSampleCount += 1
+         }
+         
+         let totalSamples = walkSampleCount + jogSampleCount + runSampleCount
+         if totalSamples % 10 == 0 {
+             saveSpeeds()
+         }
+     }
+     
+     private func loadSavedSpeeds() {
+         let defaults = UserDefaults.standard
+         
+         if defaults.double(forKey: "avgWalkingSpeed") > 0 {
+             avgWalkingSpeed = defaults.double(forKey: "avgWalkingSpeed")
+             walkSampleCount = defaults.integer(forKey: "walkSampleCount")
+         }
+         
+         if defaults.double(forKey: "avgJoggingSpeed") > 0 {
+             avgJoggingSpeed = defaults.double(forKey: "avgJoggingSpeed")
+             jogSampleCount = defaults.integer(forKey: "jogSampleCount")
+         }
+         
+         if defaults.double(forKey: "avgRunningSpeed") > 0 {
+             avgRunningSpeed = defaults.double(forKey: "avgRunningSpeed")
+             runSampleCount = defaults.integer(forKey: "runSampleCount")
+         }
+     }
+     
+     private func saveSpeeds() {
+         let defaults = UserDefaults.standard
+         defaults.set(avgWalkingSpeed, forKey: "avgWalkingSpeed")
+         defaults.set(avgJoggingSpeed, forKey: "avgJoggingSpeed")
+         defaults.set(avgRunningSpeed, forKey: "avgRunningSpeed")
+         defaults.set(walkSampleCount, forKey: "walkSampleCount")
+         defaults.set(jogSampleCount, forKey: "jogSampleCount")
+         defaults.set(runSampleCount, forKey: "runSampleCount")
+     }
+     
+     private func resetSpeedData() {
+         avgWalkingSpeed = 1.4
+         avgJoggingSpeed = 2.7
+         avgRunningSpeed = 4.0
+         walkSampleCount = 50
+         jogSampleCount = 50
+         runSampleCount = 50
+         saveSpeeds()
+         showInfoAlert(message: "Speed data reset to defaults")
+     }
+ }
+
+ // MARK: - Debug Helpers
+ extension ViewController {
+     
+     private func printSavedRoutes() {
+         let routes = CoreDataManager.shared.fetchAllRoutes()
+         print("📊 Total saved routes: \(routes.count)")
+         for route in routes {
+             print("  - \(route.targetDistance) miles, created \(String(describing: route.createdDate))")
+         }
+     }
+ }
+
+ // MARK: - Alerts
+ extension ViewController {
+     
+     private func showInfoAlert(title: String = "Info", message: String) {
+         DispatchQueue.main.async {
+             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+             alert.addAction(UIAlertAction(title: "OK", style: .default))
+             self.present(alert, animated: true)
+         }
+     }
+     
+     private func showErrorAlert(title: String = "Error", message: String) {
+         DispatchQueue.main.async {
+             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+             alert.addAction(UIAlertAction(title: "OK", style: .destructive))
+             self.present(alert, animated: true)
+         }
+     }
+ }
+
+ // MARK: - MKMapViewDelegate
+ extension ViewController: MKMapViewDelegate {
+     
+     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+         if let styled = overlay as? StyledPolyline {
+             let renderer = MKPolylineRenderer(polyline: styled)
+             
+             switch styled.kind {
+             case .walked:
+                 renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.7)  // CHANGE COLOR HERE
+                 renderer.lineWidth = 5
+                 
+             case .remaining:
+                 renderer.strokeColor = .systemBlue
+                 renderer.lineWidth = 5
+                 
+             case .forward, .backward:
+                 let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
+                 renderer.strokeColor = colors[styled.legIndex % colors.count]
+                 renderer.lineWidth = styled.mode == .scenic ? 6 : 5
+                 
+                 if styled.kind == .backward {
+                     renderer.lineDashPattern = [2, 5]
+                 }
+             }
+             
+             return renderer
+         }
+         
+         if let polyline = overlay as? MKPolyline {
+             let renderer = MKPolylineRenderer(polyline: polyline)
+             renderer.strokeColor = .systemBlue
+             renderer.lineWidth = 5
+             return renderer
+         }
+         
+         return MKOverlayRenderer(overlay: overlay)
+     }
+     
+     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+         guard !(annotation is MKUserLocation) else { return nil }
+         
+         let identifier = "PinAnnotation"
+         var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+         
+         if view == nil {
+             view = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+             view?.isDraggable = true
+             view?.canShowCallout = true
+         } else {
+             view?.annotation = annotation
+         }
+         
+         return view
+     }
+     
+     func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
+         guard newState == .ending,
+               let annotation = view.annotation as? RouteAnnotation,
+               annotation.index < selectedCoordinates.count else { return }
+         
+         selectedCoordinates[annotation.index] = annotation.coordinate
+         
+         let config = buildRouteConfig()
+         requestRoutes(for: selectedCoordinates, config: config)
+     }
+ }
+
+ // MARK: - CLLocationManagerDelegate
+ extension ViewController: CLLocationManagerDelegate {
+     
+     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+         guard let location = locations.last else { return }
+         
+         userLocation = location.coordinate
+         
+         if isActivelyWalkingRoute {
+             updateProgress(with: location)
+         }
+         
+         updateSpeedAverages(speed: location.speed)
+         
+         if !hasAlreadyCentered {
+             safelyCenterMap(on: location.coordinate, distance: 10000)
+             hasAlreadyCentered = true
+         } else if isFollowingUser {
+             safelyCenterMap(on: location.coordinate, distance: 3000)
+         }
+     }
+     
+     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+         switch status {
+         case .authorizedWhenInUse, .authorizedAlways:
+             locationManager.startUpdatingLocation()
+         case .denied, .restricted:
+             showInfoAlert(message: "Location access denied - using default location")
+         default:
+             break
+         }
+     }
+ }
+
+ // MARK: - UITextFieldDelegate
+ extension ViewController: UITextFieldDelegate {
+     
+ }
+ 
+ 
+ 
  
 */
