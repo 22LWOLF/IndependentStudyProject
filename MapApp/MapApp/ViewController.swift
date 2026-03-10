@@ -1196,7 +1196,7 @@ class ViewController: UIViewController, MKMapViewDelegate, CLLocationManagerDele
             let renderer = MKPolylineRenderer(polyline: styled)
             let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
             if styled.kind == .walked {
-                renderer.strokeColor = UIColor.gray.withAlphaComponent(0.7)
+                renderer.strokeColor = UIColor.purple.withAlphaComponent(1)
                 renderer.lineWidth = 5
             } else if styled.kind == .remaining {
                 renderer.strokeColor = .systemBlue
@@ -1510,16 +1510,6 @@ When messing with UI stuff I found 2 problems:
  
  
 TO-DO:
- 
-Look into "squishing" header area is awkwardly big on certain models of phone.
 
-Make user tracking more smooth and less jerky. Also implement a way for the user to zoom in and out while tracking is on.
- 
-When you click route settings have cog go to full cog for a sec to show you clicked it.
- 
-See if battery usage is good or not.
-
-Flesh out colors
  
 */
-
