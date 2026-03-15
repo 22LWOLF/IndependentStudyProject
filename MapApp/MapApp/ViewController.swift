@@ -397,8 +397,8 @@ extension ViewController {
             let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: config.direction ?? "random")
             return [center, endpoint]
         case .loop:
-            let perimeter = targetMiles * 1609.34
-            let averageRadius = perimeter / (Double(selectedLoopPoints) * .pi)
+            let targetMeters = targetMiles * 1609.34
+            let averageRadius = targetMeters / (Double(selectedLoopPoints) * 1.8)
             return generateLoopPoints(count: selectedLoopPoints, center: center, averageRadius: averageRadius, direction: config.direction ?? "random")
         }
     }
@@ -418,7 +418,7 @@ extension ViewController {
         case .outAndBack:
             requestSingleLeg(from: waypoints[0], to: waypoints[1], config: config, targetMiles: config.targetDistance, isOutAndBack: true)
         case .loop:
-            requestMultiLegLoop(waypoints: waypoints, config: config)
+            requestMultiLegLoop(waypoints: waypoints, config: config, targetMiles: config.targetDistance)
         }
     }
 
@@ -465,24 +465,75 @@ extension ViewController {
         }
     }
 
-    private func requestMultiLegLoop(waypoints: [CLLocationCoordinate2D], config: RouteConfig) {
+    private func requestMultiLegLoop(waypoints: [CLLocationCoordinate2D], config: RouteConfig, targetMiles: Double? = nil, retryCount: Int = 0) {
         var totalDistance: CLLocationDistance = 0
         var totalTime: TimeInterval = 0
         let n = waypoints.count
+        
         func requestLeg(at index: Int) {
             if index >= n {
                 var allCoords: [CLLocationCoordinate2D] = []
-                for overlay in self.mapView.overlays { if let sp = overlay as? StyledPolyline { allCoords.append(contentsOf: self.getCoordinates(from: sp)) } }
+                for overlay in self.mapView.overlays {
+                    if let sp = overlay as? StyledPolyline {
+                        allCoords.append(contentsOf: self.getCoordinates(from: sp))
+                    }
+                }
+                
+                //CHECK IF WE NEED TO RETRY
+                if let targetMiles = targetMiles, retryCount < 3 {
+                    let actualMiles = totalDistance / 1609.34
+                    let ratio = actualMiles / targetMiles
+                    
+                    if abs(ratio - 1.0) > 0.25 {  // More than 25% off
+                        print("Loop retry \(retryCount + 1): Got \(String(format: "%.2f", actualMiles))mi, wanted \(String(format: "%.2f", targetMiles))mi")
+                        
+                        // Clear current overlays
+                        self.mapView.removeOverlays(self.mapView.overlays)
+                        
+                        // Adjust radius and regenerate
+                        let currentAvgRadius = CLLocation(latitude: waypoints[0].latitude, longitude: waypoints[0].longitude)
+                            .distance(from: CLLocation(latitude: waypoints[1].latitude, longitude: waypoints[1].longitude))
+                        
+                        let adjustedRadius = currentAvgRadius / ratio
+                        
+                        let newWaypoints = self.generateLoopPoints(
+                            count: waypoints.count,
+                            center: waypoints[0],  // Keep same start
+                            averageRadius: adjustedRadius,
+                            direction: config.direction ?? "random"
+                        )
+                        
+                        // Update pins
+                        self.mapView.removeAnnotations(self.mapView.annotations.filter { !($0 is MKUserLocation) })
+                        self.selectedCoordinates = newWaypoints
+                        self.placeAnnotations(for: newWaypoints, routeType: .loop)
+                        
+                        // Retry with new waypoints
+                        DispatchQueue.main.async {
+                            self.requestMultiLegLoop(waypoints: newWaypoints, config: config, targetMiles: targetMiles, retryCount: retryCount + 1)
+                        }
+                        return
+                    }
+                }
+                
                 self.finishRouteGeneration(coordinates: allCoords, totalDistance: totalDistance, totalTime: totalTime, config: config)
                 return
             }
+            
             let start = waypoints[index]
             let end = waypoints[(index + 1) % n]
             let request = buildDirectionsRequest(from: start, to: end, requestAlternates: config.isScenic)
             MKDirections(request: request).calculate { [weak self] response, error in
                 guard let self = self else { return }
-                if let error = error { self.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)"); self.isGeneratingRoute = false; return }
-                guard let routes = response?.routes, !routes.isEmpty else { self.isGeneratingRoute = false; return }
+                if let error = error {
+                    self.showErrorAlert(message: "Leg \(index + 1) failed: \(error.localizedDescription)")
+                    self.isGeneratingRoute = false
+                    return
+                }
+                guard let routes = response?.routes, !routes.isEmpty else {
+                    self.isGeneratingRoute = false
+                    return
+                }
                 let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
                 DispatchQueue.main.async {
                     let coords = self.getCoordinates(from: selectedRoute.polyline)
@@ -644,43 +695,46 @@ extension ViewController {
     }
     
     private func updateWalkedOverlay() {
-        let oldOverlays = mapView.overlays.compactMap { overlay -> MKOveraly? in
-            guard let styled = overaly as? StyledPolyline else {return nil}
-            return (styled.kind == .walked || styled.kind == .remaining) ? overaly : nil}
-    }
-    mapView.removeOverlays(oldOverlays)
-    
-    guard currentRouteCOordinates.count > 1 else { return }
-    
-    //find the nearest point on route
-    var closestIndex = 0
-    var closestDistance = CLLocationDistance.greatestFiniteMagnitude
-    guard let userLoc = userLocation(latitude: userLoc.Latitude, longitude: userLoc.longitude)
-    
-    for (index, coord) in currentRouteCoordinates.enumerated() {
-        let routePoint = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        let distance = location.distance(from: routePoint)
-        if distance < closestDistance {
-            closestDistance = distance
-            closestIndex = index
+        // Remove old walked/remaining overlays
+        let oldOverlays = mapView.overlays.compactMap { overlay -> MKOverlay? in
+            guard let styled = overlay as? StyledPolyline else { return nil }
+            return (styled.kind == .walked || styled.kind == .remaining) ? overlay : nil
         }
-    }
-    
-    guard closestIndex < currentRouteCoordinates.count else {return}
-    
-    //create walked and remaining segs
-    let walkedCoords = Array(currentRouteCoordinates[0...closestIndex])
-    let remainingCoords = Array(currentRouteCoordinates[closestIndex...])
-    
-    let walkedLine = SyledPolyline(coordinates: walkedCoords,count: walkedCoords.count)
-    walkedLine.kind = .walked
-    
-    let remaingLine = StyledPolyline(coordinates: remaningCoords, count: remainingCoords.count)
-    remainingLine.kind = .remaining
-    
-    DispatchQueue.main.async {
-        self.mapView.addOverlay(walkedLine)
-        self.mapView.addOverlay(remainingLine)
+        mapView.removeOverlays(oldOverlays)
+        
+        guard currentRouteCoordinates.count > 1 else { return }
+        
+        // Find nearest point on route
+        var closestIndex = 0
+        var closestDistance = CLLocationDistance.greatestFiniteMagnitude
+        guard let userLoc = userLocation else { return }
+        let location = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
+        
+        for (index, coord) in currentRouteCoordinates.enumerated() {
+            let routePoint = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            let distance = location.distance(from: routePoint)
+            if distance < closestDistance {
+                closestDistance = distance
+                closestIndex = index
+            }
+        }
+        
+        guard closestIndex < currentRouteCoordinates.count else { return }
+        
+        // Create walked and remaining segments
+        let walkedCoords = Array(currentRouteCoordinates[0...closestIndex])
+        let remainingCoords = Array(currentRouteCoordinates[closestIndex...])
+        
+        let walkedLine = StyledPolyline(coordinates: walkedCoords, count: walkedCoords.count)
+        walkedLine.kind = .walked
+        
+        let remainingLine = StyledPolyline(coordinates: remainingCoords, count: remainingCoords.count)
+        remainingLine.kind = .remaining
+        
+        DispatchQueue.main.async {
+            self.mapView.addOverlay(walkedLine)
+            self.mapView.addOverlay(remainingLine)
+        }
     }
 
     private func calculateSnappedProgress(for location: CLLocation) -> CLLocationDistance? {
@@ -815,7 +869,15 @@ extension ViewController {
 extension ViewController {
     private func getUserInputMiles() -> Double? {
         guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text) else { return nil }
-        if useTimeInput { let walkingSpeedMPH = 3.5; return (value / 60.0) * walkingSpeedMPH }
+        if useTimeInput {
+            let walkingSpeedMPH: Double
+            if walkSampleCount >= 10 {
+                walkingSpeedMPH = avgWalkingSpeed * 2.23694 //converting m/s to mph
+            } else {
+                walkingSpeedMPH = 3.5
+            }
+            return (value/60.0) * walkingSpeedMPH
+        }
         return value
     }
 }
@@ -1043,47 +1105,9 @@ extension ViewController: UITextFieldDelegate { }
 
 
 /*
- Location permission prompt worked.
- 
- Route type testing:
- 
- If you have 2 points and don't move them and generate a one-way the overlay is correct (just a basic blue line) but if you select OAB and then generate it creates the blue line with "pulses" on it, but if you switch back to one-way the overlay will still be the OAB version with pulses.
- Loops work as intended, different colored legs with no flashing overlays.
- 
- Center button:
- 
- Visual works of filling in when clicked and unfilling when clicked again.
- When clicked it centers on the user.
- Having starting point be automatically where user location is when turned on works, for all 3 route types.
- Might be issue or just because of using simulator, but when turned on it isn't automatically recentering on the user when you move the camera, assuming this is because I am using the sim, and not testing on my physical device. Yep I was right pretty sure it is currently set to only center when the user moves and in sim I cannot move so that is why it isn't constatnly re-tracking.
- 
- Route settings button/slide out panel:
- Does spinning animation when clicked
- Properly makes side popup, scrolling works.
- Has correct formatting and stuff.
- 
-    Route style selector (fastest or scenic):
-        When you have one already selected before generating route everything works, but if you swtich in between (for example I have fastest selected and then click on the scenic to switch modes, it automatically is making the scenic route (which I want), but it is also keeping the overlay from the fastest route gen as well)
- 
- Clear settings button works as inteded clears out distance/time TF and resets compass.
- 
- Compass/Direction selector:
-    if direction isn't selected doing just random direction works.
-    all directions work
- 
-Loop with random route gen:
- amount of points ticker works.
- direction selector kind of works.
- It appears that the input of dist or time dosen't really work. I cannot tell exactly but this is my hypotheisis. When I am inserting a dist or time the math isn't being done to make a route so it is just defualting to the basic radius around the user, or the display of info is wrong. I think that the issue is the display of info at the top. I am assumming it is becuase it is not adding up the time it talks or the distance from each leg. It appears to just be grabbing one leg of it or somehting and not the entire singular route. Solution should be simple just when making loop and placing the random points take the values for distance and then add them together at the end and display that not just a single leg.
- 
-Route progress tracking:
- The progress bar does work (want to change color though too see eaiser)
- Appears that the route overlay part (showing on the actual route itself that you have walked there) isn't working, to test I want to change color to something crazy to confirm if this is actual issue or just bad color selection.
- 
- 
- ERORRS:
- when testing out random root gen. I had OAB type selected using time as input with direction N (north) selected. this is the line I got the error on: "let randomDistance = Double.random(in: (0.7 * radius)...radius)" It was a thread 1 error I beileve.
- Conclusion: seems to have just been a run error, couldn't repilcate with same scenerio.
 
+ Issue? with loop random gen
+ 
+ It appears to be keeping the points of the last generated route and adding them into the generation. like it'll make a cirlcish shape and then there will be like a stick poking out that was where a prev. point was.
  */
 
