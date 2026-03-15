@@ -45,6 +45,10 @@ class ViewController: UIViewController {
     @IBOutlet weak var routeInfoLabel: UILabel!
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
     @IBOutlet weak var bottomTabContainer: UIView!
+    @IBOutlet weak var routeHistorySheet: UIView!
+    @IBOutlet weak var routesTableView: UITableView!
+    @IBOutlet weak var routesSearchBar: UISearchBar!
+    @IBOutlet weak var filterButton: UIButton!
 
     // MARK: - UI Components
     private var slidePanel: UIView!
@@ -91,6 +95,16 @@ class ViewController: UIViewController {
     private var walkSampleCount = 0
     private var jogSampleCount = 0
     private var runSampleCount = 0
+    
+    // MARK: - Route History Sheet State
+    private var routeSheetState: RouteSheetState = .collapsed
+    private var routeSheetCollapsedHeight: CGFloat = 60  // Just pill visible
+    private var routeSheetExpandedHeight: CGFloat = 500
+
+    enum RouteSheetState {
+        case collapsed
+        case expanded
+    }
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -99,6 +113,7 @@ class ViewController: UIViewController {
         setupLocation()
         setupUI()
         loadSavedSpeeds()
+        setupRouteHistorySheet()
     }
 
     override func viewDidLayoutSubviews() {
@@ -161,7 +176,54 @@ extension ViewController {
         loopPointLabel?.isEnabled = false
         loopPointLabel?.alpha = 0.4
     }
+    
+    private func setupRouteHistorySheet() {
+        // Round top corners
+        routeHistorySheet.layer.cornerRadius = 20
+        routeHistorySheet.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        routeHistorySheet.layer.masksToBounds = true
+        
+        // Add shadow for depth
+        routeHistorySheet.layer.shadowColor = UIColor.black.cgColor
+        routeHistorySheet.layer.shadowOpacity = 0.1
+        routeHistorySheet.layer.shadowOffset = CGSize(width: 0, height: -2)
+        routeHistorySheet.layer.shadowRadius = 8
+        
+        // Add pan gesture
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleRouteSheetPan(_:)))
+        routeHistorySheet.addGestureRecognizer(panGesture)
+        
+        // Add tap on pill to expand
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handlePillTap))
+        // You'll add this to the pill view specifically in storyboard
+        
+        // Set initial collapsed state
+        setRouteSheetHeight(routeSheetCollapsedHeight, animated: false)
+        
+        // Setup table view
+        routesTableView.delegate = self
+        routesTableView.dataSource = self
+        routesTableView.register(UITableViewCell.self, forCellReuseIdentifier: "RouteCell")
+        
+        // Setup search bar
+        routesSearchBar.delegate = self
+        
+        // Hide search/filter when collapsed
+        routesSearchBar.alpha = 0
+        filterButton.alpha = 0
+    }
 }
+
+// MARK: - Bottom Sheet State
+private var bottomSheetState: BottomSheetState = .collapsed
+private var bottomSheetCollapsedHeight: CGFloat = 100
+private var bottomSheetExpandedHeight: CGFloat = 500
+
+enum BottomSheetState {
+    case collapsed  // Just shows "Go" and "Cancel" buttons
+    case expanded   // Shows full route list
+}
+
 
 // MARK: - Slide Panel Setup
 extension ViewController {
@@ -780,6 +842,90 @@ extension ViewController {
     }
 }
 
+// MARK: - Route History Sheet Helpers
+extension ViewController {
+    private func expandRouteSheet() {
+        setRouteSheetHeight(routeSheetExpandedHeight, animated: true)
+        routeSheetState = .expanded
+        
+        // Show search/filter
+        UIView.animate(withDuration: 0.2) {
+            self.routesSearchBar.alpha = 1
+            self.filterButton.alpha = 1
+        }
+    }
+
+    private func collapseRouteSheet() {
+        setRouteSheetHeight(routeSheetCollapsedHeight, animated: true)
+        routeSheetState = .collapsed
+        
+        // Hide search/filter
+        UIView.animate(withDuration: 0.2) {
+            self.routesSearchBar.alpha = 0
+            self.filterButton.alpha = 0
+        }
+        
+        // Dismiss keyboard
+        routesSearchBar.resignFirstResponder()
+    }
+
+    private func setRouteSheetHeight(_ height: CGFloat, animated: Bool) {
+        // Find the height constraint
+        for constraint in routeHistorySheet.constraints {
+            if constraint.firstAttribute == .height {
+                constraint.constant = height
+                break
+            }
+        }
+        
+        if animated {
+            UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+                self.view.layoutIfNeeded()
+            }
+        } else {
+            view.layoutIfNeeded()
+        }
+    }
+
+    @objc private func handleRouteSheetPan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: view)
+        let velocity = gesture.velocity(in: view)
+        
+        switch gesture.state {
+        case .changed:
+            let newHeight = routeHistorySheet.frame.height - translation.y
+            let clampedHeight = max(routeSheetCollapsedHeight, min(routeSheetExpandedHeight, newHeight))
+            setRouteSheetHeight(clampedHeight, animated: false)
+            gesture.setTranslation(.zero, in: view)
+            
+        case .ended:
+            if velocity.y < -500 {
+                expandRouteSheet()
+            } else if velocity.y > 500 {
+                collapseRouteSheet()
+            } else {
+                let midpoint = (routeSheetCollapsedHeight + routeSheetExpandedHeight) / 2
+                if routeHistorySheet.frame.height > midpoint {
+                    expandRouteSheet()
+                } else {
+                    collapseRouteSheet()
+                }
+            }
+            
+        default:
+            break
+        }
+    }
+    
+    @objc private func handlePillTap() {
+        if routeSheetState == .collapsed {
+            expandRouteSheet()
+        } else {
+            collapseRouteSheet()
+        }
+    }
+}
+
 // MARK: - Map Helpers
 extension ViewController {
     private func clearAllRoutes() {
@@ -1102,7 +1248,37 @@ extension ViewController: CLLocationManagerDelegate {
 // MARK: - UITextFieldDelegate
 extension ViewController: UITextFieldDelegate { }
 
+// MARK: - UITableViewDataSource
+extension ViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        // TODO: Return actual saved routes count
+        return 5  // Placeholder
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath)
+        // TODO: Configure with actual route data
+        cell.textLabel?.text = "Route \(indexPath.row + 1) - 3.2 miles"
+        return cell
+    }
+}
 
+// MARK: - UITableViewDelegate
+extension ViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        // TODO: Load selected route
+        print("Selected route \(indexPath.row)")
+    }
+}
+
+// MARK: - UISearchBarDelegate
+extension ViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // TODO: Filter routes
+        print("Searching for: \(searchText)")
+    }
+}
 
 /*
 
