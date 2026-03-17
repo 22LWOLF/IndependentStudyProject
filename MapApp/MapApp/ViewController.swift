@@ -1183,7 +1183,7 @@ extension ViewController: MKMapViewDelegate {
             let renderer = MKPolylineRenderer(polyline: styled)
             switch styled.kind {
             case .walked:
-                renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.7)
+                renderer.strokeColor = UIColor.appPrimary
                 renderer.lineWidth = 5
             case .remaining:
                 renderer.strokeColor = .systemBlue
@@ -1220,8 +1220,10 @@ extension ViewController: MKMapViewDelegate {
     func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
         guard newState == .ending, let annotation = view.annotation as? RouteAnnotation, annotation.index < selectedCoordinates.count else { return }
         selectedCoordinates[annotation.index] = annotation.coordinate
+        mapView.removeOverlays(mapView.overlays)
         let config = buildRouteConfig()
         requestRoutes(for: selectedCoordinates, config: config)
+        
     }
 }
 
@@ -1285,5 +1287,9 @@ extension ViewController: UISearchBarDelegate {
  Issue? with loop random gen
  
  It appears to be keeping the points of the last generated route and adding them into the generation. like it'll make a cirlcish shape and then there will be like a stick poking out that was where a prev. point was.
+ 
+ When using drag and drop not clearing old route one-way, OAB
+ 
+ CALayer
  */
 
