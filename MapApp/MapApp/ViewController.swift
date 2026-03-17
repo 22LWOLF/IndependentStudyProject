@@ -195,7 +195,6 @@ extension ViewController {
         
         // Add tap on pill to expand
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handlePillTap))
-        // You'll add this to the pill view specifically in storyboard
         
         // Set initial collapsed state
         setRouteSheetHeight(routeSheetCollapsedHeight, animated: false)
@@ -211,6 +210,7 @@ extension ViewController {
         // Hide search/filter when collapsed
         routesSearchBar.alpha = 0
         filterButton.alpha = 0
+        routesTableView.alpha = 0
     }
 }
 
@@ -852,6 +852,7 @@ extension ViewController {
         UIView.animate(withDuration: 0.2) {
             self.routesSearchBar.alpha = 1
             self.filterButton.alpha = 1
+            self.routesTableView.alpha = 1
         }
     }
 
@@ -1284,12 +1285,7 @@ extension ViewController: UISearchBarDelegate {
 
 /*
 
- Issue? with loop random gen
- 
- It appears to be keeping the points of the last generated route and adding them into the generation. like it'll make a cirlcish shape and then there will be like a stick poking out that was where a prev. point was.
- 
- When using drag and drop not clearing old route one-way, OAB
- 
- CALayer
+ For Swipe up tab UI make it to where bar sits at top of panel and that is where the bottom of the view is as well.
+
  */
 
