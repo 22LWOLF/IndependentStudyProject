@@ -98,7 +98,7 @@ class ViewController: UIViewController {
     
     // MARK: - Route History Sheet State
     private var routeSheetState: RouteSheetState = .collapsed
-    private var routeSheetCollapsedHeight: CGFloat = 20
+    private var routeSheetCollapsedHeight: CGFloat = 10
     // Just pill visible
     private var routeSheetExpandedHeight: CGFloat = 500
 
