@@ -98,7 +98,8 @@ class ViewController: UIViewController {
     
     // MARK: - Route History Sheet State
     private var routeSheetState: RouteSheetState = .collapsed
-    private var routeSheetCollapsedHeight: CGFloat = 60  // Just pill visible
+    private var routeSheetCollapsedHeight: CGFloat = 20
+    // Just pill visible
     private var routeSheetExpandedHeight: CGFloat = 500
 
     enum RouteSheetState {
@@ -1153,7 +1154,7 @@ extension ViewController {
 extension ViewController {
     private func printSavedRoutes() {
         let routes = CoreDataManager.shared.fetchAllRoutes()
-        print("📊 Total saved routes: \(routes.count)")
+        print("Total saved routes: \(routes.count)")
         for route in routes { print("  - \(route.targetDistance) miles, created \(String(describing: route.createdDate))") }
     }
 }

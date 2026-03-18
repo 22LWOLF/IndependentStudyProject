@@ -229,13 +229,13 @@
                                     <constraint firstItem="9ij-aS-Qdx" firstAttribute="trailing" secondItem="uhZ-5p-fxg" secondAttribute="trailing" constant="87" id="BPQ-5B-pyX"/>
                                     <constraint firstItem="g5a-yI-zb1" firstAttribute="leading" secondItem="Br3-pP-WZN" secondAttribute="leading" constant="8" id="ISf-E9-ucq"/>
                                     <constraint firstItem="uhZ-5p-fxg" firstAttribute="leading" secondItem="9ij-aS-Qdx" secondAttribute="leading" constant="87" id="LI5-mj-doU"/>
+                                    <constraint firstItem="HD4-Zr-CM9" firstAttribute="top" secondItem="uhZ-5p-fxg" secondAttribute="bottom" id="S1l-t5-Uy4"/>
                                     <constraint firstItem="HD4-Zr-CM9" firstAttribute="top" secondItem="9ij-aS-Qdx" secondAttribute="top" constant="10" id="TyD-1a-fMl"/>
                                     <constraint firstAttribute="height" constant="10" id="Ws4-jn-smx"/>
                                     <constraint firstItem="HD4-Zr-CM9" firstAttribute="trailing" secondItem="9ij-aS-Qdx" secondAttribute="trailing" id="aFZ-vU-n35"/>
                                     <constraint firstItem="9ij-aS-Qdx" firstAttribute="trailing" secondItem="7T3-F4-pBh" secondAttribute="trailing" constant="8" id="f1q-tr-LC5"/>
                                     <constraint firstItem="g5a-yI-zb1" firstAttribute="top" secondItem="HD4-Zr-CM9" secondAttribute="bottom" id="puU-oL-Sny"/>
                                     <constraint firstAttribute="trailing" secondItem="g5a-yI-zb1" secondAttribute="trailing" constant="8" id="tvm-eZ-s7a"/>
-                                    <constraint firstItem="uhZ-5p-fxg" firstAttribute="top" secondItem="9ij-aS-Qdx" secondAttribute="top" id="xLz-QT-UAY"/>
                                     <constraint firstItem="7T3-F4-pBh" firstAttribute="top" secondItem="9ij-aS-Qdx" secondAttribute="top" constant="10" id="ycx-Xa-0K6"/>
                                 </constraints>
                             </view>
@@ -286,7 +286,7 @@
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="tintColor">
-            <color red="0.0" green="0.53333333333333333" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>
