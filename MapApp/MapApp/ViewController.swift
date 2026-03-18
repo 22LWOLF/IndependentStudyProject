@@ -75,6 +75,10 @@ class ViewController: UIViewController {
     private var useTimeInput = false
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
+    
+    // MARK: - Route History
+    private var savedRoutes: [SavedRoute] = []
+    private var filteredRoutes: [SavedRoute] = []
 
     // MARK: - Location
     private var locationManager: CLLocationManager!
@@ -204,6 +208,11 @@ extension ViewController {
         routesTableView.delegate = self
         routesTableView.dataSource = self
         routesTableView.register(UITableViewCell.self, forCellReuseIdentifier: "RouteCell")
+        
+        /// Register cell with subtitle style
+        let cellClass = UITableViewCell.self
+        routesTableView.register(cellClass, forCellReuseIdentifier: "RouteCell")
+            
         
         // Setup search bar
         routesSearchBar.delegate = self
@@ -855,6 +864,7 @@ extension ViewController {
             self.filterButton.alpha = 1
             self.routesTableView.alpha = 1
         }
+        loadSavedRoutes()
     }
 
     private func collapseRouteSheet() {
@@ -1255,14 +1265,57 @@ extension ViewController: UITextFieldDelegate { }
 // MARK: - UITableViewDataSource
 extension ViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        // TODO: Return actual saved routes count
-        return 5  // Placeholder
+        if filteredRoutes.isEmpty {
+            // Show placeholder when no routes
+            return 1
+        }
+        return filteredRoutes.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath)
-        // TODO: Configure with actual route data
-        cell.textLabel?.text = "Route \(indexPath.row + 1) - 3.2 miles"
+        var cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath)
+            
+            // Force subtitle style if needed
+            if cell.detailTextLabel == nil {
+                cell = UITableViewCell(style: .subtitle, reuseIdentifier: "RouteCell")
+            }
+        
+        // No routes - show placeholder
+        if filteredRoutes.isEmpty {
+            cell.textLabel?.text = "No saved routes yet"
+            cell.textLabel?.textColor = .systemGray
+            cell.selectionStyle = .none
+            return cell
+        }
+        
+        let route = filteredRoutes[indexPath.row]
+        
+        // Format the cell
+        let routeName = route.name ?? "Route \(indexPath.row + 1)"
+        let distance = String(format: "%.2f mi", route.targetDistance)
+        
+        let routeTypeText: String
+        switch route.routeType {
+        case 0: routeTypeText = "One-Way"
+        case 1: routeTypeText = "Out & Back"
+        case 2: routeTypeText = "Loop"
+        default: routeTypeText = ""
+        }
+        
+        let modeText = route.isScenicMode ? "🌳 Scenic" : "⚡️ Fastest"
+        
+        // Format date
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        let dateText = route.createdDate.map { formatter.string(from: $0) } ?? ""
+        
+        // Set cell text
+        cell.textLabel?.text = "\(routeName) • \(distance)"
+        cell.detailTextLabel?.text = "\(routeTypeText) • \(modeText) • \(dateText)"
+        cell.textLabel?.textColor = .label
+        cell.selectionStyle = .default
+        
         return cell
     }
 }
@@ -1281,6 +1334,17 @@ extension ViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         // TODO: Filter routes
         print("Searching for: \(searchText)")
+    }
+}
+
+// MARK: - Route History Data
+extension ViewController {
+    private func loadSavedRoutes() {
+        savedRoutes = CoreDataManager.shared.fetchAllRoutes()
+        filteredRoutes = savedRoutes  // Show all routes initially
+        routesTableView.reloadData()
+        
+        print("Loaded \(savedRoutes.count) routes")
     }
 }
 
