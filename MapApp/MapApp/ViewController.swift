@@ -104,7 +104,8 @@ class ViewController: UIViewController {
     private var routeSheetState: RouteSheetState = .collapsed
     private var routeSheetCollapsedHeight: CGFloat = 10
     // Just pill visible
-    private var routeSheetExpandedHeight: CGFloat = 500
+    private var routeSheetExpandedHeight: CGFloat = 0
+    
 
     enum RouteSheetState {
         case collapsed
@@ -119,6 +120,7 @@ class ViewController: UIViewController {
         setupUI()
         loadSavedSpeeds()
         setupRouteHistorySheet()
+        
     }
 
     override func viewDidLayoutSubviews() {
@@ -130,6 +132,8 @@ class ViewController: UIViewController {
         bottomTabContainer.layer.cornerRadius = 44
         bottomTabContainer.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         bottomTabContainer.layer.masksToBounds = true
+        
+        calculateRouteSheetHeight()
     }
 }
 
@@ -222,7 +226,20 @@ extension ViewController {
         filterButton.alpha = 0
         routesTableView.alpha = 0
     }
-}
+    
+    private func calculateRouteSheetHeight() {
+        let screenHeight = self.view.bounds.height
+        let headerMaxY = self.headerBox.frame.maxY
+        let bottomHeight = self.bottomTabContainer.bounds.height
+        // calc avaliable space
+        // space below header
+        let padding: CGFloat = 20
+        self.routeSheetExpandedHeight = screenHeight - headerMaxY - bottomHeight - padding
+            
+        print("Screen: \(screenHeight), Header: \(headerMaxY), bottom: \(bottomHeight)")
+        print("📐 Calculated expanded height: \(self.routeSheetExpandedHeight)")
+        }
+    }
 
 // MARK: - Bottom Sheet State
 private var bottomSheetState: BottomSheetState = .collapsed
@@ -1324,8 +1341,7 @@ extension ViewController: UITableViewDataSource {
 extension ViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        // TODO: Load selected route
-        print("Selected route \(indexPath.row)")
+
     }
 }
 
