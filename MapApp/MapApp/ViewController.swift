@@ -27,6 +27,101 @@ class StyledPolyline: MKPolyline {
     var mode: Mode = .fastest
 }
 
+// MARK: - Custom Table Cell
+class RouteTableViewCell: UITableViewCell {
+    let moreButton = UIButton(type: .system)
+    let deleteButton = UIButton(type: .system)
+    private var isRevealed = false
+    
+    var deleteAction: (() -> Void)?
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
+        setupButtons()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupButtons()
+    }
+    
+    private func setupButtons() {
+        // More button (3 dots) - always visible
+        moreButton.setImage(UIImage(systemName: "ellipsis.circle.fill"), for: .normal)
+        moreButton.tintColor = .systemGray
+        moreButton.addTarget(self, action: #selector(moreButtonTapped), for: .touchUpInside)
+        contentView.addSubview(moreButton)
+        moreButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            moreButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            moreButton.widthAnchor.constraint(equalToConstant: 32),
+            moreButton.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        
+        // Delete button - hidden behind, slides in
+        deleteButton.setTitle("Delete", for: .normal)
+        deleteButton.setTitleColor(.white, for: .normal)
+        deleteButton.backgroundColor = .systemRed
+        deleteButton.layer.cornerRadius = 8
+        deleteButton.addTarget(self, action: #selector(deleteButtonTapped), for: .touchUpInside)
+        contentView.addSubview(deleteButton)
+        deleteButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 80),
+            deleteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            deleteButton.widthAnchor.constraint(equalToConstant: 70),
+            deleteButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+    }
+    
+    @objc private func moreButtonTapped() {
+        if isRevealed { hideDeleteButton() } else { revealDeleteButton() }
+    }
+    
+    @objc private func deleteButtonTapped() {
+        deleteAction?()
+        hideDeleteButton()
+    }
+    
+    private func revealDeleteButton() {
+        isRevealed = true
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+                // Slide delete button in
+                self.deleteButton.transform = CGAffineTransform(translationX: -90, y: 0)
+                
+                // Slide text labels left to make room
+                self.textLabel?.transform = CGAffineTransform(translationX: -90, y: 0)
+                self.detailTextLabel?.transform = CGAffineTransform(translationX: -90, y: 0)
+                
+                // Dim the more button
+                self.moreButton.alpha = 0.3
+
+        }
+    }
+    
+    private func hideDeleteButton() {
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+                // Slide delete button out
+                self.deleteButton.transform = .identity
+                
+                // Slide text labels back
+                self.textLabel?.transform = .identity
+                self.detailTextLabel?.transform = .identity
+                
+                // Restore more button opacity
+                self.moreButton.alpha = 1.0
+        }
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        hideDeleteButton()
+    }
+}
+
 // MARK: - Route Configuration
 struct RouteConfig {
     enum RouteType: Int { case oneWay = 0, outAndBack = 1, loop = 2 }
@@ -198,12 +293,12 @@ extension ViewController {
         routeHistorySheet.layer.shadowOffset = CGSize(width: 0, height: -2)
         routeHistorySheet.layer.shadowRadius = 8
         
+        
         // Add pan gesture
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleRouteSheetPan(_:)))
+        panGesture.delegate = self
         routeHistorySheet.addGestureRecognizer(panGesture)
-        
-        // Add tap on pill to expand
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handlePillTap))
+            
         
         // Set initial collapsed state
         setRouteSheetHeight(routeSheetCollapsedHeight, animated: false)
@@ -211,13 +306,8 @@ extension ViewController {
         // Setup table view
         routesTableView.delegate = self
         routesTableView.dataSource = self
-        routesTableView.register(UITableViewCell.self, forCellReuseIdentifier: "RouteCell")
-        
-        /// Register cell with subtitle style
-        let cellClass = UITableViewCell.self
-        routesTableView.register(cellClass, forCellReuseIdentifier: "RouteCell")
+        routesTableView.register(RouteTableViewCell.self, forCellReuseIdentifier: "RouteCell")
             
-        
         // Setup search bar
         routesSearchBar.delegate = self
         
@@ -1290,18 +1380,14 @@ extension ViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        var cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath)
-            
-            // Force subtitle style if needed
-            if cell.detailTextLabel == nil {
-                cell = UITableViewCell(style: .subtitle, reuseIdentifier: "RouteCell")
-            }
+        let cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath) as! RouteTableViewCell
         
         // No routes - show placeholder
         if filteredRoutes.isEmpty {
             cell.textLabel?.text = "No saved routes yet"
             cell.textLabel?.textColor = .systemGray
             cell.selectionStyle = .none
+            cell.moreButton.isHidden = true
             return cell
         }
         
@@ -1332,6 +1418,11 @@ extension ViewController: UITableViewDataSource {
         cell.detailTextLabel?.text = "\(routeTypeText) • \(modeText) • \(dateText)"
         cell.textLabel?.textColor = .label
         cell.selectionStyle = .default
+        cell.detailTextLabel?.font = .systemFont(ofSize: 12)
+        
+        cell.deleteAction = { [weak self] in
+                    self?.confirmDeleteRoute(at: indexPath)
+                }
         
         return cell
     }
@@ -1341,6 +1432,32 @@ extension ViewController: UITableViewDataSource {
 extension ViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        // Don't do anything if it's the "no" routes placeholder
+        guard !filteredRoutes.isEmpty else {return}
+        
+        let selectedRoute = filteredRoutes[indexPath.row]
+        // close sheet
+        collapseRouteSheet()
+        // load route on map
+        loadRouteOnMap(selectedRoute)
+    }
+    
+    func tableView(_ tableView: UITableView, trailingSwipeActionConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        // dont allow for deletion of place holder
+        
+        guard !filteredRoutes.isEmpty else {return nil}
+        
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] action, view, completion in
+            self?.confirmDeleteRoute(at: indexPath)
+            completion(true)
+        }
+        deleteAction.backgroundColor = .systemRed
+        deleteAction.image = UIImage(systemName: "trash.fill")
+        
+        let configuration = UISwipeActionsConfiguration(actions: [deleteAction])
+        configuration.performsFirstActionWithFullSwipe = false //require confo, dont auto delete
+        
+        return configuration
 
     }
 }
@@ -1362,8 +1479,130 @@ extension ViewController {
         
         print("Loaded \(savedRoutes.count) routes")
     }
+    private func loadRouteOnMap(_ route: SavedRoute) {
+        // clear existing routes
+        clearAllRoutes()
+        
+        // decode waypoints
+        guard let waypointsData = route.waypointsData,
+              let waypoints = CoreDataManager.shared.decodeCoordinates(waypointsData) else {showErrorAlert(title: "", message: "Could not load route waypoints")
+            return
+        }
+        
+        // set up UI to match route settings
+        routeTypeSelector.selectedSegmentIndex = Int(route.routeType)
+        useScenicRouting = route.isScenicMode
+        
+        // store waypoints
+        selectedCoordinates = waypoints
+        
+        // place annos on map
+        let routeType = RouteConfig.RouteType(rawValue: Int(route.routeType)) ?? .oneWay
+        placeAnnotations(for: waypoints, routeType: routeType)
+        
+        // build config and generate route
+        let config = RouteConfig(
+            type: routeType,
+            isScenic: route.isScenicMode,
+            waypoints: waypoints,
+            targetDistance: nil,   //don't retry use orignal waypoints
+            direction: route.direction
+        )
+        
+        // generate route
+        requestRoutes(for: waypoints, config: config)
+        
+        // center map on route
+        if let firstPoint = waypoints.first {
+            safelyCenterMap(on: firstPoint, distance: 7500)
+        }
+        print("Loaded rotue: \(route.name ?? "Unnamed"), \(route.targetDistance) miles")
+        
+    }
+    
+    private func confirmDeleteRoute(at indexPath: IndexPath) {
+        let route = filteredRoutes[indexPath.row]
+        let routeName = route.name ?? "Unnamed Route"
+        let distance = String(format: "%.2f mi", route.targetDistance)
+        
+        let alert = UIAlertController(
+            title: "Delete Route?",
+            message: "Are you sure you want to delete \"\(routeName)\" (\(distance))? This cannot be undone.",
+            preferredStyle:  .alert
+        )
+        
+        // cancel button
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        // delete button
+        let deleteAction = UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.deleteRoute(at: indexPath)
+        }
+        
+        alert.addAction(cancelAction)
+        alert.addAction(deleteAction)
+        
+        present(alert, animated: true)
+        
+    }
+    
+    private func deleteRoute(at indexPath: IndexPath) {
+        let route = filteredRoutes[indexPath.row]
+        
+        // delete from core data
+        CoreDataManager.shared.deleteRoute(route)
+        
+        //remove from arrays
+        filteredRoutes.remove(at: indexPath.row)
+        if let index = savedRoutes.firstIndex(where: { $0.id == route.id}) {
+            savedRoutes.remove(at: index)
+        }
+        //update table
+        routesTableView.deleteRows(at: [indexPath], with: .fade)
+        
+        print("Deleted route: \(route.name ?? "Unnamed")")
+        
+        if filteredRoutes.isEmpty {
+            routesTableView.reloadData()
+        }
+    }
+    
 }
-
+// MARK: - UIGestureRecognizerDelegate
+extension ViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Allow table view gestures to work alongside sheet pan gesture
+        return true
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Sheet pan gesture should ALWAYS wait for ANY gesture on/in the table view
+        if gestureRecognizer == routeHistorySheet.gestureRecognizers?.first(where: { $0 is UIPanGestureRecognizer }) {
+            // Walk up the view hierarchy to see if this gesture is related to the table
+            var currentView: UIView? = otherGestureRecognizer.view
+            while currentView != nil {
+                if currentView == routesTableView {
+                    return true  // Sheet pan waits for this gesture to fail first
+                }
+                currentView = currentView?.superview
+            }
+        }
+        return false
+    }
+    
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // If this is the sheet pan gesture
+        if gestureRecognizer == routeHistorySheet.gestureRecognizers?.first(where: { $0 is UIPanGestureRecognizer }) {
+            let location = gestureRecognizer.location(in: routeHistorySheet)
+            
+            // Only allow pan if touching top 80px (pill + search bar area)
+            if location.y > 80 {
+                return false  // User is touching table area, don't pan sheet
+            }
+        }
+        return true
+    }
+}
 /*
 
  For Swipe up tab UI make it to where bar sits at top of panel and that is where the bottom of the view is as well.
