@@ -30,12 +30,14 @@ class StyledPolyline: MKPolyline {
 // MARK: - Custom Table Cell
 class RouteTableViewCell: UITableViewCell {
     let moreButton = UIButton(type: .system)
+    let favoriteButton = UIButton(type: .system)
     let editButton = UIButton(type: .system)
     let deleteButton = UIButton(type: .system)
     private var isRevealed = false
     
     var deleteAction: (() -> Void)?
     var editAction: (() -> Void)?
+    var favoriteAction: (() -> Void)?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
@@ -72,10 +74,18 @@ class RouteTableViewCell: UITableViewCell {
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 150),
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 200),
             deleteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             deleteButton.widthAnchor.constraint(equalToConstant: 70),
             deleteButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+        
+        
+        NSLayoutConstraint.activate([
+            favoriteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 110),
+            favoriteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            favoriteButton.widthAnchor.constraint(equalToConstant: 36),
+            favoriteButton.heightAnchor.constraint(equalToConstant: 36)
         ])
         
         // Edit button SECOND (on top)
@@ -88,7 +98,7 @@ class RouteTableViewCell: UITableViewCell {
         editButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            editButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 80),
+            editButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 70),
             editButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             editButton.widthAnchor.constraint(equalToConstant: 60),
             editButton.heightAnchor.constraint(equalToConstant: 36)
@@ -98,7 +108,7 @@ class RouteTableViewCell: UITableViewCell {
     @objc private func moreButtonTapped() {
         print("🔘 More tapped, revealed: \(isRevealed)")
         if isRevealed {
-            hideDeleteButton()
+            hideOptionsButton()
         } else {
             revealOptionsButtons()
         }
@@ -107,19 +117,26 @@ class RouteTableViewCell: UITableViewCell {
     @objc private func editButtonTapped() {
         print("✏️ Edit tapped")
         editAction?()
-        hideDeleteButton()
+        hideOptionsButton()
     }
     
     @objc private func deleteButtonTapped() {
         print("🗑️ Delete tapped")
         deleteAction?()
-        hideDeleteButton()
+        hideOptionsButton()
+    }
+    
+    @objc private func favoriteButtonTapped() {
+        print("❤️ Favorite tapped")
+        favoriteAction?()
+        // Don't hide buttons - let user tap multiple actions
     }
     
     private func revealOptionsButtons() {
         isRevealed = true
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
             self.editButton.transform = CGAffineTransform(translationX: -96, y: 0)
+            self.favoriteButton.transform = CGAffineTransform(translationX: -166, y: 0)
             self.deleteButton.transform = CGAffineTransform(translationX: -230, y: 0)
             self.textLabel?.transform = CGAffineTransform(translationX: -166, y: 0)
             self.detailTextLabel?.transform = CGAffineTransform(translationX: -166, y: 0)
@@ -128,10 +145,11 @@ class RouteTableViewCell: UITableViewCell {
         }
     }
     
-    private func hideDeleteButton() {
+    private func hideOptionsButton() {
         isRevealed = false
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseIn) {
             self.editButton.transform = .identity
+            self.favoriteButton.transform = .identity
             self.deleteButton.transform = .identity
             self.moreButton.transform = .identity
             self.textLabel?.transform = .identity
@@ -145,7 +163,7 @@ class RouteTableViewCell: UITableViewCell {
         // Ensure the more button is visible if this cell was reused from the placeholder state
         moreButton.isHidden = false
         // Reset any revealed transforms
-        hideDeleteButton()
+        hideOptionsButton()
     }
 }
 
