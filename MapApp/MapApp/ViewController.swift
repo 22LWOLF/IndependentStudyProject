@@ -30,10 +30,12 @@ class StyledPolyline: MKPolyline {
 // MARK: - Custom Table Cell
 class RouteTableViewCell: UITableViewCell {
     let moreButton = UIButton(type: .system)
+    let editButton = UIButton(type: .system)
     let deleteButton = UIButton(type: .system)
     private var isRevealed = false
     
     var deleteAction: (() -> Void)?
+    var editAction: (() -> Void)?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
@@ -60,6 +62,21 @@ class RouteTableViewCell: UITableViewCell {
             moreButton.heightAnchor.constraint(equalToConstant: 32)
         ])
         
+        editButton.setTitle("Edit", for: .normal)
+        editButton.setTitleColor(.white, for: .normal)
+        editButton.backgroundColor = .systemBlue
+        editButton.layer.cornerRadius = 8
+        editButton.addTarget(self, action: #selector(editButtonTapped), for: .touchUpInside)
+        contentView.addSubview(editButton)
+        editButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            editButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 80),
+            editButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            editButton.widthAnchor.constraint(equalToConstant: 60),
+            editButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+        
         // Delete button - hidden behind, slides in
         deleteButton.setTitle("Delete", for: .normal)
         deleteButton.setTitleColor(.white, for: .normal)
@@ -81,6 +98,11 @@ class RouteTableViewCell: UITableViewCell {
         if isRevealed { hideDeleteButton() } else { revealDeleteButton() }
     }
     
+    @objc private func editButtonTapped() {
+        editAction?()
+        hideDeleteButton()
+    }
+    
     @objc private func deleteButtonTapped() {
         deleteAction?()
         hideDeleteButton()
@@ -91,10 +113,12 @@ class RouteTableViewCell: UITableViewCell {
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
                 // Slide delete button in
                 self.deleteButton.transform = CGAffineTransform(translationX: -90, y: 0)
+            
+                self.deleteButton.transform = CGAffineTransform(translationX: -220, y: 0)
                 
                 // Slide text labels left to make room
-                self.textLabel?.transform = CGAffineTransform(translationX: -90, y: 0)
-                self.detailTextLabel?.transform = CGAffineTransform(translationX: -90, y: 0)
+                self.textLabel?.transform = CGAffineTransform(translationX: -220, y: 0)
+                self.detailTextLabel?.transform = CGAffineTransform(translationX: -220, y: 0)
                 
                 // Dim the more button
                 self.moreButton.alpha = 0.3
@@ -105,6 +129,7 @@ class RouteTableViewCell: UITableViewCell {
     private func hideDeleteButton() {
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
                 // Slide delete button out
+            self.editButton.transform = .identity
                 self.deleteButton.transform = .identity
                 
                 // Slide text labels back
@@ -1566,6 +1591,36 @@ extension ViewController {
             routesTableView.reloadData()
         }
     }
+    private func renameRoute(at indexPath: IndexPath) {
+        let route = filteredRoutes[indexPath.row]
+        let currentName == route.name ?? "Route \(indexPath.row + 1)"
+        
+        let alert = UIAlertController(
+            title: "Rename Route",
+            message: "Enter a new name for this route",
+            preferredStyle: .alert
+        )
+        
+        alert.addTextField { textField in
+            textField.text = currentName
+            textField.placeholder = "Route name"
+            textField.autocapitalizationType = .words. words
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        let saveAction = UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            guard let newName = alert.textFields?.first?.text, !newName.isEmpty else { return }
+            
+            route.name = newName
+            CoreDataManager.shared.saveContext()
+            
+            self?.routesTableView.reloadRows(at: [indexPath], with: .automatic)
+            
+            
+        }
+    }
+    
+    
     
 }
 // MARK: - UIGestureRecognizerDelegate
