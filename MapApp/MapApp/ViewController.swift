@@ -62,6 +62,23 @@ class RouteTableViewCell: UITableViewCell {
             moreButton.heightAnchor.constraint(equalToConstant: 32)
         ])
         
+        // Delete button FIRST (behind edit)
+        deleteButton.setTitle("Delete", for: .normal)
+        deleteButton.setTitleColor(.white, for: .normal)
+        deleteButton.backgroundColor = .systemRed
+        deleteButton.layer.cornerRadius = 8
+        deleteButton.addTarget(self, action: #selector(deleteButtonTapped), for: .touchUpInside)
+        contentView.addSubview(deleteButton)
+        deleteButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 150),
+            deleteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            deleteButton.widthAnchor.constraint(equalToConstant: 70),
+            deleteButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+        
+        // Edit button SECOND (on top)
         editButton.setTitle("Edit", for: .normal)
         editButton.setTitleColor(.white, for: .normal)
         editButton.backgroundColor = .systemBlue
@@ -76,73 +93,58 @@ class RouteTableViewCell: UITableViewCell {
             editButton.widthAnchor.constraint(equalToConstant: 60),
             editButton.heightAnchor.constraint(equalToConstant: 36)
         ])
-        
-        // Delete button - hidden behind, slides in
-        deleteButton.setTitle("Delete", for: .normal)
-        deleteButton.setTitleColor(.white, for: .normal)
-        deleteButton.backgroundColor = .systemRed
-        deleteButton.layer.cornerRadius = 8
-        deleteButton.addTarget(self, action: #selector(deleteButtonTapped), for: .touchUpInside)
-        contentView.addSubview(deleteButton)
-        deleteButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
-            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 80),
-            deleteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            deleteButton.widthAnchor.constraint(equalToConstant: 70),
-            deleteButton.heightAnchor.constraint(equalToConstant: 36)
-        ])
     }
     
     @objc private func moreButtonTapped() {
-        if isRevealed { hideDeleteButton() } else { revealDeleteButton() }
+        print("🔘 More tapped, revealed: \(isRevealed)")
+        if isRevealed {
+            hideDeleteButton()
+        } else {
+            revealOptionsButtons()
+        }
     }
     
     @objc private func editButtonTapped() {
+        print("✏️ Edit tapped")
         editAction?()
         hideDeleteButton()
     }
     
     @objc private func deleteButtonTapped() {
+        print("🗑️ Delete tapped")
         deleteAction?()
         hideDeleteButton()
     }
     
-    private func revealDeleteButton() {
+    private func revealOptionsButtons() {
         isRevealed = true
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
-                // Slide delete button in
-                self.deleteButton.transform = CGAffineTransform(translationX: -90, y: 0)
-            
-                self.deleteButton.transform = CGAffineTransform(translationX: -220, y: 0)
-                
-                // Slide text labels left to make room
-                self.textLabel?.transform = CGAffineTransform(translationX: -220, y: 0)
-                self.detailTextLabel?.transform = CGAffineTransform(translationX: -220, y: 0)
-                
-                // Dim the more button
-                self.moreButton.alpha = 0.3
-
+            self.editButton.transform = CGAffineTransform(translationX: -96, y: 0)
+            self.deleteButton.transform = CGAffineTransform(translationX: -230, y: 0)
+            self.textLabel?.transform = CGAffineTransform(translationX: -166, y: 0)
+            self.detailTextLabel?.transform = CGAffineTransform(translationX: -166, y: 0)
+            self.moreButton.transform = CGAffineTransform(translationX: -166, y: 0)
+            self.moreButton.alpha = 1.0
         }
     }
     
     private func hideDeleteButton() {
-        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
-                // Slide delete button out
+        isRevealed = false
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseIn) {
             self.editButton.transform = .identity
-                self.deleteButton.transform = .identity
-                
-                // Slide text labels back
-                self.textLabel?.transform = .identity
-                self.detailTextLabel?.transform = .identity
-                
-                // Restore more button opacity
-                self.moreButton.alpha = 1.0
+            self.deleteButton.transform = .identity
+            self.moreButton.transform = .identity
+            self.textLabel?.transform = .identity
+            self.detailTextLabel?.transform = .identity
+        
         }
     }
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        // Ensure the more button is visible if this cell was reused from the placeholder state
+        moreButton.isHidden = false
+        // Reset any revealed transforms
         hideDeleteButton()
     }
 }
@@ -1406,22 +1408,39 @@ extension ViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "RouteCell", for: indexPath) as! RouteTableViewCell
-        
-        // No routes - show placeholder
+
+        // Placeholder when no routes
         if filteredRoutes.isEmpty {
             cell.textLabel?.text = "No saved routes yet"
             cell.textLabel?.textColor = .systemGray
+            cell.detailTextLabel?.text = nil
             cell.selectionStyle = .none
             cell.moreButton.isHidden = true
+            // Also reset transforms to avoid leaked reveal state
+            cell.editButton.transform = .identity
+            cell.deleteButton.transform = .identity
+            cell.moreButton.transform = .identity
+            cell.textLabel?.transform = .identity
+            cell.detailTextLabel?.transform = .identity
             return cell
         }
-        
+
+        // Real route
         let route = filteredRoutes[indexPath.row]
-        
+
+        // Reset reusable state in case this cell was previously used as placeholder
+        cell.moreButton.isHidden = false
+        // Ensure action buttons and labels are back to default positions
+        cell.editButton.transform = .identity
+        cell.deleteButton.transform = .identity
+        cell.moreButton.transform = .identity
+        cell.textLabel?.transform = .identity
+        cell.detailTextLabel?.transform = .identity
+
         // Format the cell
         let routeName = route.name ?? "Route \(indexPath.row + 1)"
         let distance = String(format: "%.2f mi", route.targetDistance)
-        
+
         let routeTypeText: String
         switch route.routeType {
         case 0: routeTypeText = "One-Way"
@@ -1429,28 +1448,33 @@ extension ViewController: UITableViewDataSource {
         case 2: routeTypeText = "Loop"
         default: routeTypeText = ""
         }
-        
+
         let modeText = route.isScenicMode ? "🌳 Scenic" : "⚡️ Fastest"
-        
+
         // Format date
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         let dateText = route.createdDate.map { formatter.string(from: $0) } ?? ""
-        
+
         // Set cell text
         cell.textLabel?.text = "\(routeName) • \(distance)"
         cell.detailTextLabel?.text = "\(routeTypeText) • \(modeText) • \(dateText)"
         cell.textLabel?.textColor = .label
         cell.selectionStyle = .default
         cell.detailTextLabel?.font = .systemFont(ofSize: 12)
-        
+
+        // Actions
         cell.deleteAction = { [weak self] in
-                    self?.confirmDeleteRoute(at: indexPath)
-                }
-        
+            self?.confirmDeleteRoute(at: indexPath)
+        }
+        cell.editAction = { [weak self] in
+            self?.renameRoute(at: indexPath)
+        }
+
         return cell
     }
+        
 }
 
 // MARK: - UITableViewDelegate
@@ -1593,7 +1617,7 @@ extension ViewController {
     }
     private func renameRoute(at indexPath: IndexPath) {
         let route = filteredRoutes[indexPath.row]
-        let currentName == route.name ?? "Route \(indexPath.row + 1)"
+        let currentName = route.name ?? "Route \(indexPath.row + 1)"
         
         let alert = UIAlertController(
             title: "Rename Route",
@@ -1604,7 +1628,7 @@ extension ViewController {
         alert.addTextField { textField in
             textField.text = currentName
             textField.placeholder = "Route name"
-            textField.autocapitalizationType = .words. words
+            textField.autocapitalizationType = .words
         }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         
@@ -1616,8 +1640,11 @@ extension ViewController {
             
             self?.routesTableView.reloadRows(at: [indexPath], with: .automatic)
             
-            
+            print("Renamed worked new name is \(newName)")
         }
+    
+        alert.addAction(saveAction)
+        present(alert,animated: true)
     }
     
     
