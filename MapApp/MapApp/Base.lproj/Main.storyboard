@@ -3,6 +3,7 @@
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
+        <capability name="Image references" minToolsVersion="12.0"/>
         <capability name="Map view configurations" minToolsVersion="14.0"/>
         <capability name="Named colors" minToolsVersion="9.0"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
@@ -179,48 +180,64 @@
                                 </constraints>
                             </view>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Br3-pP-WZN">
-                                <rect key="frame" x="0.0" y="636" width="414" height="10"/>
+                                <rect key="frame" x="0.0" y="626" width="414" height="10"/>
                                 <subviews>
                                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uhZ-5p-fxg">
-                                        <rect key="frame" x="87" y="0.0" width="240" height="10"/>
-                                        <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <rect key="frame" x="150" y="0.0" width="114" height="30"/>
+                                        <subviews>
+                                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="1J8-id-VgH">
+                                                <rect key="frame" x="3" y="5" width="108" height="20"/>
+                                                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                                <imageReference key="image" image="line.3.horizontal.decrease" catalog="system" symbolScale="medium" variableValue="5.5511151231257827e-17"/>
+                                            </imageView>
+                                        </subviews>
+                                        <color key="backgroundColor" red="0.28617979743530525" green="0.31790194812945072" blue="0.43593750005000009" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="displayP3"/>
                                         <constraints>
-                                            <constraint firstAttribute="height" constant="10" id="fdk-Ur-d8W"/>
+                                            <constraint firstItem="1J8-id-VgH" firstAttribute="top" secondItem="uhZ-5p-fxg" secondAttribute="top" constant="1" id="7fG-Ug-01q"/>
+                                            <constraint firstAttribute="bottom" secondItem="1J8-id-VgH" secondAttribute="bottom" constant="1" id="eDd-O7-5fr"/>
+                                            <constraint firstAttribute="height" constant="30" id="fdk-Ur-d8W"/>
+                                            <constraint firstAttribute="trailing" secondItem="1J8-id-VgH" secondAttribute="trailing" constant="3" id="kGp-ZE-pKY"/>
+                                            <constraint firstItem="1J8-id-VgH" firstAttribute="leading" secondItem="uhZ-5p-fxg" secondAttribute="leading" constant="3" id="kZn-4d-zST"/>
                                         </constraints>
                                         <userDefinedRuntimeAttributes>
                                             <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                                <integer key="value" value="5"/>
+                                                <integer key="value" value="7"/>
                                             </userDefinedRuntimeAttribute>
                                         </userDefinedRuntimeAttributes>
                                     </view>
                                     <searchBar contentMode="redraw" placeholder="Search Routes" translatesAutoresizingMaskIntoConstraints="NO" id="HD4-Zr-CM9">
-                                        <rect key="frame" x="16" y="14" width="300" height="44"/>
-                                        <color key="backgroundColor" red="0.47058823529999999" green="0.41960784309999999" blue="0.64705882349999999" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                        <rect key="frame" x="16" y="34" width="300" height="44"/>
+                                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="44" id="EeU-N4-fFA"/>
                                         </constraints>
-                                        <color key="tintColor" systemColor="tintColor"/>
-                                        <color key="barTintColor" red="0.4226074219" green="0.4697265625" blue="0.6420898438" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="displayP3"/>
+                                        <color key="tintColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <textInputTraits key="textInputTraits"/>
                                         <connections>
                                             <outlet property="delegate" destination="BYZ-38-t0r" id="YMG-mc-xe6"/>
                                         </connections>
                                     </searchBar>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="7T3-F4-pBh">
-                                        <rect key="frame" x="308" y="14" width="90" height="44"/>
+                                        <rect key="frame" x="308" y="34" width="90" height="44"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="44" id="PFA-pK-8ri"/>
                                             <constraint firstAttribute="width" constant="90" id="SiL-xu-MqD"/>
                                         </constraints>
                                         <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="filled" image="line.3.horizontal.decrease.circle" catalog="system" title="Filter"/>
+                                        <buttonConfiguration key="configuration" style="filled" image="line.3.horizontal.decrease.circle" catalog="system" title="Filter" cornerStyle="capsule"/>
                                     </button>
                                     <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" rowHeight="80" estimatedRowHeight="-1" sectionHeaderHeight="-1" estimatedSectionHeaderHeight="-1" sectionFooterHeight="-1" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="g5a-yI-zb1">
-                                        <rect key="frame" x="16" y="60" width="382" height="400"/>
+                                        <rect key="frame" x="16" y="80" width="382" height="400"/>
                                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="400" id="HDu-x6-LOS"/>
                                         </constraints>
+                                        <userDefinedRuntimeAttributes>
+                                            <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                                <integer key="value" value="10"/>
+                                            </userDefinedRuntimeAttribute>
+                                        </userDefinedRuntimeAttributes>
                                     </tableView>
                                 </subviews>
                                 <viewLayoutGuide key="safeArea" id="9ij-aS-Qdx"/>
@@ -229,9 +246,9 @@
                                 <constraints>
                                     <constraint firstItem="HD4-Zr-CM9" firstAttribute="leading" secondItem="9ij-aS-Qdx" secondAttribute="leading" constant="16" id="40o-hh-byU"/>
                                     <constraint firstItem="g5a-yI-zb1" firstAttribute="top" secondItem="HD4-Zr-CM9" secondAttribute="bottom" constant="2" id="AU9-4K-vm2"/>
-                                    <constraint firstItem="9ij-aS-Qdx" firstAttribute="trailing" secondItem="uhZ-5p-fxg" secondAttribute="trailing" constant="87" id="BPQ-5B-pyX"/>
+                                    <constraint firstItem="9ij-aS-Qdx" firstAttribute="trailing" secondItem="uhZ-5p-fxg" secondAttribute="trailing" constant="150" id="BPQ-5B-pyX"/>
                                     <constraint firstItem="g5a-yI-zb1" firstAttribute="leading" secondItem="Br3-pP-WZN" secondAttribute="leading" constant="16" id="ISf-E9-ucq"/>
-                                    <constraint firstItem="uhZ-5p-fxg" firstAttribute="leading" secondItem="9ij-aS-Qdx" secondAttribute="leading" constant="87" id="LI5-mj-doU"/>
+                                    <constraint firstItem="uhZ-5p-fxg" firstAttribute="leading" secondItem="9ij-aS-Qdx" secondAttribute="leading" constant="150" id="LI5-mj-doU"/>
                                     <constraint firstAttribute="height" constant="10" id="Ws4-jn-smx"/>
                                     <constraint firstItem="7T3-F4-pBh" firstAttribute="top" secondItem="uhZ-5p-fxg" secondAttribute="bottom" constant="4" id="ZN5-8T-LN3"/>
                                     <constraint firstItem="HD4-Zr-CM9" firstAttribute="trailing" secondItem="9ij-aS-Qdx" secondAttribute="trailing" constant="-98" id="aFZ-vU-n35"/>
@@ -256,7 +273,7 @@
                         <constraints>
                             <constraint firstAttribute="bottom" secondItem="GTg-cZ-Eue" secondAttribute="bottom" id="HDk-nj-4vr"/>
                             <constraint firstAttribute="bottom" secondItem="Km5-Dh-ECB" secondAttribute="bottom" id="Lis-Xe-bxt"/>
-                            <constraint firstItem="GTg-cZ-Eue" firstAttribute="top" secondItem="Br3-pP-WZN" secondAttribute="bottom" constant="-10" id="MCK-Yj-p0r"/>
+                            <constraint firstItem="GTg-cZ-Eue" firstAttribute="top" secondItem="Br3-pP-WZN" secondAttribute="bottom" id="MCK-Yj-p0r"/>
                             <constraint firstItem="nR2-kL-pkI" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="PS9-pG-0wg"/>
                             <constraint firstItem="nR2-kL-pkI" firstAttribute="trailing" secondItem="6Tk-OE-BBY" secondAttribute="trailing" id="Qu3-0A-ONq"/>
                             <constraint firstItem="GTg-cZ-Eue" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" id="Umj-7j-9ud"/>
@@ -288,6 +305,7 @@
     </scenes>
     <resources>
         <image name="gearshape" catalog="system" width="128" height="123"/>
+        <image name="line.3.horizontal.decrease" catalog="system" width="128" height="73"/>
         <image name="line.3.horizontal.decrease.circle" catalog="system" width="128" height="123"/>
         <image name="location" catalog="system" width="128" height="119"/>
         <namedColor name="AccentColor">
@@ -295,9 +313,6 @@
         </namedColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-        </systemColor>
-        <systemColor name="tintColor">
-            <color red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

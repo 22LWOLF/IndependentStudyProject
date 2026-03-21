@@ -255,7 +255,7 @@ class ViewController: UIViewController {
     
     // MARK: - Route History Sheet State
     private var routeSheetState: RouteSheetState = .collapsed
-    private var routeSheetCollapsedHeight: CGFloat = 10
+    private var routeSheetCollapsedHeight: CGFloat = 30
     // Just pill visible
     private var routeSheetExpandedHeight: CGFloat = 0
     
@@ -368,6 +368,9 @@ extension ViewController {
             
         // Setup search bar
         routesSearchBar.delegate = self
+        
+        routesSearchBar.searchBarStyle = .minimal  // Removes background
+        routesSearchBar.backgroundImage = UIImage()
         
         // Hide search/filter when collapsed
         routesSearchBar.alpha = 0
@@ -1729,36 +1732,17 @@ extension ViewController: UIGestureRecognizerDelegate {
     }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Sheet pan gesture should ALWAYS wait for ANY gesture on/in the table view
-        if gestureRecognizer == routeHistorySheet.gestureRecognizers?.first(where: { $0 is UIPanGestureRecognizer }) {
-            // Walk up the view hierarchy to see if this gesture is related to the table
-            var currentView: UIView? = otherGestureRecognizer.view
-            while currentView != nil {
-                if currentView == routesTableView {
-                    return true  // Sheet pan waits for this gesture to fail first
-                }
-                currentView = currentView?.superview
-            }
-        }
+        
         return false
     }
     
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        // If this is the sheet pan gesture
-        if gestureRecognizer == routeHistorySheet.gestureRecognizers?.first(where: { $0 is UIPanGestureRecognizer }) {
-            let location = gestureRecognizer.location(in: routeHistorySheet)
-            
-            // Only allow pan if touching top 80px (pill + search bar area)
-            if location.y > 80 {
-                return false  // User is touching table area, don't pan sheet
-            }
-        }
+
         return true
     }
 }
 /*
 
- For Swipe up tab UI make it to where bar sits at top of panel and that is where the bottom of the view is as well.
 
  */
 
