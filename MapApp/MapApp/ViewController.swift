@@ -74,15 +74,22 @@ class RouteTableViewCell: UITableViewCell {
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 200),
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 140),
             deleteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             deleteButton.widthAnchor.constraint(equalToConstant: 70),
             deleteButton.heightAnchor.constraint(equalToConstant: 36)
         ])
         
         
+        // Favorite button (heart)
+        favoriteButton.setImage(UIImage(systemName: "heart"), for: .normal)
+        favoriteButton.tintColor = .systemPink
+        favoriteButton.addTarget(self, action: #selector(favoriteButtonTapped), for: .touchUpInside)
+        contentView.addSubview(favoriteButton)
+        favoriteButton.translatesAutoresizingMaskIntoConstraints = false
+
         NSLayoutConstraint.activate([
-            favoriteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 110),
+            favoriteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
             favoriteButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             favoriteButton.widthAnchor.constraint(equalToConstant: 36),
             favoriteButton.heightAnchor.constraint(equalToConstant: 36)
@@ -130,6 +137,12 @@ class RouteTableViewCell: UITableViewCell {
         print("❤️ Favorite tapped")
         favoriteAction?()
         // Don't hide buttons - let user tap multiple actions
+        
+    }
+    
+    func updateFavoriteIcon(isFavorite: Bool){
+        let iconName = isFavorite ? "heart.fill" : "heart"
+        favoriteButton.setImage(UIImage(systemName: iconName), for: .normal)
     }
     
     private func revealOptionsButtons() {
@@ -565,6 +578,7 @@ extension ViewController {
     @IBAction func settingsBTN(_ sender: UIButton) {
         resetSpeedData()
         printSavedRoutes()
+        clearAllRoutesFromDatabase()
     }
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
@@ -1489,6 +1503,11 @@ extension ViewController: UITableViewDataSource {
         cell.editAction = { [weak self] in
             self?.renameRoute(at: indexPath)
         }
+        
+        cell.favoriteAction = { [weak self] in
+            self?.toggleFavorite(at: indexPath)
+        }
+        cell.updateFavoriteIcon(isFavorite: route.isFavorite)
 
         return cell
     }
@@ -1663,6 +1682,40 @@ extension ViewController {
     
         alert.addAction(saveAction)
         present(alert,animated: true)
+    }
+    
+    private func toggleFavorite(at indexPath: IndexPath) {
+        let route = filteredRoutes[indexPath.row]
+        
+        // Toggle the favorite state
+        route.isFavorite.toggle()
+        
+        // Save to Core Data
+        CoreDataManager.shared.saveContext()
+        
+        // Update the cell icon
+        if let cell = routesTableView.cellForRow(at: indexPath) as? RouteTableViewCell {
+            cell.updateFavoriteIcon(isFavorite: route.isFavorite)
+        }
+        
+        let status = route.isFavorite ? "favorited" : "unfavorited"
+        print("❤️ Route \(status)")
+    }
+    
+    private func clearAllRoutesFromDatabase() {
+        // Delete all routes from Core Data
+        for route in savedRoutes {
+            CoreDataManager.shared.deleteRoute(route)
+        }
+        
+        // Clear arrays
+        savedRoutes.removeAll()
+        filteredRoutes.removeAll()
+        
+        // Reload table
+        routesTableView.reloadData()
+        
+        print("🗑️ All routes cleared")
     }
     
     
