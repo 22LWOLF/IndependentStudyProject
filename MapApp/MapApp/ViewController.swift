@@ -222,6 +222,23 @@ class ViewController: UIViewController {
     private var isFollowingUser = false
     private var isActivelyWalkingRoute = false
     private var hasAlreadyCentered = false
+    
+    //Filter state
+    private var showOnlyFavorites: Bool = false   //means it shows favs and non-favs
+    private var filterByRouteType: Int? = nil   //nil = show all types
+    private var filterByScenicMode: Bool? = nil   //nil = show all, 1 = fastest, 2 = scenic
+    private var sortOption: SortOption = .newestFirst
+    
+    enum SortOption {
+        case newestFirst
+        case oldestFirst
+        case shortestDistance
+        case longestDistance
+        case shortestTime
+        case longestTime
+        case nameAZ
+        case nameZA
+    }
 
     // MARK: - User Preferences
     private var useScenicRouting = false
@@ -376,8 +393,130 @@ extension ViewController {
         routesSearchBar.alpha = 0
         filterButton.alpha = 0
         routesTableView.alpha = 0
+        
+        //drop down for filter button
+        setupFilterMenu()
     }
     
+    private func setupFilterMenu() {
+        //create menu items
+        let showAllAction = UIAction (title: "All Routes", image: UIImage(systemName: "list.bullet")) { [weak self] _ in
+            self?.showOnlyFavorites = false
+            self?.filterByRouteType = nil
+            self?.filterByScenicMode = nil
+            self?.applyFiltersAndSort()
+        }
+        
+        let favoritesAction = UIAction(title: "❤️ Favorites Only", image: UIImage(systemName: "heart.fill")) { [weak self] _ in
+                self?.showOnlyFavorites = true
+                self?.filterByRouteType = nil
+                self?.filterByScenicMode = nil
+                self?.applyFiltersAndSort()
+            }
+            
+            let loopsAction = UIAction(title: "🔄 Loops Only", image: UIImage(systemName: "arrow.triangle.2.circlepath")) { [weak self] _ in
+                self?.showOnlyFavorites = false
+                self?.filterByRouteType = 2  // Loop = 2
+                self?.filterByScenicMode = nil
+                self?.applyFiltersAndSort()
+            }
+            
+            let oneWayAction = UIAction(title: "➡️ One-Way Only", image: UIImage(systemName: "arrow.right")) { [weak self] _ in
+                self?.showOnlyFavorites = false
+                self?.filterByRouteType = 0  // One-Way = 0
+                self?.filterByScenicMode = nil
+                self?.applyFiltersAndSort()
+            }
+            
+            let outBackAction = UIAction(title: "↔️ Out & Back Only", image: UIImage(systemName: "arrow.left.arrow.right")) { [weak self] _ in
+                self?.showOnlyFavorites = false
+                self?.filterByRouteType = 1  // Out & Back = 1
+                self?.filterByScenicMode = nil
+                self?.applyFiltersAndSort()
+            }
+            
+            let scenicAction = UIAction(title: "🌳 Scenic Only", image: UIImage(systemName: "leaf.fill")) { [weak self] _ in
+                self?.filterByScenicMode = true
+                self?.applyFiltersAndSort()
+            }
+            
+            let fastestAction = UIAction(title: "⚡ Fastest Only", image: UIImage(systemName: "bolt.fill")) { [weak self] _ in
+                self?.filterByScenicMode = false
+                self?.applyFiltersAndSort()
+            }
+            
+            // === SORT OPTIONS ===
+            
+            let newestAction = UIAction(title: "📅 Newest First", image: UIImage(systemName: "calendar")) { [weak self] _ in
+                self?.sortOption = .newestFirst
+                self?.applyFiltersAndSort()
+            }
+            
+            let oldestAction = UIAction(title: "📅 Oldest First", image: UIImage(systemName: "calendar.badge.clock")) { [weak self] _ in
+                self?.sortOption = .oldestFirst
+                self?.applyFiltersAndSort()
+            }
+            
+            let shortestDistAction = UIAction(title: "📏 Shortest Distance", image: UIImage(systemName: "ruler")) { [weak self] _ in
+                self?.sortOption = .shortestDistance
+                self?.applyFiltersAndSort()
+            }
+            
+            let longestDistAction = UIAction(title: "📏 Longest Distance", image: UIImage(systemName: "ruler.fill")) { [weak self] _ in
+                self?.sortOption = .longestDistance
+                self?.applyFiltersAndSort()
+            }
+            
+            let shortestTimeAction = UIAction(title: "⏱️ Shortest Time", image: UIImage(systemName: "clock")) { [weak self] _ in
+                self?.sortOption = .shortestTime
+                self?.applyFiltersAndSort()
+            }
+            
+            let longestTimeAction = UIAction(title: "⏱️ Longest Time", image: UIImage(systemName: "clock.fill")) { [weak self] _ in
+                self?.sortOption = .longestTime
+                self?.applyFiltersAndSort()
+            }
+            
+            let nameAZAction = UIAction(title: "🔤 Name (A-Z)", image: UIImage(systemName: "textformat.abc")) { [weak self] _ in
+                self?.sortOption = .nameAZ
+                self?.applyFiltersAndSort()
+            }
+            
+            let nameZAAction = UIAction(title: "🔤 Name (Z-A)", image: UIImage(systemName: "textformat.abc.dottedunderline")) { [weak self] _ in
+                self?.sortOption = .nameZA
+                self?.applyFiltersAndSort()
+            }
+            
+            // Create menu sections
+            let showMenu = UIMenu(title: "Show", options: .displayInline, children: [
+                showAllAction,
+                favoritesAction,
+                loopsAction,
+                oneWayAction,
+                outBackAction,
+                scenicAction,
+                fastestAction
+            ])
+            
+            let sortMenu = UIMenu(title: "Sort By", options: .displayInline, children: [
+                newestAction,
+                oldestAction,
+                shortestDistAction,
+                longestDistAction,
+                shortestTimeAction,
+                longestTimeAction,
+                nameAZAction,
+                nameZAAction
+            ])
+            
+            // Combine into final menu
+            let menu = UIMenu(title: "Filter & Sort", children: [showMenu, sortMenu])
+            
+            // Attach to button
+            filterButton.menu = menu
+            filterButton.showsMenuAsPrimaryAction = true
+        }
+     
     private func calculateRouteSheetHeight() {
         let screenHeight = self.view.bounds.height
         let headerMaxY = self.headerBox.frame.maxY
@@ -1079,10 +1218,11 @@ extension ViewController {
             setRouteSheetHeight(clampedHeight, animated: false)
             gesture.setTranslation(.zero, in: view)
             
+            
         case .ended:
-            if velocity.y < -500 {
+            if velocity.y < -500 {             // Smaller # = harder   (open)
                 expandRouteSheet()
-            } else if velocity.y > 500 {
+            } else if velocity.y > 500 {      // bigger # = harder (close)
                 collapseRouteSheet()
             } else {
                 let midpoint = (routeSheetCollapsedHeight + routeSheetExpandedHeight) / 2
@@ -1721,9 +1861,111 @@ extension ViewController {
         print("🗑️ All routes cleared")
     }
     
-    
-    
-}
+    private func applyFiltersAndSort()
+    {
+        // step 1: look at all routes from DB
+        var results = savedRoutes
+        
+        // step 2: apply "show only favs" filter
+        if showOnlyFavorites {
+            results = results.filter{ route in     // .filter goes through each route and asks if it is X.
+                return route.isFavorite == true}
+        }
+        
+        // step 3: apply "route type filter"
+        if let typeFilter = filterByRouteType {
+            results = results.filter {route in      //EX: if typeFilter = 2(loop) only show loops
+                return route.routeType == typeFilter
+            }
+            
+        }
+        // if vibefilter = true only scenic. false = only fastest
+        if let vibeFilter = filterByScenicMode {
+            results = results.filter {route in
+                return route.isScenicMode == vibeFilter}
+        }
+        
+        // step 4: sort remaining routes
+        switch sortOption {
+                case .newestFirst:
+                    // Sort by date, newest at top
+                    results.sort { route1, route2 in
+                        guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
+                        return date1 > date2  // > means descending (newest first)
+                    }
+                    
+                case .oldestFirst:
+                    // Sort by date, oldest at top
+                    results.sort { route1, route2 in
+                        guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
+                        return date1 < date2  // < means ascending (oldest first)
+                    }
+                    
+                case .shortestDistance:
+                    // Sort by distance, shortest at top
+                    results.sort { route1, route2 in
+                        return route1.targetDistance < route2.targetDistance
+                    }
+                    
+                case .longestDistance:
+                    // Sort by distance, longest at top
+                    results.sort { route1, route2 in
+                        return route1.targetDistance > route2.targetDistance
+                    }
+                
+            case .shortestTime:
+                // UPDATE: later will need to make more complex when other feats added
+                results.sort{ route1, route2 in
+                    // estimate time = distance/speed
+                    // using avg walking speed (same as route info label
+                    let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.2369 : 3.5
+                    let time1 = (route1.targetDistance / speedMPH) * 60  //mins
+                    let time2 = (route2.targetDistance / speedMPH) * 60
+                    return time1 < time2
+                }
+                
+            case .longestTime:
+                // UPDATE: later will need to make more complex when other feats added
+                results.sort { route1, route2 in
+                    let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
+                    let time1 = (route1.targetDistance / speedMPH) * 60
+                    let time2 = (route2.targetDistance / speedMPH) * 60
+                    
+                    return time1 > time2
+                }
+                
+            case .nameAZ:
+                // alphabetical A->Z
+                results.sort{ route1, route2 in
+                    let name1 = route1.name ?? "Unnamed"
+                    let name2 = route2.name ?? "Unnamed"
+                    return name1 < name2
+                    
+                }
+                
+            case .nameZA:
+                // alphabetical Z->A
+                results.sort{route1, route2 in
+                    let name1 = route1.name ?? "Unnamed"
+                    let name2 = route2.name ?? "Unnamed"
+                    return name1 > name2
+                    
+                }
+            }
+            
+            // step 5: update what table displays
+            filteredRoutes = results
+            
+            // step 6: refersth table to display new stuff
+            routesTableView.reloadData()
+            
+            // Debug: show what happened
+            print("Applied filters: \(results.count) routes match")
+            
+            
+        }
+        
+    }
 // MARK: - UIGestureRecognizerDelegate
 extension ViewController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -1731,13 +1973,21 @@ extension ViewController: UIGestureRecognizerDelegate {
         return true
     }
     
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        
-        return false
-    }
-    
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-
+        if gestureRecognizer == routeHistorySheet.gestureRecognizers?.first(where: { $0 is UIPanGestureRecognizer}) {
+            let location = gestureRecognizer.location(in: routeHistorySheet)
+            
+            // convert location to table view coords
+            let tableLocation = routeHistorySheet.convert(location, to: routesTableView)
+            
+            // if touch is inside the table view bounds dont allow sheet pan
+            if routesTableView.bounds.contains(tableLocation) && routesTableView.alpha > 0 {
+                return false // disable sheet pan- let table scroll instead
+            }
+            
+            //otherwise let it pan (touching pill, search bar, or bg
+            return true
+        }
         return true
     }
 }
