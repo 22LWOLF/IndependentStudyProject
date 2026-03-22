@@ -222,14 +222,16 @@ class ViewController: UIViewController {
     private var isFollowingUser = false
     private var isActivelyWalkingRoute = false
     private var hasAlreadyCentered = false
+    private var isReloadingExistingRoute = false
     
     //Filter state
     private var showOnlyFavorites: Bool = false   //means it shows favs and non-favs
     private var filterByRouteType: Int? = nil   //nil = show all types
     private var filterByScenicMode: Bool? = nil   //nil = show all, 1 = fastest, 2 = scenic
-    private var sortOption: SortOption = .newestFirst
+    private var sortOption: SortOption = .none
     
     enum SortOption {
+        case none
         case newestFirst
         case oldestFirst
         case shortestDistance
@@ -290,6 +292,7 @@ class ViewController: UIViewController {
         setupUI()
         loadSavedSpeeds()
         setupRouteHistorySheet()
+        CoreDataManager.shared.migrateExistingRoutes()
         
     }
 
@@ -399,123 +402,228 @@ extension ViewController {
     }
     
     private func setupFilterMenu() {
-        //create menu items
-        let showAllAction = UIAction (title: "All Routes", image: UIImage(systemName: "list.bullet")) { [weak self] _ in
+        // === SHOW FILTERS ===
+        
+        let showAllAction = UIAction(
+            title: "All Routes",
+            image: UIImage(systemName: "list.bullet"),
+            state: (!showOnlyFavorites && filterByRouteType == nil && filterByScenicMode == nil) ? .on : .off
+        ) { [weak self] _ in
             self?.showOnlyFavorites = false
             self?.filterByRouteType = nil
             self?.filterByScenicMode = nil
             self?.applyFiltersAndSort()
         }
         
-        let favoritesAction = UIAction(title: "❤️ Favorites Only", image: UIImage(systemName: "heart.fill")) { [weak self] _ in
-                self?.showOnlyFavorites = true
-                self?.filterByRouteType = nil
-                self?.filterByScenicMode = nil
-                self?.applyFiltersAndSort()
-            }
-            
-            let loopsAction = UIAction(title: "🔄 Loops Only", image: UIImage(systemName: "arrow.triangle.2.circlepath")) { [weak self] _ in
-                self?.showOnlyFavorites = false
-                self?.filterByRouteType = 2  // Loop = 2
-                self?.filterByScenicMode = nil
-                self?.applyFiltersAndSort()
-            }
-            
-            let oneWayAction = UIAction(title: "➡️ One-Way Only", image: UIImage(systemName: "arrow.right")) { [weak self] _ in
-                self?.showOnlyFavorites = false
-                self?.filterByRouteType = 0  // One-Way = 0
-                self?.filterByScenicMode = nil
-                self?.applyFiltersAndSort()
-            }
-            
-            let outBackAction = UIAction(title: "↔️ Out & Back Only", image: UIImage(systemName: "arrow.left.arrow.right")) { [weak self] _ in
-                self?.showOnlyFavorites = false
-                self?.filterByRouteType = 1  // Out & Back = 1
-                self?.filterByScenicMode = nil
-                self?.applyFiltersAndSort()
-            }
-            
-            let scenicAction = UIAction(title: "🌳 Scenic Only", image: UIImage(systemName: "leaf.fill")) { [weak self] _ in
-                self?.filterByScenicMode = true
-                self?.applyFiltersAndSort()
-            }
-            
-            let fastestAction = UIAction(title: "⚡ Fastest Only", image: UIImage(systemName: "bolt.fill")) { [weak self] _ in
-                self?.filterByScenicMode = false
-                self?.applyFiltersAndSort()
-            }
-            
-            // === SORT OPTIONS ===
-            
-            let newestAction = UIAction(title: "📅 Newest First", image: UIImage(systemName: "calendar")) { [weak self] _ in
-                self?.sortOption = .newestFirst
-                self?.applyFiltersAndSort()
-            }
-            
-            let oldestAction = UIAction(title: "📅 Oldest First", image: UIImage(systemName: "calendar.badge.clock")) { [weak self] _ in
-                self?.sortOption = .oldestFirst
-                self?.applyFiltersAndSort()
-            }
-            
-            let shortestDistAction = UIAction(title: "📏 Shortest Distance", image: UIImage(systemName: "ruler")) { [weak self] _ in
-                self?.sortOption = .shortestDistance
-                self?.applyFiltersAndSort()
-            }
-            
-            let longestDistAction = UIAction(title: "📏 Longest Distance", image: UIImage(systemName: "ruler.fill")) { [weak self] _ in
-                self?.sortOption = .longestDistance
-                self?.applyFiltersAndSort()
-            }
-            
-            let shortestTimeAction = UIAction(title: "⏱️ Shortest Time", image: UIImage(systemName: "clock")) { [weak self] _ in
-                self?.sortOption = .shortestTime
-                self?.applyFiltersAndSort()
-            }
-            
-            let longestTimeAction = UIAction(title: "⏱️ Longest Time", image: UIImage(systemName: "clock.fill")) { [weak self] _ in
-                self?.sortOption = .longestTime
-                self?.applyFiltersAndSort()
-            }
-            
-            let nameAZAction = UIAction(title: "🔤 Name (A-Z)", image: UIImage(systemName: "textformat.abc")) { [weak self] _ in
-                self?.sortOption = .nameAZ
-                self?.applyFiltersAndSort()
-            }
-            
-            let nameZAAction = UIAction(title: "🔤 Name (Z-A)", image: UIImage(systemName: "textformat.abc.dottedunderline")) { [weak self] _ in
-                self?.sortOption = .nameZA
-                self?.applyFiltersAndSort()
-            }
-            
-            // Create menu sections
-            let showMenu = UIMenu(title: "Show", options: .displayInline, children: [
-                showAllAction,
-                favoritesAction,
-                loopsAction,
-                oneWayAction,
-                outBackAction,
-                scenicAction,
-                fastestAction
-            ])
-            
-            let sortMenu = UIMenu(title: "Sort By", options: .displayInline, children: [
-                newestAction,
-                oldestAction,
-                shortestDistAction,
-                longestDistAction,
-                shortestTimeAction,
-                longestTimeAction,
-                nameAZAction,
-                nameZAAction
-            ])
-            
-            // Combine into final menu
-            let menu = UIMenu(title: "Filter & Sort", children: [showMenu, sortMenu])
-            
-            // Attach to button
-            filterButton.menu = menu
-            filterButton.showsMenuAsPrimaryAction = true
+        let favoritesAction = UIAction(
+            title: "❤️ Favorites Only",
+            image: UIImage(systemName: "heart.fill"),
+            state: showOnlyFavorites ? .on : .off
+        ) { [weak self] _ in
+            self?.showOnlyFavorites = true
+            self?.filterByRouteType = nil
+            self?.filterByScenicMode = nil
+            self?.applyFiltersAndSort()
         }
+        
+        let loopsAction = UIAction(
+            title: "🔄 Loops Only",
+            image: UIImage(systemName: "arrow.triangle.2.circlepath"),
+            state: filterByRouteType == 2 ? .on : .off
+        ) { [weak self] _ in
+            self?.showOnlyFavorites = false
+            self?.filterByRouteType = 2
+            self?.filterByScenicMode = nil
+            self?.applyFiltersAndSort()
+        }
+        
+        let oneWayAction = UIAction(
+            title: "➡️ One-Way Only",
+            image: UIImage(systemName: "arrow.right"),
+            state: filterByRouteType == 0 ? .on : .off
+        ) { [weak self] _ in
+            self?.showOnlyFavorites = false
+            self?.filterByRouteType = 0
+            self?.filterByScenicMode = nil
+            self?.applyFiltersAndSort()
+        }
+        
+        let outBackAction = UIAction(
+            title: "↔️ Out & Back Only",
+            image: UIImage(systemName: "arrow.left.arrow.right"),
+            state: filterByRouteType == 1 ? .on : .off
+        ) { [weak self] _ in
+            self?.showOnlyFavorites = false
+            self?.filterByRouteType = 1
+            self?.filterByScenicMode = nil
+            self?.applyFiltersAndSort()
+        }
+        
+        let scenicAction = UIAction(
+            title: "🌳 Scenic Only",
+            image: UIImage(systemName: "leaf.fill"),
+            state: filterByScenicMode == true ? .on : .off
+        ) { [weak self] _ in
+            // Toggle: if already on scenic, turn it off
+            if self?.filterByScenicMode == true {
+                self?.filterByScenicMode = nil  // Turn off filter
+            } else {
+                self?.filterByScenicMode = true  // Turn on scenic filter
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let fastestAction = UIAction(
+            title: "⚡ Fastest Only",
+            image: UIImage(systemName: "bolt.fill"),
+            state: filterByScenicMode == false ? .on : .off
+        ) { [weak self] _ in
+            // Toggle: if already on fastest, turn it off
+            if self?.filterByScenicMode == false {
+                self?.filterByScenicMode = nil  // Turn off filter
+            } else {
+                self?.filterByScenicMode = false  // Turn on fastest filter
+            }
+            self?.applyFiltersAndSort()
+        }
+        // === SORT OPTIONS ===
+        
+        // === SORT OPTIONS ===
+
+        let newestAction = UIAction(
+            title: "📅 Newest First",
+            image: UIImage(systemName: "calendar"),
+            state: sortOption == .newestFirst ? .on : .off
+        ) { [weak self] _ in
+            // Toggle: if already on, turn off
+            if self?.sortOption == .newestFirst {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .newestFirst
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let oldestAction = UIAction(
+            title: "📅 Oldest First",
+            image: UIImage(systemName: "calendar.badge.clock"),
+            state: sortOption == .oldestFirst ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .oldestFirst {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .oldestFirst
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let shortestDistAction = UIAction(
+            title: "📏 Shortest Distance",
+            image: UIImage(systemName: "ruler"),
+            state: sortOption == .shortestDistance ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .shortestDistance {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .shortestDistance
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let longestDistAction = UIAction(
+            title: "📏 Longest Distance",
+            image: UIImage(systemName: "ruler.fill"),
+            state: sortOption == .longestDistance ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .longestDistance {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .longestDistance
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let shortestTimeAction = UIAction(
+            title: "⏱️ Shortest Time",
+            image: UIImage(systemName: "clock"),
+            state: sortOption == .shortestTime ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .shortestTime {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .shortestTime
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let longestTimeAction = UIAction(
+            title: "⏱️ Longest Time",
+            image: UIImage(systemName: "clock.fill"),
+            state: sortOption == .longestTime ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .longestTime {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .longestTime
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let nameAZAction = UIAction(
+            title: "🔤 Name (A-Z)",
+            image: UIImage(systemName: "textformat.abc"),
+            state: sortOption == .nameAZ ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .nameAZ {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .nameAZ
+            }
+            self?.applyFiltersAndSort()
+        }
+
+        let nameZAAction = UIAction(
+            title: "🔤 Name (Z-A)",
+            image: UIImage(systemName: "textformat.abc.dottedunderline"),
+            state: sortOption == .nameZA ? .on : .off
+        ) { [weak self] _ in
+            if self?.sortOption == .nameZA {
+                self?.sortOption = .none
+            } else {
+                self?.sortOption = .nameZA
+            }
+            self?.applyFiltersAndSort()
+        }
+      
+        // Create menu sections
+        let showMenu = UIMenu(title: "Show", options: .displayInline, children: [
+            showAllAction,
+            favoritesAction,
+            loopsAction,
+            oneWayAction,
+            outBackAction,
+            scenicAction,
+            fastestAction
+        ])
+        
+        let sortMenu = UIMenu(title: "Sort By", options: .displayInline, children: [
+            newestAction,
+            oldestAction,
+            shortestDistAction,
+            longestDistAction,
+            shortestTimeAction,
+            longestTimeAction,
+            nameAZAction,
+            nameZAAction
+        ])
+        
+        // Combine into final menu
+        let menu = UIMenu(title: "Filter & Sort", children: [showMenu, sortMenu])
+        
+        // Attach to button
+        filterButton.menu = menu
+        filterButton.showsMenuAsPrimaryAction = true
+    }
      
     private func calculateRouteSheetHeight() {
         let screenHeight = self.view.bounds.height
@@ -717,11 +825,46 @@ extension ViewController {
 extension ViewController {
     @IBAction func showCoordinateEntry(_ sender: Any) { presentCoordinateEntryDialog() }
 
-    @IBAction func settingsBTN(_ sender: UIButton) {
-        resetSpeedData()
-        printSavedRoutes()
-        clearAllRoutesFromDatabase()
-    }
+    @IBAction func settingsBTN(_ sender: UIButton) { //TEMPORARY
+        // Show action sheet with options
+            let alert = UIAlertController(title: "Settings", message: "Choose an action", preferredStyle: .actionSheet)
+            
+            // Reset speed data
+            let resetSpeedAction = UIAlertAction(title: "Reset Speed Data", style: .default) { [weak self] _ in
+                self?.resetSpeedData()
+            }
+            
+            // Print saved routes (debug)
+            let printRoutesAction = UIAlertAction(title: "Print Routes (Debug)", style: .default) { [weak self] _ in
+                self?.printSavedRoutes()
+            }
+            
+            // Clear all routes AND reset counter (destructive)
+            let clearAllAction = UIAlertAction(title: "Clear All Routes", style: .destructive) { [weak self] _ in
+                self?.confirmClearAllData()
+            }
+            
+            // Reset Everything (nuclear option)
+            let resetEverythingAction = UIAlertAction(title: "Reset Everything", style: .destructive) { [weak self] _ in
+                self?.confirmResetEverything()
+            }
+            
+            let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+            
+            alert.addAction(resetSpeedAction)
+            alert.addAction(printRoutesAction)
+            alert.addAction(clearAllAction)
+            alert.addAction(resetEverythingAction)
+            alert.addAction(cancelAction)
+            
+            // For iPad (action sheets need a source)
+            if let popover = alert.popoverPresentationController {
+                popover.sourceView = sender
+                popover.sourceRect = sender.bounds
+            }
+            
+            present(alert, animated: true)
+        }
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         let config = buildRouteConfig()
@@ -757,6 +900,7 @@ extension ViewController {
     }
 
     private func generateRandomRoute(config: RouteConfig, targetMiles: Double) {
+        isReloadingExistingRoute = false
         clearPinsAndOverlays()
         let center = determineStartLocation()
         let waypoints = generateWaypoints(for: config, center: center, targetMiles: targetMiles)
@@ -766,6 +910,7 @@ extension ViewController {
     }
 
     private func generateManualRoute(config: RouteConfig) {
+        isReloadingExistingRoute = false 
         guard validatePinCount(for: config.type) else { return }
         requestRoutes(for: config.waypoints, config: config)
     }
@@ -948,7 +1093,15 @@ extension ViewController {
         isActivelyWalkingRoute = true
         isGeneratingRoute = false
         currentRouteType = config.type
-        saveRouteToDatabase(coordinates: coordinates, totalDistance: totalDistance, config: config)
+        
+        // 🆕 UPDATED: Only save if this is a NEW route, not a reload
+        if !isReloadingExistingRoute {
+            saveRouteToDatabase(coordinates: coordinates, totalDistance: totalDistance, config: config)
+            print("💾 Saved new route to database")
+        } else {
+            print("♻️ Reloaded existing route - not saving duplicate")
+            isReloadingExistingRoute = false  // Reset flag for next route
+        }
     }
 
     private func saveRouteToDatabase(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, config: RouteConfig) {
@@ -1613,7 +1766,7 @@ extension ViewController: UITableViewDataSource {
         cell.detailTextLabel?.transform = .identity
 
         // Format the cell
-        let routeName = route.name ?? "Route \(indexPath.row + 1)"
+        let routeName = route.name ?? "Route #\(route.routeNumber)"
         let distance = String(format: "%.2f mi", route.targetDistance)
 
         let routeTypeText: String
@@ -1709,6 +1862,8 @@ extension ViewController {
         print("Loaded \(savedRoutes.count) routes")
     }
     private func loadRouteOnMap(_ route: SavedRoute) {
+        // marks that we are remaking a route not making a new one
+        isReloadingExistingRoute = true
         // clear existing routes
         clearAllRoutes()
         
@@ -1773,6 +1928,78 @@ extension ViewController {
         
         present(alert, animated: true)
         
+        
+        
+        
+    }
+    
+    private func confirmClearAllData() {
+        let alert = UIAlertController(
+            title: "Clear All Routes?",
+            message: "This will permanently delete ALL \(savedRoutes.count) saved routes AND reset route numbering to start from #1 again. This cannot be undone.",
+            preferredStyle: .alert
+        )
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        let deleteAction = UIAlertAction(title: "Delete All & Reset", style: .destructive) { [weak self] _ in
+            self?.clearAllRoutesAndResetCounter()
+        }
+        
+        alert.addAction(cancelAction)
+        alert.addAction(deleteAction)
+        
+        present(alert, animated: true)
+    }
+
+    private func confirmResetEverything() {
+        let alert = UIAlertController(
+            title: "Reset Everything?",
+            message: "This will delete ALL routes, reset route counter, AND reset speed data. This is a complete fresh start and cannot be undone.",
+            preferredStyle: .alert
+        )
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        let resetAction = UIAlertAction(title: "Reset Everything", style: .destructive) { [weak self] _ in
+            self?.resetEverythingToDefaults()
+        }
+        
+        alert.addAction(cancelAction)
+        alert.addAction(resetAction)
+        
+        present(alert, animated: true)
+    }
+
+    private func clearAllRoutesAndResetCounter() {
+        // Delete all routes from Core Data
+        for route in savedRoutes {
+            CoreDataManager.shared.deleteRoute(route)
+        }
+        
+        // Reset route counter
+        CoreDataManager.shared.resetRouteCounter()
+        
+        // Clear arrays
+        savedRoutes.removeAll()
+        filteredRoutes.removeAll()
+        
+        // Reload table
+        routesTableView.reloadData()
+        
+        print("🗑️ All routes cleared and counter reset")
+        showInfoAlert(message: "All routes deleted. Next route will be Route #1")
+    }
+
+    private func resetEverythingToDefaults() {
+        // Clear all routes and reset counter
+        clearAllRoutesAndResetCounter()
+        
+        // Reset speed data
+        resetSpeedData()
+        
+        print("♻️ Everything reset to defaults")
+        showInfoAlert(message: "Everything reset! Fresh start.")
     }
     
     private func deleteRoute(at indexPath: IndexPath) {
@@ -1846,20 +2073,20 @@ extension ViewController {
     }
     
     private func clearAllRoutesFromDatabase() {
-        // Delete all routes from Core Data
-        for route in savedRoutes {
-            CoreDataManager.shared.deleteRoute(route)
+            // Delete all routes from Core Data
+            for route in savedRoutes {
+                CoreDataManager.shared.deleteRoute(route)
+            }
+            
+            // Clear arrays
+            savedRoutes.removeAll()
+            filteredRoutes.removeAll()
+            
+            // Reload table
+            routesTableView.reloadData()
+            
+            print("🗑️ All routes cleared (counter NOT reset)")
         }
-        
-        // Clear arrays
-        savedRoutes.removeAll()
-        filteredRoutes.removeAll()
-        
-        // Reload table
-        routesTableView.reloadData()
-        
-        print("🗑️ All routes cleared")
-    }
     
     private func applyFiltersAndSort()
     {
@@ -1887,6 +2114,9 @@ extension ViewController {
         
         // step 4: sort remaining routes
         switch sortOption {
+            
+        case .none:
+            break
                 case .newestFirst:
                     // Sort by date, newest at top
                     results.sort { route1, route2 in
@@ -1958,6 +2188,8 @@ extension ViewController {
             
             // step 6: refersth table to display new stuff
             routesTableView.reloadData()
+        
+            setupFilterMenu() //rebuilds menu to update checkmarks
             
             // Debug: show what happened
             print("Applied filters: \(results.count) routes match")

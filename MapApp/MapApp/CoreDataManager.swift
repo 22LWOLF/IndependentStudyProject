@@ -19,8 +19,8 @@ class CoreDataManager {
         
         // for auto migration
         let description = container.persistentStoreDescriptions.first
-            description?.shouldMigrateStoreAutomatically = true
-            description?.shouldInferMappingModelAutomatically = true
+        description?.shouldMigrateStoreAutomatically = true
+        description?.shouldInferMappingModelAutomatically = true
         
         // Load the database from disk (or create if first launch)
         container.loadPersistentStores { description, error in
@@ -30,6 +30,11 @@ class CoreDataManager {
         }
         return container
     }()
+    
+    func resetRouteCounter() {
+        UserDefaults.standard.set(0, forKey: "routeCounter")
+        print("🔄 Route counter reset to 0")
+    }
     
     // Your workspace for making changes
     var context: NSManagedObjectContext {
@@ -45,6 +50,25 @@ class CoreDataManager {
                 print("Error saving context: \(error)")
             }
         }
+    }
+    
+    // MARK: - Route Counter (for stable route numbers)
+    
+    // Auto-incrementing counter for route numbers
+    private var routeCounter: Int {
+        get {
+            return UserDefaults.standard.integer(forKey: "routeCounter")
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "routeCounter")
+        }
+    }
+    
+    // Get next route number and increment counter
+    private func getNextRouteNumber() -> Int {
+        let number = routeCounter
+        routeCounter = number + 1
+        return number + 1  // Start at 1, not 0
     }
     
     // MARK: - Coordinate Encoding/Decoding
@@ -96,9 +120,12 @@ class CoreDataManager {
         route.wasCompleted = false
         route.isFavorite = false
         
+        // Assign permanent route number
+        route.routeNumber = Int32(getNextRouteNumber())
+        
         // Write to disk
         saveContext()
-        print("Saved route: \(targetDistance) miles")
+        print("✅ Saved route #\(route.routeNumber): \(targetDistance) miles")
     }
     
     // MARK: - Fetch Routes
@@ -121,5 +148,36 @@ class CoreDataManager {
     func deleteRoute(_ route: SavedRoute) {
         context.delete(route)
         saveContext()
+    }
+    
+    // MARK: - Migration Helper
+    
+    // Assign route numbers to existing routes (runs once on app launch)
+    func migrateExistingRoutes() {
+        let routes = fetchAllRoutes()
+        
+        // Find routes without a number
+        let unnumberedRoutes = routes.filter { $0.routeNumber == 0 }
+        
+        if unnumberedRoutes.isEmpty {
+            print("✅ All routes already have numbers")
+            return
+        }
+        
+        print("🔄 Migrating \(unnumberedRoutes.count) routes...")
+        
+        // Sort by creation date (oldest first)
+        let sortedRoutes = unnumberedRoutes.sorted {
+            ($0.createdDate ?? Date.distantPast) < ($1.createdDate ?? Date.distantPast)
+        }
+        
+        // Assign numbers
+        for route in sortedRoutes {
+            route.routeNumber = Int32(getNextRouteNumber())
+            print("  - Assigned #\(route.routeNumber) to route from \(route.createdDate ?? Date())")
+        }
+        
+        saveContext()
+        print("✅ Migration complete!")
     }
 }
