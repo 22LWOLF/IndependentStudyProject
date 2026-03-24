@@ -2268,6 +2268,13 @@ extension ViewController: UIGestureRecognizerDelegate {
 }
 /*
 
+ 
+    This week:
+        Figure out test cases
+    
+        Pacing pattern implemenation
+ 
+        Think about ada compliance.
 
  */
 
