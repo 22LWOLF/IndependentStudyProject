@@ -910,7 +910,7 @@ extension ViewController {
     }
 
     private func generateManualRoute(config: RouteConfig) {
-        isReloadingExistingRoute = false 
+        isReloadingExistingRoute = false
         guard validatePinCount(for: config.type) else { return }
         requestRoutes(for: config.waypoints, config: config)
     }
@@ -1847,10 +1847,26 @@ extension ViewController: UITableViewDelegate {
 // MARK: - UISearchBarDelegate
 extension ViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        // TODO: Filter routes
-        print("Searching for: \(searchText)")
-    }
-}
+        // Step 1: Get the search text and trim whitespace
+                // .trimmingCharacters removes spaces from start/end
+                let searchText = searchText.trimmingCharacters(in: .whitespaces)
+                
+                // Step 2: Apply both search AND filters together
+                applySearchAndFilters(searchText: searchText)
+            }
+            
+            // Called when user taps the search button on keyboard
+            func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+                searchBar.resignFirstResponder()  // Dismiss keyboard
+            }
+            
+            // Called when user taps Cancel button (if visible)
+            func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+                searchBar.text = ""
+                searchBar.resignFirstResponder()
+                applySearchAndFilters(searchText: "")
+            }
+        }
 
 // MARK: - Route History Data
 extension ViewController {
@@ -1904,6 +1920,134 @@ extension ViewController {
         
     }
     
+    private func applySearchAndFilters(searchText: String) {
+        // STEP 1: Start with all routes from database
+        var results = savedRoutes
+        
+        // STEP 2: Apply search filter (if search text exists)
+        if !searchText.isEmpty {
+            results = results.filter { route in
+                // Get route name (or default if unnamed)
+                let routeName = (route.name ?? "Route #\(route.routeNumber)").lowercased()
+                
+                // Get route type as text
+                let routeType: String
+                switch route.routeType {
+                case 0: routeType = "one-way oneway"
+                case 1: routeType = "out back outandback"
+                case 2: routeType = "loop"
+                default: routeType = ""
+                }
+                
+                // Get distance as text
+                let distance = String(format: "%.2f", route.targetDistance)
+                
+                // Get mode
+                let mode = route.isScenicMode ? "scenic" : "fastest"
+                
+                // Get favorite status
+                let favoriteText = route.isFavorite ? "favorite starred" : ""
+                
+                // Combine all searchable fields into one string
+                let searchableText = "\(routeName) \(routeType) \(distance) \(mode) \(favoriteText)"
+                
+                // Check if the search text appears anywhere in searchable text
+                // .lowercased() makes search case-insensitive
+                return searchableText.contains(searchText.lowercased())
+            }
+        }
+        
+        // STEP 3: Apply "show only favorites" filter
+        if showOnlyFavorites {
+            results = results.filter { $0.isFavorite == true }
+        }
+        
+        // STEP 4: Apply "route type" filter
+        if let typeFilter = filterByRouteType {
+            results = results.filter { $0.routeType == typeFilter }
+        }
+        
+        // STEP 5: Apply "route vibe" filter
+        if let vibeFilter = filterByScenicMode {
+            results = results.filter { $0.isScenicMode == vibeFilter }
+        }
+        
+        // STEP 6: Sort the remaining routes
+        switch sortOption {
+        case .none:
+            // No sorting - keep database order
+            break
+            
+        case .newestFirst:
+            results.sort { route1, route2 in
+                guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
+                return date1 > date2
+            }
+            
+        case .oldestFirst:
+            results.sort { route1, route2 in
+                guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
+                return date1 < date2
+            }
+            
+        case .shortestDistance:
+            results.sort { route1, route2 in
+                return route1.targetDistance < route2.targetDistance
+            }
+            
+        case .longestDistance:
+            results.sort { route1, route2 in
+                return route1.targetDistance > route2.targetDistance
+            }
+            
+        case .shortestTime:
+            results.sort { route1, route2 in
+                let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
+                let time1 = (route1.targetDistance / speedMPH) * 60
+                let time2 = (route2.targetDistance / speedMPH) * 60
+                return time1 < time2
+            }
+            
+        case .longestTime:
+            results.sort { route1, route2 in
+                let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
+                let time1 = (route1.targetDistance / speedMPH) * 60
+                let time2 = (route2.targetDistance / speedMPH) * 60
+                return time1 > time2
+            }
+            
+        case .nameAZ:
+            results.sort { route1, route2 in
+                let name1 = route1.name ?? "Route #\(route1.routeNumber)"
+                let name2 = route2.name ?? "Route #\(route2.routeNumber)"
+                return name1 < name2
+            }
+            
+        case .nameZA:
+            results.sort { route1, route2 in
+                let name1 = route1.name ?? "Route #\(route1.routeNumber)"
+                let name2 = route2.name ?? "Route #\(route2.routeNumber)"
+                return name1 > name2
+            }
+        }
+        
+        // STEP 7: Update what table displays
+        filteredRoutes = results
+        
+        // STEP 8: Refresh table to display new stuff
+        routesTableView.reloadData()
+        
+        // STEP 9: Rebuild menu to update checkmarks
+        setupFilterMenu()
+        
+        // Debug: show what happened
+        if searchText.isEmpty {
+            print("🎯 Applied filters: \(results.count) routes match")
+        } else {
+            print("🔍 Search: '\(searchText)' with filters → \(results.count) routes match")
+        }
+    }
+    
     private func confirmDeleteRoute(at indexPath: IndexPath) {
         let route = filteredRoutes[indexPath.row]
         let routeName = route.name ?? "Unnamed Route"
@@ -1951,7 +2095,7 @@ extension ViewController {
         
         present(alert, animated: true)
     }
-
+    
     private func confirmResetEverything() {
         let alert = UIAlertController(
             title: "Reset Everything?",
@@ -1970,7 +2114,7 @@ extension ViewController {
         
         present(alert, animated: true)
     }
-
+    
     private func clearAllRoutesAndResetCounter() {
         // Delete all routes from Core Data
         for route in savedRoutes {
@@ -1990,7 +2134,7 @@ extension ViewController {
         print("🗑️ All routes cleared and counter reset")
         showInfoAlert(message: "All routes deleted. Next route will be Route #1")
     }
-
+    
     private func resetEverythingToDefaults() {
         // Clear all routes and reset counter
         clearAllRoutesAndResetCounter()
@@ -2049,7 +2193,7 @@ extension ViewController {
             
             print("Renamed worked new name is \(newName)")
         }
-    
+        
         alert.addAction(saveAction)
         present(alert,animated: true)
     }
@@ -2073,131 +2217,30 @@ extension ViewController {
     }
     
     private func clearAllRoutesFromDatabase() {
-            // Delete all routes from Core Data
-            for route in savedRoutes {
-                CoreDataManager.shared.deleteRoute(route)
-            }
-            
-            // Clear arrays
-            savedRoutes.removeAll()
-            filteredRoutes.removeAll()
-            
-            // Reload table
-            routesTableView.reloadData()
-            
-            print("🗑️ All routes cleared (counter NOT reset)")
+        // Delete all routes from Core Data
+        for route in savedRoutes {
+            CoreDataManager.shared.deleteRoute(route)
         }
+        
+        // Clear arrays
+        savedRoutes.removeAll()
+        filteredRoutes.removeAll()
+        
+        // Reload table
+        routesTableView.reloadData()
+        
+        print("🗑️ All routes cleared (counter NOT reset)")
+    }
     
     private func applyFiltersAndSort()
     {
-        // step 1: look at all routes from DB
-        var results = savedRoutes
+        // Get current search text (if any)
+        let searchText = routesSearchBar.text?.trimmingCharacters(in: .whitespaces) ?? ""
         
-        // step 2: apply "show only favs" filter
-        if showOnlyFavorites {
-            results = results.filter{ route in     // .filter goes through each route and asks if it is X.
-                return route.isFavorite == true}
-        }
-        
-        // step 3: apply "route type filter"
-        if let typeFilter = filterByRouteType {
-            results = results.filter {route in      //EX: if typeFilter = 2(loop) only show loops
-                return route.routeType == typeFilter
-            }
-            
-        }
-        // if vibefilter = true only scenic. false = only fastest
-        if let vibeFilter = filterByScenicMode {
-            results = results.filter {route in
-                return route.isScenicMode == vibeFilter}
-        }
-        
-        // step 4: sort remaining routes
-        switch sortOption {
-            
-        case .none:
-            break
-                case .newestFirst:
-                    // Sort by date, newest at top
-                    results.sort { route1, route2 in
-                        guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
-                        return date1 > date2  // > means descending (newest first)
-                    }
-                    
-                case .oldestFirst:
-                    // Sort by date, oldest at top
-                    results.sort { route1, route2 in
-                        guard let date1 = route1.createdDate, let date2 = route2.createdDate else { return false }
-                        return date1 < date2  // < means ascending (oldest first)
-                    }
-                    
-                case .shortestDistance:
-                    // Sort by distance, shortest at top
-                    results.sort { route1, route2 in
-                        return route1.targetDistance < route2.targetDistance
-                    }
-                    
-                case .longestDistance:
-                    // Sort by distance, longest at top
-                    results.sort { route1, route2 in
-                        return route1.targetDistance > route2.targetDistance
-                    }
-                
-            case .shortestTime:
-                // UPDATE: later will need to make more complex when other feats added
-                results.sort{ route1, route2 in
-                    // estimate time = distance/speed
-                    // using avg walking speed (same as route info label
-                    let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.2369 : 3.5
-                    let time1 = (route1.targetDistance / speedMPH) * 60  //mins
-                    let time2 = (route2.targetDistance / speedMPH) * 60
-                    return time1 < time2
-                }
-                
-            case .longestTime:
-                // UPDATE: later will need to make more complex when other feats added
-                results.sort { route1, route2 in
-                    let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
-                    let time1 = (route1.targetDistance / speedMPH) * 60
-                    let time2 = (route2.targetDistance / speedMPH) * 60
-                    
-                    return time1 > time2
-                }
-                
-            case .nameAZ:
-                // alphabetical A->Z
-                results.sort{ route1, route2 in
-                    let name1 = route1.name ?? "Unnamed"
-                    let name2 = route2.name ?? "Unnamed"
-                    return name1 < name2
-                    
-                }
-                
-            case .nameZA:
-                // alphabetical Z->A
-                results.sort{route1, route2 in
-                    let name1 = route1.name ?? "Unnamed"
-                    let name2 = route2.name ?? "Unnamed"
-                    return name1 > name2
-                    
-                }
-            }
-            
-            // step 5: update what table displays
-            filteredRoutes = results
-            
-            // step 6: refersth table to display new stuff
-            routesTableView.reloadData()
-        
-            setupFilterMenu() //rebuilds menu to update checkmarks
-            
-            // Debug: show what happened
-            print("Applied filters: \(results.count) routes match")
-            
-            
-        }
-        
+        // Apply both search and filters together
+        applySearchAndFilters(searchText: searchText)
     }
+}
 // MARK: - UIGestureRecognizerDelegate
 extension ViewController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
