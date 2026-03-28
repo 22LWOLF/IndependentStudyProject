@@ -320,6 +320,7 @@ class ViewController: UIViewController {
     
     // MARK: - Pace Configuration State
     private var paceOrder: [PaceSegmentConfig] = []
+    private var pacePercentLables: [UILabel] = []
     
 
     enum RouteSheetState {
@@ -887,7 +888,7 @@ extension ViewController {
     
     private func setupPacePanelContent() {
         let padding: CGFloat = 12
-        var currentY: CGFloat = 20
+        var currentY: CGFloat = 0
         
         // === SECTION 1: VERTICAL SLIDERS ===
         currentY = addPaceSectionHeader(to: pacePanel, text: "PACE MIX", y: currentY, padding: padding)
@@ -900,7 +901,7 @@ extension ViewController {
         let walkContainer = createVerticalSlider(
             label: "W",
             color: .systemGreen,
-            x: 10,
+            x: 0,
             action: #selector(paceSliderChanged(_:))
         )
         sliderContainer.addSubview(walkContainer)
@@ -914,7 +915,7 @@ extension ViewController {
         )
         sliderContainer.addSubview(jogContainer)
         
-        currentY += 170
+        currentY += 160
         
         // === SECTION 2: RUN PERCENTAGE (CALCULATED) ===
         let runLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 40))
@@ -927,19 +928,19 @@ extension ViewController {
         pacePanel.addSubview(runLabel)
         runPercentLabel = runLabel
         
-        currentY += 50
+        currentY += 40
         
         // === SECTION 3: PACE ORDER CHIPS ===
         currentY = addPaceSectionHeader(to: pacePanel, text: "PACE ORDER", y: currentY, padding: padding)
         
         // Horizontal stack for chips
-        paceChipsContainer = UIStackView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 100))
+        paceChipsContainer = UIStackView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 65))
         paceChipsContainer.axis = .horizontal
         paceChipsContainer.spacing = 4
         paceChipsContainer.distribution = .fillEqually
         pacePanel.addSubview(paceChipsContainer)
         
-        currentY += 110
+        currentY += 75
         
         // === SECTION 4: BUTTONS ===
         // Randomize percentages button
@@ -951,7 +952,7 @@ extension ViewController {
         )
         pacePanel.addSubview(randomizePercentButton)
         
-        currentY += 45
+        currentY += 44
         
         // Shuffle order button
         let shuffleOrderButton = createPaceButton(
@@ -978,7 +979,7 @@ extension ViewController {
         container.addSubview(labelView)
         
         // Vertical slider
-        let slider = UISlider(frame: CGRect(x: 15, y: 25, width: 100, height: 20))
+        let slider = UISlider(frame: CGRect(x: -24, y: 60, width: 100, height: 20))
         slider.transform = CGAffineTransform(rotationAngle: -CGFloat.pi / 2)  // Rotate to vertical
         slider.minimumValue = 0
         slider.maximumValue = 1
@@ -1859,13 +1860,63 @@ extension ViewController {
     }
     
     private func updatePaceChips() {
-        // Clear existing chips
-        paceChipsContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // If first time, build chips and capture percent labels
+        if paceChipsContainer.arrangedSubviews.isEmpty {
+            pacePercentLabels.removeAll()
+            for (index, pace) in paceOrder.enumerated() {
+                let chip = createPaceChip(pace: pace, index: index)
+                
+                // Find the percent label we created in createPaceChip and keep a reference
+                if let percentLabel = chip.subviews.compactMap({ $0 as? UILabel }).last {
+                    pacePercentLabels.append(percentLabel)
+                } else {
+                    // Fallback: create a new label if structure changes
+                    let fallback = UILabel()
+                    fallback.font = .systemFont(ofSize: 10, weight: .bold)
+                    fallback.textAlignment = .center
+                    fallback.textColor = pace.color
+                    fallback.text = "\(Int(pace.percentage * 100))%"
+                    fallback.translatesAutoresizingMaskIntoConstraints = false
+                    chip.addSubview(fallback)
+                    NSLayoutConstraint.activate([
+                        fallback.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+                        fallback.bottomAnchor.constraint(equalTo: chip.bottomAnchor, constant: -6)
+                    ])
+                    pacePercentLabels.append(fallback)
+                }
+                
+                paceChipsContainer.addArrangedSubview(chip)
+            }
+            return
+        }
         
-        // Create new chips in current order
-        for (index, pace) in paceOrder.enumerated() {
-            let chip = createPaceChip(pace: pace, index: index)
-            paceChipsContainer.addArrangedSubview(chip)
+        // Otherwise, update existing labels with animation
+        for (i, pace) in paceOrder.enumerated() {
+            guard i < pacePercentLabels.count else { continue }
+            let label = pacePercentLabels[i]
+            let newText = "\(Int(pace.percentage * 100))%"
+            
+            // Only animate if the text actually changes
+            if label.text != newText {
+                crossfadeText(label: label, to: newText)
+            }
+        }
+    }
+    
+    // animation
+    private func crossfadeText(label: UILabel, to newText: String) {
+        UIView.transition(with: label, duration: 0.12, options: .transitionCrossDissolve, animations: {
+            label.text = newText
+        }, completion: nil)
+    }
+    // animation
+    private func pop(label: UILabel) {
+        UIView.animate(withDuration: 0.08, animations: {
+            label.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+        }) { _ in
+            UIView.animate(withDuration: 0.08) {
+                label.transform = .identity
+            }
         }
     }
     
