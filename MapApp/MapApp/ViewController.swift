@@ -320,7 +320,7 @@ class ViewController: UIViewController {
     
     // MARK: - Pace Configuration State
     private var paceOrder: [PaceSegmentConfig] = []
-    private var pacePercentLables: [UILabel] = []
+    private var pacePercentLabels: [UILabel] = []
     
 
     enum RouteSheetState {
@@ -1855,6 +1855,8 @@ extension ViewController {
                 }
             }
         }
+        print("Walk: \(Int(walk * 100))%, Jog: \(Int(jog * 100))%, Run: \(Int(run * 100))%")
+        print("walkLabel: \(walkPercentLabel.text ?? "nil"), jogLabel: \(jogPercentLabel.text ?? "nil"), runLabel: \(runPercentLabel.text ?? "nil")")
         
         updatePaceChips()
     }
@@ -1987,8 +1989,15 @@ extension ViewController {
     
     @objc private func shufflePaceOrder() {
         paceOrder.shuffle()
-        updatePaceChips()
-        
+        // Rebuild only the arrangement (not labels)
+        UIView.animate(withDuration: 0.2) {
+            self.paceChipsContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            for (index, _) in self.paceOrder.enumerated() {
+                // Reuse existing chips by index if you store them, OR recreate chips here
+                // If you recreate, also rebuild pacePercentLabels accordingly.
+            }
+            self.view.layoutIfNeeded()
+        }
         print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
@@ -2697,6 +2706,11 @@ extension ViewController: UIGestureRecognizerDelegate {
         Pacing pattern implemenation
  
         Think about ada compliance.
+ 
+ 
+ 
+ 
+ issue when user does manual manipulaiton of order it is only swapping percents not the image and color with the percents. This started happening after the fix for the flashing. Also if possible I would like to make it to where you drag and drop the order instead of the click and it instatnly teleporting to the left or right it isn't very intutive.
 
  */
 
