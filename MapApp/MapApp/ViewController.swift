@@ -25,6 +25,7 @@ class StyledPolyline: MKPolyline {
     var legIndex: Int = 0
     enum Mode { case fastest, scenic }
     var mode: Mode = .fastest
+    var paceType: PaceType? = nil
 }
 
 // MARK: - Custom Table Cell
@@ -320,6 +321,7 @@ class ViewController: UIViewController {
     
     // MARK: - Pace Configuration State
     private var paceOrder: [PaceSegmentConfig] = []
+    private var lastPaceOrder: [PaceType] = []
     private var pacePercentLabels: [UILabel] = []
     
 
@@ -1332,7 +1334,20 @@ extension ViewController {
         isGeneratingRoute = false
         currentRouteType = config.type
         
-        // 🆕 UPDATED: Only save if this is a NEW route, not a reload
+        if !paceOrder.isEmpty {
+               let pacedSegments = applyPaceToRoute(coordinates: coordinates, totalDistance: totalDistance)
+               
+               // Remove existing overlays
+               mapView.removeOverlays(mapView.overlays)
+               
+               // Add paced segments
+               for segment in pacedSegments {
+                   mapView.addOverlay(segment)
+               }
+           }
+           
+        
+        // UPDATED: Only save if this is a NEW route, not a reload
         if !isReloadingExistingRoute {
             saveRouteToDatabase(coordinates: coordinates, totalDistance: totalDistance, config: config)
             print("💾 Saved new route to database")
@@ -1378,6 +1393,78 @@ extension ViewController {
         let miles = distance / 1609.34
         let minutes = time / 60.0
         routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", miles, minutes)
+    }
+}
+
+// MARK: - Pace Segment Calculation
+extension ViewController {
+    private func applyPaceToRoute(coordinates: [CLLocationCoordinate2D], totalDistance: Double) -> [StyledPolyline] {
+        guard !paceOrder.isEmpty else {
+            // No pacing - return single segment
+            let polyline = StyledPolyline(coordinates: coordinates, count: coordinates.count)
+            return [polyline]
+        }
+        
+        print("🎨 Applying pace pattern to route...")
+        
+        // Calculate segment boundaries based on pace order
+        var segmentBoundaries: [(distance: Double, paceType: PaceType)] = []
+        var accumulatedDistance: Double = 0
+        
+        for pace in paceOrder {
+            accumulatedDistance += pace.percentage * totalDistance
+            segmentBoundaries.append((accumulatedDistance, pace.paceType))
+            print("  - \(pace.paceType.rawValue): 0 → \(Int(accumulatedDistance))m")
+        }
+        
+        // Walk through route coordinates and create segments
+        var polylines: [StyledPolyline] = []
+        var currentDistance: Double = 0
+        var currentSegmentCoords: [CLLocationCoordinate2D] = [coordinates[0]]
+        var boundaryIndex = 0
+        var currentPace = paceOrder[0].paceType
+        
+        for i in 1..<coordinates.count {
+            let prev = coordinates[i-1]
+            let curr = coordinates[i]
+            
+            let prevLocation = CLLocation(latitude: prev.latitude, longitude: prev.longitude)
+            let currLocation = CLLocation(latitude: curr.latitude, longitude: curr.longitude)
+            let segmentLength = prevLocation.distance(from: currLocation)
+            
+            currentDistance += segmentLength
+            currentSegmentCoords.append(curr)
+            
+            // Check if we've crossed into next pace segment
+            if boundaryIndex < segmentBoundaries.count &&
+               currentDistance >= segmentBoundaries[boundaryIndex].distance {
+                
+                // Save current segment
+                let polyline = StyledPolyline(coordinates: currentSegmentCoords, count: currentSegmentCoords.count)
+                polyline.paceType = currentPace
+                polylines.append(polyline)
+                
+                print("  ✅ Created \(currentPace.rawValue) segment: \(currentSegmentCoords.count) coords")
+                
+                // Start new segment
+                boundaryIndex += 1
+                if boundaryIndex < paceOrder.count {
+                    currentPace = paceOrder[boundaryIndex].paceType
+                }
+                currentSegmentCoords = [curr]  // Start next segment from current point
+            }
+        }
+        
+        // Save final segment
+        if !currentSegmentCoords.isEmpty {
+            let polyline = StyledPolyline(coordinates: currentSegmentCoords, count: currentSegmentCoords.count)
+            polyline.paceType = currentPace
+            polylines.append(polyline)
+            print("  ✅ Created final \(currentPace.rawValue) segment: \(currentSegmentCoords.count) coords")
+        }
+        
+        print("🎨 Total segments created: \(polylines.count)")
+        return polylines
     }
 }
 
@@ -1837,70 +1924,113 @@ extension ViewController {
         jogPercentLabel.text = "\(Int(jog * 100))%"
         runPercentLabel.text = "🐰 Run: \(Int(run * 100))%"
         
-        // Update pace order array (keep existing order, just update percentages)
+        // 🆕 UPDATE: Calculate distances if we have an active route
+        let routeDistance = totalRouteDistance / 1609.34  // Convert meters to miles
+        
+        // Update pace order array
         if paceOrder.isEmpty {
-            // Initialize default order
             paceOrder = [
-                PaceSegmentConfig(paceType: .walk, percentage: walk, distance: 0),
-                PaceSegmentConfig(paceType: .jog, percentage: jog, distance: 0),
-                PaceSegmentConfig(paceType: .run, percentage: run, distance: 0)
+                PaceSegmentConfig(paceType: .walk, percentage: walk, distance: walk * routeDistance),
+                PaceSegmentConfig(paceType: .jog, percentage: jog, distance: jog * routeDistance),
+                PaceSegmentConfig(paceType: .run, percentage: run, distance: run * routeDistance)
             ]
         } else {
-            // Update existing order with new percentages
             for i in 0..<paceOrder.count {
                 switch paceOrder[i].paceType {
-                case .walk: paceOrder[i].percentage = walk
-                case .jog: paceOrder[i].percentage = jog
-                case .run: paceOrder[i].percentage = run
+                case .walk:
+                    paceOrder[i].percentage = walk
+                    paceOrder[i].distance = walk * routeDistance
+                case .jog:
+                    paceOrder[i].percentage = jog
+                    paceOrder[i].distance = jog * routeDistance
+                case .run:
+                    paceOrder[i].percentage = run
+                    paceOrder[i].distance = run * routeDistance
                 }
             }
         }
+        
         print("Walk: \(Int(walk * 100))%, Jog: \(Int(jog * 100))%, Run: \(Int(run * 100))%")
-        print("walkLabel: \(walkPercentLabel.text ?? "nil"), jogLabel: \(jogPercentLabel.text ?? "nil"), runLabel: \(runPercentLabel.text ?? "nil")")
         
         updatePaceChips()
+        
+        //  Redraw route with new pacing if route exists
+        if !currentRouteCoordinates.isEmpty && totalRouteDistance > 0 {
+            let pacedSegments = applyPaceToRoute(coordinates: currentRouteCoordinates, totalDistance: totalRouteDistance)
+            mapView.removeOverlays(mapView.overlays.filter { $0 is StyledPolyline })
+            pacedSegments.forEach { mapView.addOverlay($0) }
+        }
     }
     
     private func updatePaceChips() {
-        // If first time, build chips and capture percent labels
+        let currentOrder = paceOrder.map { $0.paceType }
+        
+        // CHECK 1: Is this the first time? Build from scratch
         if paceChipsContainer.arrangedSubviews.isEmpty {
-            pacePercentLabels.removeAll()
-            for (index, pace) in paceOrder.enumerated() {
-                let chip = createPaceChip(pace: pace, index: index)
-                
-                // Find the percent label we created in createPaceChip and keep a reference
-                if let percentLabel = chip.subviews.compactMap({ $0 as? UILabel }).last {
-                    pacePercentLabels.append(percentLabel)
-                } else {
-                    // Fallback: create a new label if structure changes
-                    let fallback = UILabel()
-                    fallback.font = .systemFont(ofSize: 10, weight: .bold)
-                    fallback.textAlignment = .center
-                    fallback.textColor = pace.color
-                    fallback.text = "\(Int(pace.percentage * 100))%"
-                    fallback.translatesAutoresizingMaskIntoConstraints = false
-                    chip.addSubview(fallback)
-                    NSLayoutConstraint.activate([
-                        fallback.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
-                        fallback.bottomAnchor.constraint(equalTo: chip.bottomAnchor, constant: -6)
-                    ])
-                    pacePercentLabels.append(fallback)
-                }
-                
-                paceChipsContainer.addArrangedSubview(chip)
-            }
+            rebuildPaceChips()
+            lastPaceOrder = currentOrder
             return
         }
         
-        // Otherwise, update existing labels with animation
+        // CHECK 2: Did the ORDER change? (tap/drag to swap)
+        if currentOrder != lastPaceOrder {
+            // Order changed - rebuild with animation
+            rebuildPaceChipsAnimated()
+            lastPaceOrder = currentOrder
+            return
+        }
+        
+        // CHECK 3: Only PERCENTAGES changed (slider moved)
+        // Just update the text labels - no rebuilding!
         for (i, pace) in paceOrder.enumerated() {
             guard i < pacePercentLabels.count else { continue }
             let label = pacePercentLabels[i]
             let newText = "\(Int(pace.percentage * 100))%"
             
-            // Only animate if the text actually changes
             if label.text != newText {
                 crossfadeText(label: label, to: newText)
+            }
+        }
+    }
+    
+    private func rebuildPaceChips() {
+        paceChipsContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        pacePercentLabels.removeAll()
+        
+        for (index, pace) in paceOrder.enumerated() {
+            let chip = createPaceChip(pace: pace, index: index)
+            
+            if let percentLabel = chip.subviews.compactMap({ $0 as? UILabel }).last {
+                pacePercentLabels.append(percentLabel)
+            } else {
+                let fallback = UILabel()
+                fallback.font = .systemFont(ofSize: 10, weight: .bold)
+                fallback.textAlignment = .center
+                fallback.textColor = pace.color
+                fallback.text = "\(Int(pace.percentage * 100))%"
+                fallback.translatesAutoresizingMaskIntoConstraints = false
+                chip.addSubview(fallback)
+                NSLayoutConstraint.activate([
+                    fallback.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+                    fallback.bottomAnchor.constraint(equalTo: chip.bottomAnchor, constant: -6)
+                ])
+                pacePercentLabels.append(fallback)
+            }
+            
+            paceChipsContainer.addArrangedSubview(chip)
+        }
+    }
+    
+    private func rebuildPaceChipsAnimated() {
+        // Fade out old chips
+        UIView.animate(withDuration: 0.15, animations: {
+            self.paceChipsContainer.alpha = 0
+        }) { _ in
+            self.rebuildPaceChips()
+            
+            // Fade in new chips
+            UIView.animate(withDuration: 0.15) {
+                self.paceChipsContainer.alpha = 1
             }
         }
     }
@@ -1956,6 +2086,8 @@ extension ViewController {
         chip.tag = index
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(paceChipTapped(_:)))
         chip.addGestureRecognizer(tapGesture)
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleChipDrag(_:)))
+        chip.addGestureRecognizer(panGesture)
         chip.isUserInteractionEnabled = true
         
         return chip
@@ -1974,6 +2106,68 @@ extension ViewController {
         print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
     
+    @objc private func handleChipDrag(_ gesture: UIPanGestureRecognizer) {
+        guard let draggedChip = gesture.view else { return }
+        let translation = gesture.translation(in: paceChipsContainer)
+        
+        switch gesture.state {
+        case .began:
+            paceChipsContainer.bringSubviewToFront(draggedChip)
+            UIView.animate(withDuration: 0.2) {
+                draggedChip.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+                draggedChip.alpha = 0.8
+            }
+            
+        case .changed:
+            draggedChip.center.x += translation.x
+            gesture.setTranslation(.zero, in: paceChipsContainer)
+            
+            let draggedIndex = draggedChip.tag
+            let chips = paceChipsContainer.arrangedSubviews
+            
+            for (i, otherChip) in chips.enumerated() where i != draggedIndex {
+                if draggedChip.frame.midX > otherChip.frame.minX &&
+                    draggedChip.frame.midX < otherChip.frame.maxX {
+                    paceOrder.swapAt(draggedIndex, i)
+                    paceChipsContainer.removeArrangedSubview(draggedChip)
+                    draggedChip.removeFromSuperview()
+                    paceChipsContainer.insertArrangedSubview(draggedChip, at: i)
+                    
+                    for (updatedIndex, chip) in paceChipsContainer.arrangedSubviews.enumerated() {
+                        chip.tag = updatedIndex
+                    }
+                    
+                    lastPaceOrder = paceOrder.map { $0.paceType }
+                    
+                    UIView.animate(withDuration: 0.2) {
+                        self.paceChipsContainer.layoutIfNeeded()
+                    }
+                    
+                    break
+                }
+            }
+            
+        case .ended, .cancelled:
+            UIView.animate(withDuration: 0.3) {
+                draggedChip.transform = .identity
+                draggedChip.alpha = 1.0
+                self.paceChipsContainer.layoutIfNeeded()
+            }
+            
+            print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
+            
+            // Redraw route with new pace order
+            if !self.currentRouteCoordinates.isEmpty && self.totalRouteDistance > 0 {
+                let pacedSegments = self.applyPaceToRoute(coordinates: self.currentRouteCoordinates, totalDistance: self.totalRouteDistance)
+                self.mapView.removeOverlays(self.mapView.overlays.filter { $0 is StyledPolyline })
+                pacedSegments.forEach { self.mapView.addOverlay($0) }
+            }
+            
+        default:
+            break
+        }
+    }
+    
     @objc private func randomizePacePercentages() {
         // Generate random percentages that sum to 100%
         let walk = Double.random(in: 0...1)
@@ -1989,15 +2183,7 @@ extension ViewController {
     
     @objc private func shufflePaceOrder() {
         paceOrder.shuffle()
-        // Rebuild only the arrangement (not labels)
-        UIView.animate(withDuration: 0.2) {
-            self.paceChipsContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            for (index, _) in self.paceOrder.enumerated() {
-                // Reuse existing chips by index if you store them, OR recreate chips here
-                // If you recreate, also rebuild pacePercentLabels accordingly.
-            }
-            self.view.layoutIfNeeded()
-        }
+        updatePaceChips()
         print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
@@ -2086,6 +2272,24 @@ extension ViewController: MKMapViewDelegate {
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
+            
+            if let paceType = styled.paceType {
+                       // Color based on pace
+                       switch paceType {
+                       case .walk:
+                           renderer.strokeColor = .systemGreen
+                           renderer.lineWidth = 6
+                       case .jog:
+                           renderer.strokeColor = .systemOrange
+                           renderer.lineWidth = 6
+                       case .run:
+                           renderer.strokeColor = .systemRed
+                           renderer.lineWidth = 6
+                       }
+                       return renderer
+                   }
+            
+            
             switch styled.kind {
             case .walked:
                 renderer.strokeColor = UIColor.appPrimary
@@ -2713,4 +2917,3 @@ extension ViewController: UIGestureRecognizerDelegate {
  issue when user does manual manipulaiton of order it is only swapping percents not the image and color with the percents. This started happening after the fix for the flashing. Also if possible I would like to make it to where you drag and drop the order instead of the click and it instatnly teleporting to the left or right it isn't very intutive.
 
  */
-
