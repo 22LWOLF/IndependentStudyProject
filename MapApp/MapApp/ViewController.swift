@@ -190,6 +190,36 @@ struct RouteConfig {
     var direction: String?
 }
 
+// MARK: - Pace Configuration
+struct PaceSegmentConfig {
+    let paceType: PaceType
+    var percentage: Double
+    var distance: Double
+    
+    var icon: String {
+        switch paceType {
+        case .walk: return "🐢"
+        case .jog: return "🏃"
+        case .run: return "🐰"
+        }
+    }
+    
+    var color: UIColor {
+        switch paceType {
+        case .walk: return .systemGreen
+        case .jog: return .systemOrange
+        case .run: return .systemRed
+        }
+    }
+}
+
+enum PaceType: String {
+    case walk = "Walk"
+    case jog = "Jog"
+    case run = "Run"
+}
+
+
 // MARK: - ViewController
 class ViewController: UIViewController {
     // MARK: - Outlets
@@ -214,6 +244,16 @@ class ViewController: UIViewController {
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
     private var progressView = UIProgressView(progressViewStyle: .default)
+    
+    // MARK: - Pace Settings Panel
+    private var pacePanel: UIView!
+    private var walkSlider: UISlider!
+    private var jogSlider: UISlider!
+    private var walkPercentLabel: UILabel!
+    private var jogPercentLabel: UILabel!
+    private var runPercentLabel: UILabel!
+    private var paceChipsContainer: UIStackView!
+    private var isPacePanelOpen = false
 
     // MARK: - State
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
@@ -278,6 +318,9 @@ class ViewController: UIViewController {
     // Just pill visible
     private var routeSheetExpandedHeight: CGFloat = 0
     
+    // MARK: - Pace Configuration State
+    private var paceOrder: [PaceSegmentConfig] = []
+    
 
     enum RouteSheetState {
         case collapsed
@@ -292,7 +335,9 @@ class ViewController: UIViewController {
         setupUI()
         loadSavedSpeeds()
         setupRouteHistorySheet()
+        setupPacePanel()
         CoreDataManager.shared.migrateExistingRoutes()
+        
         
     }
 
@@ -487,8 +532,6 @@ extension ViewController {
             self?.applyFiltersAndSort()
         }
         // === SORT OPTIONS ===
-        
-        // === SORT OPTIONS ===
 
         let newestAction = UIAction(
             title: "📅 Newest First",
@@ -650,7 +693,7 @@ enum BottomSheetState {
 }
 
 
-// MARK: - Slide Panel Setup
+// MARK: - Slide Panel Setup      TEMPORARY: CHANGE SSP TO ROUTESETTINGSPANEL
 extension ViewController {
     private func setupSlidePanel() {
         let screenWidth = view.bounds.width
@@ -821,9 +864,199 @@ extension ViewController {
     }
 }
 
+// MARK: - Pace Panel Setup
+extension ViewController {
+    private func setupPacePanel() {
+        let screenWidth = view.bounds.width
+        let screenHeight = view.bounds.height
+        let panelWidth: CGFloat = 140  // Skinny panel
+        
+        // Create panel (starts off-screen to the left)
+        pacePanel = UIView(frame: CGRect(x: -panelWidth, y: 165, width: panelWidth, height: screenHeight - 450))
+        pacePanel.backgroundColor = .white
+        pacePanel.layer.cornerRadius = 12
+        pacePanel.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]  // Round right corners
+        pacePanel.layer.shadowColor = UIColor.black.cgColor
+        pacePanel.layer.shadowOpacity = 0.2
+        pacePanel.layer.shadowOffset = CGSize(width: 2, height: 0)
+        pacePanel.layer.shadowRadius = 8
+        view.addSubview(pacePanel)
+        
+        setupPacePanelContent()
+    }
+    
+    private func setupPacePanelContent() {
+        let padding: CGFloat = 12
+        var currentY: CGFloat = 20
+        
+        // === SECTION 1: VERTICAL SLIDERS ===
+        currentY = addPaceSectionHeader(to: pacePanel, text: "PACE MIX", y: currentY, padding: padding)
+        
+        // Container for sliders (horizontal layout)
+        let sliderContainer = UIView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 160))
+        pacePanel.addSubview(sliderContainer)
+        
+        // Walk slider (left)
+        let walkContainer = createVerticalSlider(
+            label: "W",
+            color: .systemGreen,
+            x: 10,
+            action: #selector(paceSliderChanged(_:))
+        )
+        sliderContainer.addSubview(walkContainer)
+        
+        // Jog slider (right)
+        let jogContainer = createVerticalSlider(
+            label: "J",
+            color: .systemOrange,
+            x: 70,
+            action: #selector(paceSliderChanged(_:))
+        )
+        sliderContainer.addSubview(jogContainer)
+        
+        currentY += 170
+        
+        // === SECTION 2: RUN PERCENTAGE (CALCULATED) ===
+        let runLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 40))
+        runLabel.text = "🐰 Run: 0%"
+        runLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        runLabel.textAlignment = .center
+        runLabel.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
+        runLabel.layer.cornerRadius = 8
+        runLabel.clipsToBounds = true
+        pacePanel.addSubview(runLabel)
+        runPercentLabel = runLabel
+        
+        currentY += 50
+        
+        // === SECTION 3: PACE ORDER CHIPS ===
+        currentY = addPaceSectionHeader(to: pacePanel, text: "PACE ORDER", y: currentY, padding: padding)
+        
+        // Horizontal stack for chips
+        paceChipsContainer = UIStackView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 100))
+        paceChipsContainer.axis = .horizontal
+        paceChipsContainer.spacing = 4
+        paceChipsContainer.distribution = .fillEqually
+        pacePanel.addSubview(paceChipsContainer)
+        
+        currentY += 110
+        
+        // === SECTION 4: BUTTONS ===
+        // Randomize percentages button
+        let randomizePercentButton = createPaceButton(
+            title: "🎲",
+            color: .systemBlue,
+            y: currentY,
+            action: #selector(randomizePacePercentages)
+        )
+        pacePanel.addSubview(randomizePercentButton)
+        
+        currentY += 45
+        
+        // Shuffle order button
+        let shuffleOrderButton = createPaceButton(
+            title: "🔀",
+            color: .systemPurple,
+            y: currentY,
+            action: #selector(shufflePaceOrder)
+        )
+        pacePanel.addSubview(shuffleOrderButton)
+        
+        // Initialize pace order
+        updatePaceConfiguration()
+    }
+    
+    private func createVerticalSlider(label: String, color: UIColor, x: CGFloat, action: Selector) -> UIView {
+        let container = UIView(frame: CGRect(x: x, y: 0, width: 50, height: 160))
+        
+        // Label on top
+        let labelView = UILabel(frame: CGRect(x: 0, y: 0, width: 50, height: 20))
+        labelView.text = label
+        labelView.font = .systemFont(ofSize: 12, weight: .bold)
+        labelView.textAlignment = .center
+        labelView.textColor = color
+        container.addSubview(labelView)
+        
+        // Vertical slider
+        let slider = UISlider(frame: CGRect(x: 15, y: 25, width: 100, height: 20))
+        slider.transform = CGAffineTransform(rotationAngle: -CGFloat.pi / 2)  // Rotate to vertical
+        slider.minimumValue = 0
+        slider.maximumValue = 1
+        slider.value = 0.33
+        slider.tintColor = color
+        slider.addTarget(self, action: action, for: .valueChanged)
+        container.addSubview(slider)
+        
+        // Store reference
+        if label == "W" {
+            walkSlider = slider
+        } else {
+            jogSlider = slider
+        }
+        
+        // Percentage label at bottom
+        let percentLabel = UILabel(frame: CGRect(x: 0, y: 135, width: 50, height: 20))
+        percentLabel.text = "33%"
+        percentLabel.font = .systemFont(ofSize: 11)
+        percentLabel.textAlignment = .center
+        percentLabel.textColor = .secondaryLabel
+        container.addSubview(percentLabel)
+        
+        // Store reference
+        if label == "W" {
+            walkPercentLabel = percentLabel
+        } else {
+            jogPercentLabel = percentLabel
+        }
+        
+        return container
+    }
+    
+    private func createPaceButton(title: String, color: UIColor, y: CGFloat, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.frame = CGRect(x: 12, y: y, width: pacePanel.frame.width - 24, height: 36)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 20)
+        button.backgroundColor = color.withAlphaComponent(0.1)
+        button.setTitleColor(color, for: .normal)
+        button.layer.cornerRadius = 8
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+    
+    private func addPaceSectionHeader(to container: UIView, text: String, y: CGFloat, padding: CGFloat) -> CGFloat {
+        let label = UILabel(frame: CGRect(x: padding, y: y, width: container.frame.width - (padding * 2), height: 20))
+        label.text = text
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = .systemGray
+        label.textAlignment = .center
+        container.addSubview(label)
+        return y + 25
+    }
+}
+
+// MARK: - Pace Panel Toggle
+extension ViewController {
+    private func openPacePanel() {
+        UIView.animate(withDuration: 0.3) {
+            self.pacePanel.frame.origin.x = 0
+        }
+        isPacePanelOpen = true
+    }
+    
+    private func closePacePanel() {
+        UIView.animate(withDuration: 0.3) {
+            self.pacePanel.frame.origin.x = -self.pacePanel.frame.width
+        }
+        isPacePanelOpen = false
+    }
+}
+
 // MARK: - IBActions
 extension ViewController {
     @IBAction func showCoordinateEntry(_ sender: Any) { presentCoordinateEntryDialog() }
+    
+    
 
     @IBAction func settingsBTN(_ sender: UIButton) { //TEMPORARY
         // Show action sheet with options
@@ -888,9 +1121,13 @@ extension ViewController {
 
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
         animateSettingsCog(sender)
-        isPanelOpen ? closePanel() : openPanel()
+        isPanelOpen ? closePanel() : openPanel()}
+        
+    @IBAction func paceSettingsButtonTapped(_ sender: UIButton) {
+        animateSettingsCog(sender)  // Reuse your rotation animation
+        isPacePanelOpen ? closePacePanel() : openPacePanel()
+        }
     }
-}
 
 // MARK: - Route Building
 extension ViewController {
@@ -1502,7 +1739,7 @@ extension ViewController {
     }
 }
 
-// MARK: - @objc Handlers
+// MARK: - @objc Handlers     TEMPORARY NEED TO ADD SECTION FOR EACH AREA
 extension ViewController {
     @objc private func handleMapTap(_ gesture: UITapGestureRecognizer) {
         let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
@@ -1568,6 +1805,140 @@ extension ViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(goAction)
         present(alert, animated: true)
+    }
+}
+
+// MARK: - Pace Panel Actions
+extension ViewController {
+    @objc private func paceSliderChanged(_ sender: UISlider) {
+        let walk = walkSlider.value
+        let jog = jogSlider.value
+        
+        // Prevent total from exceeding 100%
+        if walk + jog > 1.0 {
+            if sender == walkSlider {
+                jogSlider.value = 1.0 - walk
+            } else {
+                walkSlider.value = 1.0 - jog
+            }
+        }
+        
+        updatePaceConfiguration()
+    }
+    
+    private func updatePaceConfiguration() {
+        let walk = Double(walkSlider.value)
+        let jog = Double(jogSlider.value)
+        let run = max(0, 1.0 - walk - jog)
+        
+        // Update percentage labels
+        walkPercentLabel.text = "\(Int(walk * 100))%"
+        jogPercentLabel.text = "\(Int(jog * 100))%"
+        runPercentLabel.text = "🐰 Run: \(Int(run * 100))%"
+        
+        // Update pace order array (keep existing order, just update percentages)
+        if paceOrder.isEmpty {
+            // Initialize default order
+            paceOrder = [
+                PaceSegmentConfig(paceType: .walk, percentage: walk, distance: 0),
+                PaceSegmentConfig(paceType: .jog, percentage: jog, distance: 0),
+                PaceSegmentConfig(paceType: .run, percentage: run, distance: 0)
+            ]
+        } else {
+            // Update existing order with new percentages
+            for i in 0..<paceOrder.count {
+                switch paceOrder[i].paceType {
+                case .walk: paceOrder[i].percentage = walk
+                case .jog: paceOrder[i].percentage = jog
+                case .run: paceOrder[i].percentage = run
+                }
+            }
+        }
+        
+        updatePaceChips()
+    }
+    
+    private func updatePaceChips() {
+        // Clear existing chips
+        paceChipsContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        // Create new chips in current order
+        for (index, pace) in paceOrder.enumerated() {
+            let chip = createPaceChip(pace: pace, index: index)
+            paceChipsContainer.addArrangedSubview(chip)
+        }
+    }
+    
+    private func createPaceChip(pace: PaceSegmentConfig, index: Int) -> UIView {
+        let chip = UIView()
+        chip.backgroundColor = pace.color.withAlphaComponent(0.2)
+        chip.layer.cornerRadius = 8
+        chip.layer.borderWidth = 2
+        chip.layer.borderColor = pace.color.cgColor
+        
+        let iconLabel = UILabel()
+        iconLabel.text = pace.icon
+        iconLabel.font = .systemFont(ofSize: 24)
+        iconLabel.textAlignment = .center
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        chip.addSubview(iconLabel)
+        
+        let percentLabel = UILabel()
+        percentLabel.text = "\(Int(pace.percentage * 100))%"
+        percentLabel.font = .systemFont(ofSize: 10, weight: .bold)
+        percentLabel.textAlignment = .center
+        percentLabel.textColor = pace.color
+        percentLabel.translatesAutoresizingMaskIntoConstraints = false
+        chip.addSubview(percentLabel)
+        
+        NSLayoutConstraint.activate([
+            iconLabel.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+            iconLabel.topAnchor.constraint(equalTo: chip.topAnchor, constant: 8),
+            
+            percentLabel.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+            percentLabel.topAnchor.constraint(equalTo: iconLabel.bottomAnchor, constant: 2)
+        ])
+        
+        // Add tap gesture to swap positions
+        chip.tag = index
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(paceChipTapped(_:)))
+        chip.addGestureRecognizer(tapGesture)
+        chip.isUserInteractionEnabled = true
+        
+        return chip
+    }
+    
+    @objc private func paceChipTapped(_ gesture: UITapGestureRecognizer) {
+        guard let chip = gesture.view else { return }
+        let index = chip.tag
+        
+        // Simple interaction: swap with next chip (cycles around)
+        let nextIndex = (index + 1) % paceOrder.count
+        paceOrder.swapAt(index, nextIndex)
+        
+        updatePaceChips()
+        
+        print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
+    }
+    
+    @objc private func randomizePacePercentages() {
+        // Generate random percentages that sum to 100%
+        let walk = Double.random(in: 0...1)
+        let jog = Double.random(in: 0...(1-walk))
+        
+        walkSlider.value = Float(walk)
+        jogSlider.value = Float(jog)
+        
+        updatePaceConfiguration()
+        
+        print("🎲 Randomized: Walk \(Int(walk*100))%, Jog \(Int(jog*100))%, Run \(Int((1-walk-jog)*100))%")
+    }
+    
+    @objc private func shufflePaceOrder() {
+        paceOrder.shuffle()
+        updatePaceChips()
+        
+        print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
 

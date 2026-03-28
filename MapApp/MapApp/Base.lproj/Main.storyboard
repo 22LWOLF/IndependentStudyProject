@@ -263,9 +263,15 @@
                                             <color key="baseForegroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                             <color key="baseBackgroundColor" red="0.1915283203" green="0.14086912569999999" blue="0.1954345703" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                         </buttonConfiguration>
+                                        <connections>
+                                            <action selector="paceSettingsButtonTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="0nO-br-WBU"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <color key="backgroundColor" red="0.4226074219" green="0.4697265625" blue="0.6420898438" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="displayP3"/>
+                                <accessibility key="accessibilityConfiguration">
+                                    <bool key="isElement" value="YES"/>
+                                </accessibility>
                                 <constraints>
                                     <constraint firstItem="Yo3-b4-0E8" firstAttribute="leading" secondItem="oYZ-YX-7KV" secondAttribute="trailing" constant="30" id="1QA-Tc-xSx"/>
                                     <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="500" id="7B8-Wx-5W6"/>
