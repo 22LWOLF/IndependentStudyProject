@@ -2912,8 +2912,11 @@ extension ViewController: UIGestureRecognizerDelegate {
         Think about ada compliance.
  
  
+ISSUE: having on map pace pattern displaying but now need to make it to where user calced speeds are using for timing stuff. Also need to store percentages and order in DB for each route that way when the open up the old route it is exactly the same.
  
+ Loops start off correctly right after generation as in all points are connected by a line and displaying pace, but after atlering pace in any way the last leg (in my testing C -> A) dissapears.
+ another loop issue if you generate a route then place another point the leg that connects (in my case C -> D) is back to the rainbow colors like it was before pacing pattern.
  
- issue when user does manual manipulaiton of order it is only swapping percents not the image and color with the percents. This started happening after the fix for the flashing. Also if possible I would like to make it to where you drag and drop the order instead of the click and it instatnly teleporting to the left or right it isn't very intutive.
+ Smaller problem is that even when a val is 0% 1 segment is still being displayed as that color. Also next is to add
 
  */
