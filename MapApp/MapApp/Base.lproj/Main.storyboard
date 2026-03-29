@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24765" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
-    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <device id="retina6_9" orientation="portrait" appearance="light"/>
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24743"/>
         <capability name="Image references" minToolsVersion="12.0"/>
@@ -16,21 +16,21 @@
             <objects>
                 <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="MapApp" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
-                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <rect key="frame" x="0.0" y="0.0" width="440" height="956"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <mapView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Km5-Dh-ECB">
-                                <rect key="frame" x="0.0" y="0.0" width="365" height="896"/>
+                                <rect key="frame" x="0.0" y="0.0" width="365" height="956"/>
                                 <standardMapConfiguration key="preferredConfiguration"/>
                             </mapView>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Br3-pP-WZN">
-                                <rect key="frame" x="0.0" y="626" width="365" height="10"/>
+                                <rect key="frame" x="0.0" y="686" width="365" height="10"/>
                                 <subviews>
                                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uhZ-5p-fxg">
                                         <rect key="frame" x="150" y="0.0" width="65" height="30"/>
                                         <subviews>
                                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="1J8-id-VgH">
-                                                <rect key="frame" x="3" y="5" width="59" height="20"/>
+                                                <rect key="frame" x="3" y="5.3333333333333321" width="59" height="19.666666666666668"/>
                                                 <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                 <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                 <imageReference key="image" image="line.3.horizontal.decrease" catalog="system" symbolScale="medium" variableValue="5.5511151231257827e-17"/>
@@ -118,10 +118,10 @@
                                         <rect key="frame" x="8" y="32" width="349" height="102"/>
                                         <subviews>
                                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" alignment="center" spacing="175" translatesAutoresizingMaskIntoConstraints="NO" id="7qo-rR-UAb">
-                                                <rect key="frame" x="0.0" y="0.0" width="349" height="81.5"/>
+                                                <rect key="frame" x="0.0" y="0.0" width="349" height="81.666666666666671"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" pointerInteraction="YES" translatesAutoresizingMaskIntoConstraints="NO" id="M0M-a1-PIa">
-                                                        <rect key="frame" x="0.0" y="23.5" width="87" height="34.5"/>
+                                                        <rect key="frame" x="0.0" y="23.666666666666661" width="87" height="34.333333333333343"/>
                                                         <state key="normal" title="Button"/>
                                                         <buttonConfiguration key="configuration" style="filled" title="Settings">
                                                             <color key="baseBackgroundColor" red="0.6225585938" green="0.4187011719" blue="0.6420898438" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
@@ -131,7 +131,7 @@
                                                         </connections>
                                                     </button>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" pointerInteraction="YES" translatesAutoresizingMaskIntoConstraints="NO" id="tv6-ZN-Jc4">
-                                                        <rect key="frame" x="262" y="23.5" width="87" height="34.5"/>
+                                                        <rect key="frame" x="262" y="23.666666666666661" width="87" height="34.333333333333343"/>
                                                         <color key="tintColor" name="AccentColor"/>
                                                         <state key="normal" title="Button"/>
                                                         <buttonConfiguration key="configuration" style="filled" title="Go To">
@@ -144,7 +144,7 @@
                                                 </subviews>
                                             </stackView>
                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Welcome Back" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hmn-d1-uvR">
-                                                <rect key="frame" x="0.0" y="81.5" width="349" height="20.5"/>
+                                                <rect key="frame" x="0.0" y="81.666666666666671" width="349" height="20.333333333333329"/>
                                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                 <nil key="highlightedColor"/>
@@ -167,7 +167,7 @@
                                 </constraints>
                             </view>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="GTg-cZ-Eue">
-                                <rect key="frame" x="0.0" y="636" width="365" height="260"/>
+                                <rect key="frame" x="0.0" y="696" width="365" height="260"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oYZ-YX-7KV">
                                         <rect key="frame" x="45" y="130" width="100" height="100"/>
@@ -312,7 +312,9 @@
                     </view>
                     <connections>
                         <outlet property="bottomTabContainer" destination="GTg-cZ-Eue" id="gTI-S1-hXW"/>
+                        <outlet property="cancelRouteButton" destination="oYZ-YX-7KV" id="4na-Ik-Mdt"/>
                         <outlet property="filterButton" destination="7T3-F4-pBh" id="bm8-6U-AmG"/>
+                        <outlet property="generateRouteButton" destination="zaf-Wt-aAi" id="yQW-0m-lFl"/>
                         <outlet property="headerBox" destination="nR2-kL-pkI" id="Nkz-qo-Jxb"/>
                         <outlet property="mapView" destination="Km5-Dh-ECB" id="4M1-0u-Rc9"/>
                         <outlet property="routeHistorySheet" destination="Br3-pP-WZN" id="BN3-d8-f2y"/>
