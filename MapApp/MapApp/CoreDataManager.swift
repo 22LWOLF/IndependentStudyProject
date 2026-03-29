@@ -9,6 +9,11 @@ import CoreData
 import MapKit
 
 class CoreDataManager {
+    private struct StoredPaceSegment: Codable {
+        let type: String
+        let percentage: Double
+    }
+
     // Singleton - one instance for whole app
     static let shared = CoreDataManager()
     
@@ -100,7 +105,8 @@ class CoreDataManager {
         direction: String?,
         waypoints: [CLLocationCoordinate2D],
         fullRoute: [CLLocationCoordinate2D]?,
-        name: String? = nil
+        name: String? = nil,
+        paceConfig: [PaceSegmentConfig]? = nil
     ) {
         // Create new database row
         let route = SavedRoute(context: context)
@@ -122,10 +128,32 @@ class CoreDataManager {
         
         // Assign permanent route number
         route.routeNumber = Int32(getNextRouteNumber())
+
+        if let paceConfig = paceConfig {
+            route.paceOrderData = encodePaceConfig(paceConfig)
+        }
         
         // Write to disk
         saveContext()
         print("✅ Saved route #\(route.routeNumber): \(targetDistance) miles")
+    }
+
+    func encodePaceConfig(_ config: [PaceSegmentConfig]) -> Data? {
+        let simplified = config.map {
+            StoredPaceSegment(type: $0.paceType.rawValue, percentage: $0.percentage)
+        }
+        return try? JSONEncoder().encode(simplified)
+    }
+
+    func decodePaceConfig(_ data: Data) -> [PaceSegmentConfig]? {
+        guard let array = try? JSONDecoder().decode([StoredPaceSegment].self, from: data) else {
+            return nil
+        }
+
+        return array.compactMap { item in
+            guard let paceType = PaceType(rawValue: item.type) else { return nil }
+            return PaceSegmentConfig(paceType: paceType, percentage: item.percentage, distance: 0)
+        }
     }
     
     // MARK: - Fetch Routes

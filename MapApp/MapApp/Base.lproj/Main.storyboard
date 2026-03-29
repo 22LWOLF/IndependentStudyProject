@@ -184,7 +184,7 @@
                                         </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="zaf-Wt-aAi">
-                                        <rect key="frame" x="255" y="130" width="100" height="100"/>
+                                        <rect key="frame" x="259" y="130" width="100" height="100"/>
                                         <constraints>
                                             <constraint firstAttribute="width" constant="100" id="CbQ-pc-OaC"/>
                                             <constraint firstAttribute="height" constant="100" id="UsC-vG-FKh"/>
@@ -212,7 +212,7 @@
                                         </connections>
                                     </segmentedControl>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Yo3-b4-0E8">
-                                        <rect key="frame" x="175" y="158" width="50" height="50"/>
+                                        <rect key="frame" x="177" y="158" width="50" height="50"/>
                                         <constraints>
                                             <constraint firstAttribute="width" constant="50" id="Y33-Sk-3QM"/>
                                             <constraint firstAttribute="height" constant="50" id="maF-et-9p1"/>
@@ -273,9 +273,9 @@
                                     <bool key="isElement" value="YES"/>
                                 </accessibility>
                                 <constraints>
-                                    <constraint firstItem="Yo3-b4-0E8" firstAttribute="leading" secondItem="oYZ-YX-7KV" secondAttribute="trailing" constant="30" id="1QA-Tc-xSx"/>
+                                    <constraint firstItem="Yo3-b4-0E8" firstAttribute="leading" secondItem="oYZ-YX-7KV" secondAttribute="trailing" constant="32" id="1QA-Tc-xSx"/>
                                     <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="500" id="7B8-Wx-5W6"/>
-                                    <constraint firstItem="zaf-Wt-aAi" firstAttribute="leading" secondItem="Yo3-b4-0E8" secondAttribute="trailing" constant="30" id="7fh-LX-1no"/>
+                                    <constraint firstItem="zaf-Wt-aAi" firstAttribute="leading" secondItem="Yo3-b4-0E8" secondAttribute="trailing" constant="32" id="7fh-LX-1no"/>
                                     <constraint firstAttribute="trailing" secondItem="Bdg-6c-prn" secondAttribute="trailing" constant="15" id="BGM-yC-ThG"/>
                                     <constraint firstAttribute="bottom" secondItem="oYZ-YX-7KV" secondAttribute="bottom" constant="30" id="DDG-dE-d8c"/>
                                     <constraint firstItem="Bdg-6c-prn" firstAttribute="leading" secondItem="GTg-cZ-Eue" secondAttribute="leading" constant="15" id="Ibp-PO-BSL"/>

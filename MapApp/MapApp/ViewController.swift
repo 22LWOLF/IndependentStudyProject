@@ -1127,7 +1127,7 @@ extension ViewController {
         isPanelOpen ? closePanel() : openPanel()}
         
     @IBAction func paceSettingsButtonTapped(_ sender: UIButton) {
-        animateSettingsCog(sender)  // Reuse your rotation animation
+        animateSettingsCog(sender, clockwise: false)
         isPacePanelOpen ? closePacePanel() : openPacePanel()
         }
     }
@@ -1234,13 +1234,17 @@ extension ViewController {
         var totalDistance: CLLocationDistance = 0
         var totalTime: TimeInterval = 0
         let n = waypoints.count
+        var legCoordinateSegments = Array(repeating: [CLLocationCoordinate2D](), count: n)
         
         func requestLeg(at index: Int) {
             if index >= n {
                 var allCoords: [CLLocationCoordinate2D] = []
-                for overlay in self.mapView.overlays {
-                    if let sp = overlay as? StyledPolyline {
-                        allCoords.append(contentsOf: self.getCoordinates(from: sp))
+                for (legIndex, coords) in legCoordinateSegments.enumerated() {
+                    guard !coords.isEmpty else { continue }
+                    if allCoords.isEmpty || legIndex == 0 {
+                        allCoords.append(contentsOf: coords)
+                    } else {
+                        allCoords.append(contentsOf: coords.dropFirst())
                     }
                 }
                 
@@ -1300,12 +1304,16 @@ extension ViewController {
                     return
                 }
                 let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
-                DispatchQueue.main.async {
-                    let coords = self.getCoordinates(from: selectedRoute.polyline)
-                    let styled = StyledPolyline(coordinates: coords, count: coords.count)
-                    styled.legIndex = index
-                    styled.mode = config.isScenic ? .scenic : .fastest
-                    self.mapView.addOverlay(styled)
+                let coords = self.getCoordinates(from: selectedRoute.polyline)
+                legCoordinateSegments[index] = coords
+                
+                if self.paceOrder.isEmpty {
+                    DispatchQueue.main.async {
+                        let styled = StyledPolyline(coordinates: coords, count: coords.count)
+                        styled.legIndex = index
+                        styled.mode = config.isScenic ? .scenic : .fastest
+                        self.mapView.addOverlay(styled)
+                    }
                 }
                 totalDistance += selectedRoute.distance
                 totalTime += selectedRoute.expectedTravelTime
@@ -1364,7 +1372,8 @@ extension ViewController {
             targetDistance: totalDistance / 1609.34,
             direction: config.direction,
             waypoints: selectedCoordinates,
-            fullRoute: coordinates
+            fullRoute: coordinates,
+            paceConfig: paceOrder.isEmpty ? nil : paceOrder
         )
     }
 }
@@ -1399,6 +1408,7 @@ extension ViewController {
 // MARK: - Pace Segment Calculation
 extension ViewController {
     private func applyPaceToRoute(coordinates: [CLLocationCoordinate2D], totalDistance: Double) -> [StyledPolyline] {
+        guard coordinates.count > 1 else { return [] }
         guard !paceOrder.isEmpty else {
             // No pacing - return single segment
             let polyline = StyledPolyline(coordinates: coordinates, count: coordinates.count)
@@ -1408,21 +1418,41 @@ extension ViewController {
         print("🎨 Applying pace pattern to route...")
         
         // Calculate segment boundaries based on pace order
+        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
+        guard !activePaceOrder.isEmpty else {
+            let polyline = StyledPolyline(coordinates: coordinates, count: coordinates.count)
+            return [polyline]
+        }
+        
         var segmentBoundaries: [(distance: Double, paceType: PaceType)] = []
         var accumulatedDistance: Double = 0
         
-        for pace in paceOrder {
+        for (index, pace) in activePaceOrder.enumerated() {
+            // Skip segments that round down to 0% in practice.
+            if pace.percentage < 0.01 {
+                continue
+            }
+            
             accumulatedDistance += pace.percentage * totalDistance
-            segmentBoundaries.append((accumulatedDistance, pace.paceType))
-            print("  - \(pace.paceType.rawValue): 0 → \(Int(accumulatedDistance))m")
+            print("  - \(pace.paceType.rawValue): 0 → \(Int(accumulatedDistance))m (\(Int(pace.percentage * 100))%)")
+            
+            if index < activePaceOrder.count - 1 {
+                segmentBoundaries.append((accumulatedDistance, pace.paceType))
+            }
         }
         
-        // Walk through route coordinates and create segments
+        if segmentBoundaries.isEmpty {
+            let polyline = StyledPolyline(coordinates: coordinates, count: coordinates.count)
+            polyline.paceType = activePaceOrder[0].paceType
+            return [polyline]
+        }
+        
+        // Walk through route coordinates and split exactly at pace boundaries.
         var polylines: [StyledPolyline] = []
-        var currentDistance: Double = 0
+        var distanceCovered: Double = 0
         var currentSegmentCoords: [CLLocationCoordinate2D] = [coordinates[0]]
         var boundaryIndex = 0
-        var currentPace = paceOrder[0].paceType
+        var currentPace = activePaceOrder[0].paceType
         
         for i in 1..<coordinates.count {
             let prev = coordinates[i-1]
@@ -1431,32 +1461,39 @@ extension ViewController {
             let prevLocation = CLLocation(latitude: prev.latitude, longitude: prev.longitude)
             let currLocation = CLLocation(latitude: curr.latitude, longitude: curr.longitude)
             let segmentLength = prevLocation.distance(from: currLocation)
+            guard segmentLength > 0 else { continue }
             
-            currentDistance += segmentLength
-            currentSegmentCoords.append(curr)
-            
-            // Check if we've crossed into next pace segment
-            if boundaryIndex < segmentBoundaries.count &&
-               currentDistance >= segmentBoundaries[boundaryIndex].distance {
+            while boundaryIndex < segmentBoundaries.count &&
+                    distanceCovered + segmentLength >= segmentBoundaries[boundaryIndex].distance {
+                let boundaryDistance = segmentBoundaries[boundaryIndex].distance
+                let distanceIntoSegment = boundaryDistance - distanceCovered
+                let progress = max(0, min(1, distanceIntoSegment / segmentLength))
+                let splitCoordinate = interpolatedCoordinate(from: prev, to: curr, progress: progress)
                 
-                // Save current segment
+                if currentSegmentCoords.last?.latitude != splitCoordinate.latitude ||
+                    currentSegmentCoords.last?.longitude != splitCoordinate.longitude {
+                    currentSegmentCoords.append(splitCoordinate)
+                }
+                
                 let polyline = StyledPolyline(coordinates: currentSegmentCoords, count: currentSegmentCoords.count)
                 polyline.paceType = currentPace
                 polylines.append(polyline)
                 
                 print("  ✅ Created \(currentPace.rawValue) segment: \(currentSegmentCoords.count) coords")
                 
-                // Start new segment
                 boundaryIndex += 1
-                if boundaryIndex < paceOrder.count {
-                    currentPace = paceOrder[boundaryIndex].paceType
+                if boundaryIndex < activePaceOrder.count {
+                    currentPace = activePaceOrder[boundaryIndex].paceType
+                    currentSegmentCoords = [splitCoordinate]
                 }
-                currentSegmentCoords = [curr]  // Start next segment from current point
             }
+            
+            currentSegmentCoords.append(curr)
+            distanceCovered += segmentLength
         }
         
         // Save final segment
-        if !currentSegmentCoords.isEmpty {
+        if currentSegmentCoords.count > 1 {
             let polyline = StyledPolyline(coordinates: currentSegmentCoords, count: currentSegmentCoords.count)
             polyline.paceType = currentPace
             polylines.append(polyline)
@@ -1465,6 +1502,13 @@ extension ViewController {
         
         print("🎨 Total segments created: \(polylines.count)")
         return polylines
+    }
+    
+    private func interpolatedCoordinate(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, progress: Double) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: start.latitude + ((end.latitude - start.latitude) * progress),
+            longitude: start.longitude + ((end.longitude - start.longitude) * progress)
+        )
     }
 }
 
@@ -1631,10 +1675,56 @@ extension ViewController {
     private func updateLiveRouteInfo() {
         guard totalRouteDistance > 0 else { return }
         let remainingMeters = max(0, totalRouteDistance - traveledDistance)
-        let remainingMiles = remainingMeters / 1609.34
-        let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
-        let remainingMinutes = (remainingMiles / speedMPH) * 60
-        DispatchQueue.main.async { self.routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMiles, remainingMinutes) }
+        
+        // CALCULATE TIME BASED ON PACE SEGMENTS
+        var remainingMinutes: Double = 0
+        
+        if !paceOrder.isEmpty {
+            // Calculate remaining distance per pace type
+            var remainingPerPace: [PaceType: Double] = [:]
+            
+            // Figure out which segment we're in and what's left
+            var distanceCovered: Double = 0
+            for pace in paceOrder {
+                let segmentDistance = pace.percentage * totalRouteDistance
+                
+                if traveledDistance < distanceCovered + segmentDistance {
+                    // We're in this segment
+                    let remainingInSegment = (distanceCovered + segmentDistance) - traveledDistance
+                    remainingPerPace[pace.paceType, default: 0] += remainingInSegment
+                } else if traveledDistance >= distanceCovered + segmentDistance {
+                    // Haven't reached this segment yet - add full distance
+                    remainingPerPace[pace.paceType, default: 0] += segmentDistance
+                }
+                
+                distanceCovered += segmentDistance
+            }
+            
+            // Calculate time for each pace type
+            for (paceType, distance) in remainingPerPace {
+                let speedMPS: Double
+                switch paceType {
+                case .walk:
+                    speedMPS = walkSampleCount >= 10 ? avgWalkingSpeed : 1.4
+                case .jog:
+                    speedMPS = jogSampleCount >= 10 ? avgJoggingSpeed : 2.7
+                case .run:
+                    speedMPS = runSampleCount >= 10 ? avgRunningSpeed : 4.0
+                }
+                
+                let timeSeconds = distance / speedMPS
+                remainingMinutes += timeSeconds / 60.0
+            }
+        } else {
+            // No pacing - use walk speed
+            let remainingMiles = remainingMeters / 1609.34
+            let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
+            remainingMinutes = (remainingMiles / speedMPH) * 60
+        }
+        
+        DispatchQueue.main.async {
+            self.routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMeters / 1609.34, remainingMinutes)
+        }
     }
 }
 
@@ -1802,8 +1892,13 @@ extension ViewController {
         }
     }
 
-    private func animateSettingsCog(_ button: UIButton) {
-        UIView.animate(withDuration: 0.3) { button.transform = CGAffineTransform(rotationAngle: .pi) } completion: { _ in button.transform = .identity }
+    private func animateSettingsCog(_ button: UIButton, clockwise: Bool = true) {
+        let rotation = clockwise ? CGFloat.pi : -CGFloat.pi
+        UIView.animate(withDuration: 0.3) {
+            button.transform = CGAffineTransform(rotationAngle: rotation)
+        } completion: { _ in
+            button.transform = .identity
+        }
     }
 
     private func openPanel() { UIView.animate(withDuration: 0.3) { self.slidePanel.frame.origin.x = self.view.bounds.width - 184 }; isPanelOpen = true }
@@ -1957,7 +2052,7 @@ extension ViewController {
         //  Redraw route with new pacing if route exists
         if !currentRouteCoordinates.isEmpty && totalRouteDistance > 0 {
             let pacedSegments = applyPaceToRoute(coordinates: currentRouteCoordinates, totalDistance: totalRouteDistance)
-            mapView.removeOverlays(mapView.overlays.filter { $0 is StyledPolyline })
+            mapView.removeOverlays(mapView.overlays)
             pacedSegments.forEach { mapView.addOverlay($0) }
         }
     }
@@ -2530,6 +2625,21 @@ extension ViewController {
         
         // store waypoints
         selectedCoordinates = waypoints
+
+        // Restore pace configuration
+        if let paceData = route.paceOrderData,
+           let savedPaceOrder = CoreDataManager.shared.decodePaceConfig(paceData) {
+            paceOrder = savedPaceOrder
+            
+            if let walkPace = paceOrder.first(where: { $0.paceType == .walk }) {
+                walkSlider.value = Float(walkPace.percentage)
+            }
+            if let jogPace = paceOrder.first(where: { $0.paceType == .jog }) {
+                jogSlider.value = Float(jogPace.percentage)
+            }
+            
+            updatePaceConfiguration()
+        }
         
         // place annos on map
         let routeType = RouteConfig.RouteType(rawValue: Int(route.routeType)) ?? .oneWay
@@ -2912,7 +3022,7 @@ extension ViewController: UIGestureRecognizerDelegate {
         Think about ada compliance.
  
  
-ISSUE: having on map pace pattern displaying but now need to make it to where user calced speeds are using for timing stuff. Also need to store percentages and order in DB for each route that way when the open up the old route it is exactly the same.
+ISSUE: having on map pace pattern displayiokay ng but now need to make it to where user calced speeds are using for timing stuff. Also need to store percentages and order in DB for each route that way when the open up the old route it is exactly the same.
  
  Loops start off correctly right after generation as in all points are connected by a line and displaying pace, but after atlering pace in any way the last leg (in my testing C -> A) dissapears.
  another loop issue if you generate a route then place another point the leg that connects (in my case C -> D) is back to the rainbow colors like it was before pacing pattern.
