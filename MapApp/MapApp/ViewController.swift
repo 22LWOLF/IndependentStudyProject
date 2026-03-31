@@ -8,6 +8,7 @@
 import UIKit
 import MapKit
 import CoreLocation
+import AVFAudio
 
 // MARK: - Color Scheme
 extension UIColor {
@@ -223,9 +224,22 @@ enum PaceType: String {
 
 // MARK: - ViewController
 class ViewController: UIViewController {
+    private struct PendingRouteSave {
+        let waypoints: [CLLocationCoordinate2D]
+        let coordinates: [CLLocationCoordinate2D]
+        let totalDistance: CLLocationDistance
+        let config: RouteConfig
+    }
+    
+    private struct NavigationCue {
+        let triggerDistance: CLLocationDistance
+        let instruction: String
+    }
+    
     // MARK: - Outlets
     @IBOutlet weak var headerBox: UIView!
     @IBOutlet weak var mapView: MKMapView!
+    @IBOutlet weak var routeNameLabel: UILabel?
     @IBOutlet weak var routeInfoLabel: UILabel!
     @IBOutlet weak var routeTypeSelector: UISegmentedControl!
     @IBOutlet weak var bottomTabContainer: UIView!
@@ -245,11 +259,13 @@ class ViewController: UIViewController {
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
     private var progressView = UIProgressView(progressViewStyle: .default)
+    private var saveRoutePillButton: UIButton!
     
     // MARK: - Pace Settings Panel
     private var pacePanel: UIView!
     private var walkSlider: UISlider!
     private var jogSlider: UISlider!
+    private var runSlider: UISlider!
     private var walkPercentLabel: UILabel!
     private var jogPercentLabel: UILabel!
     private var runPercentLabel: UILabel!
@@ -304,6 +320,12 @@ class ViewController: UIViewController {
     private var routeSegments: [CLLocationCoordinate2D] = []
     private var cumulativeSegmentLengths: [CLLocationDistance] = []
     private var currentRouteType: RouteConfig.RouteType = .oneWay
+    private var currentRouteDisplayName = "Welcome Back"
+    private var lastRouteTypeSelection = 0
+    private var pendingRouteSave: PendingRouteSave?
+    private var speechSynthesizer = AVSpeechSynthesizer()
+    private var navigationCues: [NavigationCue] = []
+    private var nextNavigationCueIndex = 0
 
     // MARK: - Speed Learning
     private var avgWalkingSpeed: Double = 1.4
@@ -340,6 +362,8 @@ class ViewController: UIViewController {
         setupRouteHistorySheet()
         setupPacePanel()
         CoreDataManager.shared.migrateExistingRoutes()
+        lastRouteTypeSelection = routeTypeSelector.selectedSegmentIndex
+        routeNameLabel?.text = currentRouteDisplayName
         
         
     }
@@ -383,6 +407,7 @@ extension ViewController {
         setupProgressBar()
         setupSlidePanel()
         setupLoopControls()
+        setupSaveRoutePill()
     }
 
     private func setupProgressBar() {
@@ -397,6 +422,32 @@ extension ViewController {
             progressView.trailingAnchor.constraint(equalTo: headerBox.trailingAnchor, constant: -16),
             progressView.bottomAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: -8),
             progressView.heightAnchor.constraint(equalToConstant: 4)
+        ])
+    }
+    
+    private func setupSaveRoutePill() {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Save Route", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.setTitleColor(.white, for: .normal)
+        button.backgroundColor = UIColor.darkColor.withAlphaComponent(0.92)
+        button.layer.cornerRadius = 22
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.18
+        button.layer.shadowOffset = CGSize(width: 0, height: 6)
+        button.layer.shadowRadius = 12
+        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+        button.alpha = 0
+        button.isHidden = true
+        button.addTarget(self, action: #selector(saveRoutePillTapped), for: .touchUpInside)
+        view.addSubview(button)
+        saveRoutePillButton = button
+        
+        NSLayoutConstraint.activate([
+            button.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            button.bottomAnchor.constraint(equalTo: bottomTabContainer.topAnchor, constant: -35),
+            button.heightAnchor.constraint(equalToConstant: 44)
         ])
     }
 
@@ -899,40 +950,39 @@ extension ViewController {
         let sliderContainer = UIView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 160))
         pacePanel.addSubview(sliderContainer)
         
-        // Walk slider (left)
+        let sliderWidth: CGFloat = 36
+        
         let walkContainer = createVerticalSlider(
             label: "W",
             color: .systemGreen,
             x: 0,
+            width: sliderWidth,
             action: #selector(paceSliderChanged(_:))
         )
         sliderContainer.addSubview(walkContainer)
         
-        // Jog slider (right)
         let jogContainer = createVerticalSlider(
             label: "J",
             color: .systemOrange,
-            x: 70,
+            x: 40,
+            width: sliderWidth,
             action: #selector(paceSliderChanged(_:))
         )
         sliderContainer.addSubview(jogContainer)
         
+        let runContainer = createVerticalSlider(
+            label: "R",
+            color: .systemRed,
+            x: 80,
+            width: sliderWidth,
+            action: #selector(paceSliderChanged(_:))
+        )
+        sliderContainer.addSubview(runContainer)
+        
         currentY += 160
+        currentY += 8
         
-        // === SECTION 2: RUN PERCENTAGE (CALCULATED) ===
-        let runLabel = UILabel(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 40))
-        runLabel.text = "🐰 Run: 0%"
-        runLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        runLabel.textAlignment = .center
-        runLabel.backgroundColor = UIColor.systemRed.withAlphaComponent(0.1)
-        runLabel.layer.cornerRadius = 8
-        runLabel.clipsToBounds = true
-        pacePanel.addSubview(runLabel)
-        runPercentLabel = runLabel
-        
-        currentY += 40
-        
-        // === SECTION 3: PACE ORDER CHIPS ===
+        // === SECTION 2: PACE ORDER CHIPS ===
         currentY = addPaceSectionHeader(to: pacePanel, text: "PACE ORDER", y: currentY, padding: padding)
         
         // Horizontal stack for chips
@@ -944,7 +994,7 @@ extension ViewController {
         
         currentY += 75
         
-        // === SECTION 4: BUTTONS ===
+        // === SECTION 3: BUTTONS ===
         // Randomize percentages button
         let randomizePercentButton = createPaceButton(
             title: "🎲",
@@ -969,11 +1019,11 @@ extension ViewController {
         updatePaceConfiguration()
     }
     
-    private func createVerticalSlider(label: String, color: UIColor, x: CGFloat, action: Selector) -> UIView {
-        let container = UIView(frame: CGRect(x: x, y: 0, width: 50, height: 160))
+    private func createVerticalSlider(label: String, color: UIColor, x: CGFloat, width: CGFloat, action: Selector) -> UIView {
+        let container = UIView(frame: CGRect(x: x, y: 0, width: width, height: 160))
         
         // Label on top
-        let labelView = UILabel(frame: CGRect(x: 0, y: 0, width: 50, height: 20))
+        let labelView = UILabel(frame: CGRect(x: 0, y: 0, width: width, height: 20))
         labelView.text = label
         labelView.font = .systemFont(ofSize: 12, weight: .bold)
         labelView.textAlignment = .center
@@ -981,11 +1031,12 @@ extension ViewController {
         container.addSubview(labelView)
         
         // Vertical slider
-        let slider = UISlider(frame: CGRect(x: -24, y: 60, width: 100, height: 20))
+        let sliderWidth: CGFloat = 100
+        let slider = UISlider(frame: CGRect(x: (width - sliderWidth) / 2, y: 60, width: sliderWidth, height: 20))
         slider.transform = CGAffineTransform(rotationAngle: -CGFloat.pi / 2)  // Rotate to vertical
         slider.minimumValue = 0
         slider.maximumValue = 1
-        slider.value = 0.33
+        slider.value = 1.0 / 3.0
         slider.tintColor = color
         slider.addTarget(self, action: action, for: .valueChanged)
         container.addSubview(slider)
@@ -993,12 +1044,14 @@ extension ViewController {
         // Store reference
         if label == "W" {
             walkSlider = slider
-        } else {
+        } else if label == "J" {
             jogSlider = slider
+        } else {
+            runSlider = slider
         }
         
         // Percentage label at bottom
-        let percentLabel = UILabel(frame: CGRect(x: 0, y: 135, width: 50, height: 20))
+        let percentLabel = UILabel(frame: CGRect(x: 0, y: 135, width: width, height: 20))
         percentLabel.text = "33%"
         percentLabel.font = .systemFont(ofSize: 11)
         percentLabel.textAlignment = .center
@@ -1008,8 +1061,10 @@ extension ViewController {
         // Store reference
         if label == "W" {
             walkPercentLabel = percentLabel
-        } else {
+        } else if label == "J" {
             jogPercentLabel = percentLabel
+        } else {
+            runPercentLabel = percentLabel
         }
         
         return container
@@ -1104,6 +1159,7 @@ extension ViewController {
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         let config = buildRouteConfig()
+        setRouteDisplayName("Current Route")
         if let targetMiles = config.targetDistance {
             generateRandomRoute(config: config, targetMiles: targetMiles)
         } else {
@@ -1113,7 +1169,17 @@ extension ViewController {
 
     @IBAction func clearRouteBTN(_ sender: UIButton) { clearAllRoutes() }
 
-    @IBAction func routeTypeChanged(_ sender: UISegmentedControl) { updateLoopControlsVisibility(isLoop: sender.selectedSegmentIndex == 2) }
+    @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
+        let wasLoopSelected = lastRouteTypeSelection == RouteConfig.RouteType.loop.rawValue
+        let isLoopSelected = sender.selectedSegmentIndex == RouteConfig.RouteType.loop.rawValue
+        lastRouteTypeSelection = sender.selectedSegmentIndex
+        
+        if wasLoopSelected && !isLoopSelected && (!selectedCoordinates.isEmpty || !mapView.overlays.isEmpty) {
+            clearAllRoutes()
+        }
+        
+        updateLoopControlsVisibility(isLoop: isLoopSelected)
+    }
 
     @IBAction func routeVibeSelector(_ sender: UISegmentedControl) {
         useScenicRouting = (sender.selectedSegmentIndex == 1)
@@ -1215,7 +1281,9 @@ extension ViewController {
         var allCoords = coords
         var totalDistance = route.distance
         var totalTime = route.expectedTravelTime
+        var cues = buildNavigationCues(from: route.steps, distanceOffset: 0)
         DispatchQueue.main.async {
+            self.syncSingleLegEndpointAnnotation(with: coords, isOutAndBack: isOutAndBack)
             self.mapView.addOverlay(route.polyline)
             if isOutAndBack {
                 let backward = Array(coords.reversed())
@@ -1225,8 +1293,23 @@ extension ViewController {
                 allCoords += backward
                 totalDistance *= 2
                 totalTime *= 2
+                cues.append(
+                    NavigationCue(
+                        triggerDistance: route.distance,
+                        instruction: "Turn around to return to your starting point."
+                    )
+                )
             }
-            self.finishRouteGeneration(coordinates: allCoords, totalDistance: totalDistance, totalTime: totalTime, config: config)
+            self.finishRouteGeneration(coordinates: allCoords, totalDistance: totalDistance, totalTime: totalTime, config: config, navigationCues: cues)
+        }
+    }
+
+    private func syncSingleLegEndpointAnnotation(with coordinates: [CLLocationCoordinate2D], isOutAndBack: Bool) {
+        guard !isOutAndBack, let actualEndpoint = coordinates.last, selectedCoordinates.count > 1 else { return }
+        selectedCoordinates[1] = actualEndpoint
+        for annotation in mapView.annotations {
+            guard let routeAnnotation = annotation as? RouteAnnotation, routeAnnotation.index == 1 else { continue }
+            routeAnnotation.coordinate = actualEndpoint
         }
     }
 
@@ -1235,6 +1318,7 @@ extension ViewController {
         var totalTime: TimeInterval = 0
         let n = waypoints.count
         var legCoordinateSegments = Array(repeating: [CLLocationCoordinate2D](), count: n)
+        var collectedCues: [NavigationCue] = []
         
         func requestLeg(at index: Int) {
             if index >= n {
@@ -1285,7 +1369,7 @@ extension ViewController {
                     }
                 }
                 
-                self.finishRouteGeneration(coordinates: allCoords, totalDistance: totalDistance, totalTime: totalTime, config: config)
+                self.finishRouteGeneration(coordinates: allCoords, totalDistance: totalDistance, totalTime: totalTime, config: config, navigationCues: collectedCues)
                 return
             }
             
@@ -1306,6 +1390,7 @@ extension ViewController {
                 let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
                 let coords = self.getCoordinates(from: selectedRoute.polyline)
                 legCoordinateSegments[index] = coords
+                collectedCues.append(contentsOf: self.buildNavigationCues(from: selectedRoute.steps, distanceOffset: totalDistance))
                 
                 if self.paceOrder.isEmpty {
                     DispatchQueue.main.async {
@@ -1335,12 +1420,13 @@ extension ViewController {
 
 // MARK: - Route Completion
 extension ViewController {
-    private func finishRouteGeneration(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, totalTime: TimeInterval, config: RouteConfig) {
+    private func finishRouteGeneration(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, totalTime: TimeInterval, config: RouteConfig, navigationCues: [NavigationCue] = []) {
         updateRouteInfoLabel(distance: totalDistance, time: totalTime)
         resetProgressTracking(totalDistance: totalDistance, routeCoords: coordinates)
         isActivelyWalkingRoute = true
         isGeneratingRoute = false
         currentRouteType = config.type
+        beginNavigationCues(navigationCues)
         
         if !paceOrder.isEmpty {
                let pacedSegments = applyPaceToRoute(coordinates: coordinates, totalDistance: totalDistance)
@@ -1357,24 +1443,47 @@ extension ViewController {
         
         // UPDATED: Only save if this is a NEW route, not a reload
         if !isReloadingExistingRoute {
-            saveRouteToDatabase(coordinates: coordinates, totalDistance: totalDistance, config: config)
-            print("💾 Saved new route to database")
+            pendingRouteSave = PendingRouteSave(waypoints: selectedCoordinates, coordinates: coordinates, totalDistance: totalDistance, config: config)
+            setSaveRoutePillVisible(true)
+            print("💾 Route ready to save")
         } else {
             print("♻️ Reloaded existing route - not saving duplicate")
             isReloadingExistingRoute = false  // Reset flag for next route
+            pendingRouteSave = nil
+            setSaveRoutePillVisible(false)
         }
     }
 
-    private func saveRouteToDatabase(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, config: RouteConfig) {
+    private func saveRouteToDatabase(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, config: RouteConfig, name: String? = nil, waypoints: [CLLocationCoordinate2D]? = nil) {
         CoreDataManager.shared.saveRoute(
             routeType: config.type.rawValue,
             isScenicMode: config.isScenic,
             targetDistance: totalDistance / 1609.34,
             direction: config.direction,
-            waypoints: selectedCoordinates,
+            waypoints: waypoints ?? selectedCoordinates,
             fullRoute: coordinates,
+            name: name,
             paceConfig: paceOrder.isEmpty ? nil : paceOrder
         )
+    }
+    
+    private func buildNavigationCues(from steps: [MKRoute.Step], distanceOffset: CLLocationDistance) -> [NavigationCue] {
+        var cues: [NavigationCue] = []
+        var accumulatedDistance = distanceOffset
+        
+        for step in steps {
+            accumulatedDistance += step.distance
+            let instruction = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !instruction.isEmpty else { continue }
+            cues.append(NavigationCue(triggerDistance: accumulatedDistance, instruction: instruction))
+        }
+        
+        return cues
+    }
+    
+    private func beginNavigationCues(_ cues: [NavigationCue]) {
+        navigationCues = cues.sorted { $0.triggerDistance < $1.triggerDistance }
+        nextNavigationCueIndex = 0
     }
 }
 
@@ -1402,6 +1511,33 @@ extension ViewController {
         let miles = distance / 1609.34
         let minutes = time / 60.0
         routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", miles, minutes)
+    }
+    
+    private func setRouteDisplayName(_ name: String?) {
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentRouteDisplayName = (trimmedName?.isEmpty == false) ? trimmedName! : "Welcome Back"
+        routeNameLabel?.text = currentRouteDisplayName
+    }
+    
+    private func setSaveRoutePillVisible(_ isVisible: Bool) {
+        guard saveRoutePillButton != nil else { return }
+        let shouldShow = isVisible && routeSheetState == .collapsed
+        
+        if shouldShow {
+            saveRoutePillButton.isHidden = false
+            UIView.animate(withDuration: 0.4) {
+                self.saveRoutePillButton.alpha = 1
+                self.saveRoutePillButton.transform = .identity
+            }
+        } else {
+            UIView.animate(withDuration: 0.4, animations: {
+                self.saveRoutePillButton.alpha = 0
+                self.saveRoutePillButton.transform = CGAffineTransform(translationX: 0, y: 8)
+            }) { _ in
+                self.saveRoutePillButton.isHidden = true
+                self.saveRoutePillButton.transform = .identity
+            }
+        }
     }
 }
 
@@ -1588,12 +1724,32 @@ extension ViewController {
             traveledDistance = snappedDistance
             let progress = Float(min(max(traveledDistance / totalRouteDistance, 0), 1))
             DispatchQueue.main.async { self.progressView.setProgress(progress, animated: true) }
+            speakNextNavigationCueIfNeeded()
+        }
+        updateWalkedOverlay()
+        updateLiveRouteInfo()
+    }
+    
+    private func speakNextNavigationCueIfNeeded() {
+        guard nextNavigationCueIndex < navigationCues.count else { return }
+        let cue = navigationCues[nextNavigationCueIndex]
+        let leadDistance: CLLocationDistance = 35
+        guard traveledDistance + leadDistance >= cue.triggerDistance else { return }
+        
+        speakNavigationInstruction(cue.instruction)
+        nextNavigationCueIndex += 1
+    }
+    
+    private func speakNavigationInstruction(_ instruction: String) {
+        guard !instruction.isEmpty else { return }
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
         }
         
-        if currentRouteType != .loop{
-            updateWalkedOverlay()
-        }
-        updateLiveRouteInfo()
+        let utterance = AVSpeechUtterance(string: instruction)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.48
+        speechSynthesizer.speak(utterance)
     }
     
     private func updateWalkedOverlay() {
@@ -1623,19 +1779,15 @@ extension ViewController {
         
         guard closestIndex < currentRouteCoordinates.count else { return }
         
-        // Create walked and remaining segments
+        // Create walked-only overlay so the underlying pace colors stay visible.
         let walkedCoords = Array(currentRouteCoordinates[0...closestIndex])
-        let remainingCoords = Array(currentRouteCoordinates[closestIndex...])
+        guard walkedCoords.count > 1 else { return }
         
         let walkedLine = StyledPolyline(coordinates: walkedCoords, count: walkedCoords.count)
         walkedLine.kind = .walked
-        
-        let remainingLine = StyledPolyline(coordinates: remainingCoords, count: remainingCoords.count)
-        remainingLine.kind = .remaining
-        
+
         DispatchQueue.main.async {
             self.mapView.addOverlay(walkedLine)
-            self.mapView.addOverlay(remainingLine)
         }
     }
 
@@ -1766,6 +1918,11 @@ extension ViewController {
             }
         }
         
+        let shouldHideSavePill = pendingRouteSave != nil && height > (routeSheetCollapsedHeight + 8)
+        if pendingRouteSave != nil {
+            setSaveRoutePillVisible(!shouldHideSavePill)
+        }
+        
         if animated {
             UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
                 self.view.layoutIfNeeded()
@@ -1825,6 +1982,10 @@ extension ViewController {
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         resetProgressTracking(totalDistance: 0, routeCoords: [])
         progressView.setProgress(0, animated: false)
+        setRouteDisplayName(nil)
+        pendingRouteSave = nil
+        setSaveRoutePillVisible(false)
+        beginNavigationCues([])
     }
 
     private func clearPinsAndOverlays() {
@@ -1970,6 +2131,11 @@ extension ViewController {
     }
 
     @objc private func dismissKeyboard() { view.endEditing(true); closePanel() }
+    
+    @objc private func saveRoutePillTapped() {
+        guard pendingRouteSave != nil else { return }
+        presentSaveRouteDialog()
+    }
 
     private func presentCoordinateEntryDialog() {
         let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and Longitude", preferredStyle: .alert)
@@ -1989,35 +2155,74 @@ extension ViewController {
         alert.addAction(goAction)
         present(alert, animated: true)
     }
+    
+    private func presentSaveRouteDialog() {
+        guard let pendingRouteSave else { return }
+        
+        let alert = UIAlertController(title: "Save Route", message: "Give this route a name.", preferredStyle: .alert)
+        alert.addTextField { textField in
+            let currentName = self.currentRouteDisplayName
+            textField.placeholder = "Route name"
+            textField.text = currentName == "Current Route" || currentName == "Welcome Back" ? "" : currentName
+            textField.autocapitalizationType = .words
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            let enteredName = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let finalName = (enteredName?.isEmpty == false) ? enteredName : nil
+            self.saveRouteToDatabase(
+                coordinates: pendingRouteSave.coordinates,
+                totalDistance: pendingRouteSave.totalDistance,
+                config: pendingRouteSave.config,
+                name: finalName,
+                waypoints: pendingRouteSave.waypoints
+            )
+            self.pendingRouteSave = nil
+            self.setSaveRoutePillVisible(false)
+            self.setRouteDisplayName(finalName ?? "Current Route")
+            self.loadSavedRoutes()
+            self.showInfoAlert(message: "Route saved.")
+        })
+        
+        present(alert, animated: true)
+    }
 }
 
 // MARK: - Pace Panel Actions
 extension ViewController {
     @objc private func paceSliderChanged(_ sender: UISlider) {
-        let walk = walkSlider.value
-        let jog = jogSlider.value
+        let allSliders = [walkSlider, jogSlider, runSlider].compactMap { $0 }
+        let otherSliders = allSliders.filter { $0 !== sender }
+        let available = max(0, 1 - Double(sender.value))
+        let currentOtherTotal = otherSliders.reduce(0.0) { $0 + Double($1.value) }
         
-        // Prevent total from exceeding 100%
-        if walk + jog > 1.0 {
-            if sender == walkSlider {
-                jogSlider.value = 1.0 - walk
-            } else {
-                walkSlider.value = 1.0 - jog
+        if currentOtherTotal > 0 {
+            for slider in otherSliders {
+                slider.value = Float((Double(slider.value) / currentOtherTotal) * available)
             }
+        } else {
+            let evenShare = Float(available / Double(max(otherSliders.count, 1)))
+            otherSliders.forEach { $0.value = evenShare }
         }
         
         updatePaceConfiguration()
     }
     
     private func updatePaceConfiguration() {
-        let walk = Double(walkSlider.value)
-        let jog = Double(jogSlider.value)
-        let run = max(0, 1.0 - walk - jog)
+        let total = max(Double(walkSlider.value + jogSlider.value + runSlider.value), 0.0001)
+        let walk = Double(walkSlider.value) / total
+        let jog = Double(jogSlider.value) / total
+        let run = Double(runSlider.value) / total
+        
+        walkSlider.value = Float(walk)
+        jogSlider.value = Float(jog)
+        runSlider.value = Float(run)
         
         // Update percentage labels
         walkPercentLabel.text = "\(Int(walk * 100))%"
         jogPercentLabel.text = "\(Int(jog * 100))%"
-        runPercentLabel.text = "🐰 Run: \(Int(run * 100))%"
+        runPercentLabel.text = "\(Int(run * 100))%"
         
         // 🆕 UPDATE: Calculate distances if we have an active route
         let routeDistance = totalRouteDistance / 1609.34  // Convert meters to miles
@@ -2264,16 +2469,18 @@ extension ViewController {
     }
     
     @objc private func randomizePacePercentages() {
-        // Generate random percentages that sum to 100%
-        let walk = Double.random(in: 0...1)
-        let jog = Double.random(in: 0...(1-walk))
+        let walk = Double.random(in: 0.1...1.0)
+        let jog = Double.random(in: 0.1...1.0)
+        let run = Double.random(in: 0.1...1.0)
+        let total = walk + jog + run
         
-        walkSlider.value = Float(walk)
-        jogSlider.value = Float(jog)
+        walkSlider.value = Float(walk / total)
+        jogSlider.value = Float(jog / total)
+        runSlider.value = Float(run / total)
         
         updatePaceConfiguration()
         
-        print("🎲 Randomized: Walk \(Int(walk*100))%, Jog \(Int(jog*100))%, Run \(Int((1-walk-jog)*100))%")
+        print("🎲 Randomized: Walk \(Int((walk / total) * 100))%, Jog \(Int((jog / total) * 100))%, Run \(Int((run / total) * 100))%")
     }
     
     @objc private func shufflePaceOrder() {
@@ -2387,11 +2594,13 @@ extension ViewController: MKMapViewDelegate {
             
             switch styled.kind {
             case .walked:
-                renderer.strokeColor = UIColor.appPrimary
-                renderer.lineWidth = 5
+                renderer.strokeColor = UIColor.black.withAlphaComponent(0.28)
+                renderer.lineWidth = 9
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
             case .remaining:
-                renderer.strokeColor = .systemBlue
-                renderer.lineWidth = 5
+                renderer.strokeColor = .clear
+                renderer.lineWidth = 0
             case .forward, .backward:
                 let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemRed, .systemTeal, .systemPink, .brown]
                 renderer.strokeColor = colors[styled.legIndex % colors.count]
@@ -2621,7 +2830,9 @@ extension ViewController {
         
         // set up UI to match route settings
         routeTypeSelector.selectedSegmentIndex = Int(route.routeType)
+        lastRouteTypeSelection = Int(route.routeType)
         useScenicRouting = route.isScenicMode
+        setRouteDisplayName(route.name ?? "Route #\(route.routeNumber)")
         
         // store waypoints
         selectedCoordinates = waypoints
@@ -2636,6 +2847,9 @@ extension ViewController {
             }
             if let jogPace = paceOrder.first(where: { $0.paceType == .jog }) {
                 jogSlider.value = Float(jogPace.percentage)
+            }
+            if let runPace = paceOrder.first(where: { $0.paceType == .run }) {
+                runSlider.value = Float(runPace.percentage)
             }
             
             updatePaceConfiguration()
@@ -3022,11 +3236,14 @@ extension ViewController: UIGestureRecognizerDelegate {
         Think about ada compliance.
  
  
-ISSUE: having on map pace pattern displayiokay ng but now need to make it to where user calced speeds are using for timing stuff. Also need to store percentages and order in DB for each route that way when the open up the old route it is exactly the same.
+ISSUE: 3/31/2026
+ Walked route breaks colro stuff. See if only drawing over user has walked is possible on top layer onstead of redrawing evertime a new segment is done.
+ Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black.
  
- Loops start off correctly right after generation as in all points are connected by a line and displaying pace, but after atlering pace in any way the last leg (in my testing C -> A) dissapears.
- another loop issue if you generate a route then place another point the leg that connects (in my case C -> D) is back to the rainbow colors like it was before pacing pattern.
  
- Smaller problem is that even when a val is 0% 1 segment is still being displayed as that color. Also next is to add
+ Small:
+ when go from loop selected to One way or OAB call Clear
+ 
+ Idea that I kind of like that my prof gave me. Have it to where I have 3 sliders instead of 2 and a label. But instead of having it to where values are changed dynamically EX if walk is at 50% and jog is at 50% and I move walk up to 60% then jog goes to 40%. instead make it realitive is the best way to describe it. For example with 3 sliders you have walk = 50% jog = 50% and run = 50% on the math/visual side where the route is being displayed it is essentially 33% for each. Does that make sense? if not lmk, but I kind of and kind of don't like the idea. Also my prof mentioned that he was worried about everytime a route is gneerated it being saved he said that he think it would be better to have a "positive" reaction behind it so instead of being done for you, you need to click a "Save Route" button, thoughts on this? And 3rd which is something I def want to add is the routes name at the top above the distance and time stuff.
 
  */

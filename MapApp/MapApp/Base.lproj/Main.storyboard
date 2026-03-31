@@ -118,10 +118,10 @@
                                         <rect key="frame" x="8" y="32" width="349" height="102"/>
                                         <subviews>
                                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" alignment="center" spacing="175" translatesAutoresizingMaskIntoConstraints="NO" id="7qo-rR-UAb">
-                                                <rect key="frame" x="0.0" y="0.0" width="349" height="81.666666666666671"/>
+                                                <rect key="frame" x="0.0" y="0.0" width="349" height="64.666666666666671"/>
                                                 <subviews>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" pointerInteraction="YES" translatesAutoresizingMaskIntoConstraints="NO" id="M0M-a1-PIa">
-                                                        <rect key="frame" x="0.0" y="23.666666666666661" width="87" height="34.333333333333343"/>
+                                                        <rect key="frame" x="0.0" y="15.333333333333332" width="87" height="34.333333333333343"/>
                                                         <state key="normal" title="Button"/>
                                                         <buttonConfiguration key="configuration" style="filled" title="Settings">
                                                             <color key="baseBackgroundColor" red="0.6225585938" green="0.4187011719" blue="0.6420898438" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
@@ -131,7 +131,7 @@
                                                         </connections>
                                                     </button>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" pointerInteraction="YES" translatesAutoresizingMaskIntoConstraints="NO" id="tv6-ZN-Jc4">
-                                                        <rect key="frame" x="262" y="23.666666666666661" width="87" height="34.333333333333343"/>
+                                                        <rect key="frame" x="262" y="15.333333333333332" width="87" height="34.333333333333343"/>
                                                         <color key="tintColor" name="AccentColor"/>
                                                         <state key="normal" title="Button"/>
                                                         <buttonConfiguration key="configuration" style="filled" title="Go To">
@@ -143,7 +143,13 @@
                                                     </button>
                                                 </subviews>
                                             </stackView>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Welcome Back" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hmn-d1-uvR">
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" ambiguous="YES" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Ibk-13-qJC">
+                                                <rect key="frame" x="0.0" y="64.666666666666671" width="349" height="17"/>
+                                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                                <nil key="textColor"/>
+                                                <nil key="highlightedColor"/>
+                                            </label>
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" ambiguous="YES" text="Welcome Back" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hmn-d1-uvR">
                                                 <rect key="frame" x="0.0" y="81.666666666666671" width="349" height="20.333333333333329"/>
                                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                                 <color key="textColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -152,7 +158,11 @@
                                         </subviews>
                                         <constraints>
                                             <constraint firstItem="7qo-rR-UAb" firstAttribute="top" secondItem="Psu-8x-qz8" secondAttribute="top" id="25J-KS-sET"/>
+                                            <constraint firstAttribute="trailing" secondItem="Ibk-13-qJC" secondAttribute="trailing" id="3OU-T2-F8A"/>
                                             <constraint firstItem="7qo-rR-UAb" firstAttribute="leading" secondItem="Psu-8x-qz8" secondAttribute="leading" id="Apb-rp-Ymz"/>
+                                            <constraint firstItem="Ibk-13-qJC" firstAttribute="leading" secondItem="Psu-8x-qz8" secondAttribute="leading" id="Fhu-DH-del"/>
+                                            <constraint firstItem="hmn-d1-uvR" firstAttribute="top" secondItem="Ibk-13-qJC" secondAttribute="bottom" id="PxQ-AG-mNg"/>
+                                            <constraint firstItem="Ibk-13-qJC" firstAttribute="top" secondItem="Psu-8x-qz8" secondAttribute="top" constant="64.670000000000002" id="Z1l-MS-XWQ"/>
                                             <constraint firstAttribute="trailing" secondItem="7qo-rR-UAb" secondAttribute="trailing" id="wlg-Oc-Dwd"/>
                                         </constraints>
                                     </stackView>
@@ -312,13 +322,12 @@
                     </view>
                     <connections>
                         <outlet property="bottomTabContainer" destination="GTg-cZ-Eue" id="gTI-S1-hXW"/>
-                        <outlet property="cancelRouteButton" destination="oYZ-YX-7KV" id="4na-Ik-Mdt"/>
                         <outlet property="filterButton" destination="7T3-F4-pBh" id="bm8-6U-AmG"/>
-                        <outlet property="generateRouteButton" destination="zaf-Wt-aAi" id="yQW-0m-lFl"/>
                         <outlet property="headerBox" destination="nR2-kL-pkI" id="Nkz-qo-Jxb"/>
                         <outlet property="mapView" destination="Km5-Dh-ECB" id="4M1-0u-Rc9"/>
                         <outlet property="routeHistorySheet" destination="Br3-pP-WZN" id="BN3-d8-f2y"/>
                         <outlet property="routeInfoLabel" destination="hmn-d1-uvR" id="wgL-ee-pcz"/>
+                        <outlet property="routeNameLabel" destination="Ibk-13-qJC" id="prK-Pr-PZ4"/>
                         <outlet property="routeTypeSelector" destination="Bdg-6c-prn" id="cLh-zd-lV4"/>
                         <outlet property="routesSearchBar" destination="HD4-Zr-CM9" id="2RZ-aS-ILn"/>
                         <outlet property="routesTableView" destination="g5a-yI-zb1" id="XzC-YY-opn"/>
