@@ -730,9 +730,6 @@ extension ViewController {
         // space below header
         let padding: CGFloat = 20
         self.routeSheetExpandedHeight = screenHeight - headerMaxY - bottomHeight - padding
-            
-        print("Screen: \(screenHeight), Header: \(headerMaxY), bottom: \(bottomHeight)")
-        print("📐 Calculated expanded height: \(self.routeSheetExpandedHeight)")
         }
     }
 
