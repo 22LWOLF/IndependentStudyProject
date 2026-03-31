@@ -6,11 +6,51 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0B7BED02F7C5D1300C934DF /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0B7BECF2F7C5D1300C934DF /* WidgetKit.framework */; };
+		C0B7BED22F7C5D1300C934DF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0B7BED12F7C5D1300C934DF /* SwiftUI.framework */; };
+		C0B7BEE32F7C5D1400C934DF /* MapAppLiveActivityExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0B7BECD2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C0B7BEE12F7C5D1400C934DF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FE794D792F1A9A7B000B99B0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0B7BECC2F7C5D1300C934DF;
+			remoteInfo = MapAppLiveActivityExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C0B7BEE82F7C5D1400C934DF /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C0B7BEE32F7C5D1400C934DF /* MapAppLiveActivityExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		C0B7BECD2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MapAppLiveActivityExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0B7BECF2F7C5D1300C934DF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		C0B7BED12F7C5D1300C934DF /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		FE794D812F1A9A7B000B99B0 /* MapApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MapApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C0B7BEE72F7C5D1400C934DF /* Exceptions for "MapAppLiveActivityExtension" folder in "MapAppLiveActivityExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C0B7BECC2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension */;
+		};
 		FE794D932F1A9A7C000B99B0 /* Exceptions for "MapApp" folder in "MapApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -21,6 +61,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		C0B7BED32F7C5D1300C934DF /* MapAppLiveActivityExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C0B7BEE72F7C5D1400C934DF /* Exceptions for "MapAppLiveActivityExtension" folder in "MapAppLiveActivityExtensionExtension" target */,
+			);
+			path = MapAppLiveActivityExtension;
+			sourceTree = "<group>";
+		};
 		FE794D832F1A9A7B000B99B0 /* MapApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -32,6 +80,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		C0B7BECA2F7C5D1300C934DF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0B7BED22F7C5D1300C934DF /* SwiftUI.framework in Frameworks */,
+				C0B7BED02F7C5D1300C934DF /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FE794D7E2F1A9A7B000B99B0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,10 +99,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C0B7BECE2F7C5D1300C934DF /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C0B7BECF2F7C5D1300C934DF /* WidgetKit.framework */,
+				C0B7BED12F7C5D1300C934DF /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FE794D782F1A9A7B000B99B0 = {
 			isa = PBXGroup;
 			children = (
 				FE794D832F1A9A7B000B99B0 /* MapApp */,
+				C0B7BED32F7C5D1300C934DF /* MapAppLiveActivityExtension */,
+				C0B7BECE2F7C5D1300C934DF /* Frameworks */,
 				FE794D822F1A9A7B000B99B0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +122,7 @@
 			isa = PBXGroup;
 			children = (
 				FE794D812F1A9A7B000B99B0 /* MapApp.app */,
+				C0B7BECD2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +130,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		C0B7BECC2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0B7BEE42F7C5D1400C934DF /* Build configuration list for PBXNativeTarget "MapAppLiveActivityExtensionExtension" */;
+			buildPhases = (
+				C0B7BEC92F7C5D1300C934DF /* Sources */,
+				C0B7BECA2F7C5D1300C934DF /* Frameworks */,
+				C0B7BECB2F7C5D1300C934DF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C0B7BED32F7C5D1300C934DF /* MapAppLiveActivityExtension */,
+			);
+			name = MapAppLiveActivityExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = MapAppLiveActivityExtensionExtension;
+			productReference = C0B7BECD2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		FE794D802F1A9A7B000B99B0 /* MapApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FE794D942F1A9A7C000B99B0 /* Build configuration list for PBXNativeTarget "MapApp" */;
@@ -68,10 +159,12 @@
 				FE794D7D2F1A9A7B000B99B0 /* Sources */,
 				FE794D7E2F1A9A7B000B99B0 /* Frameworks */,
 				FE794D7F2F1A9A7B000B99B0 /* Resources */,
+				C0B7BEE82F7C5D1400C934DF /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C0B7BEE22F7C5D1400C934DF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FE794D832F1A9A7B000B99B0 /* MapApp */,
@@ -90,9 +183,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2620;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					C0B7BECC2F7C5D1300C934DF = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					FE794D802F1A9A7B000B99B0 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -113,11 +209,19 @@
 			projectRoot = "";
 			targets = (
 				FE794D802F1A9A7B000B99B0 /* MapApp */,
+				C0B7BECC2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		C0B7BECB2F7C5D1300C934DF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FE794D7F2F1A9A7B000B99B0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,6 +232,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		C0B7BEC92F7C5D1300C934DF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FE794D7D2F1A9A7B000B99B0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,7 +248,77 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		C0B7BEE22F7C5D1400C934DF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0B7BECC2F7C5D1300C934DF /* MapAppLiveActivityExtensionExtension */;
+			targetProxy = C0B7BEE12F7C5D1400C934DF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		C0B7BEE52F7C5D1400C934DF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MMY8QR2XBC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MapAppLiveActivityExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MapAppLiveActivityExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = LukeWolf.MapApp.MapAppLiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C0B7BEE62F7C5D1400C934DF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MMY8QR2XBC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MapAppLiveActivityExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MapAppLiveActivityExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = LukeWolf.MapApp.MapAppLiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		FE794D952F1A9A7C000B99B0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -324,6 +505,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		C0B7BEE42F7C5D1400C934DF /* Build configuration list for PBXNativeTarget "MapAppLiveActivityExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0B7BEE52F7C5D1400C934DF /* Debug */,
+				C0B7BEE62F7C5D1400C934DF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FE794D7C2F1A9A7B000B99B0 /* Build configuration list for PBXProject "MapApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

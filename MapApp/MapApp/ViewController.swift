@@ -1509,8 +1509,82 @@ extension ViewController {
 
     private func updateRouteInfoLabel(distance: CLLocationDistance, time: TimeInterval) {
         let miles = distance / 1609.34
-        let minutes = time / 60.0
+        let minutes = paceOrder.isEmpty ? (time / 60.0) : estimatedRouteMinutes(totalDistance: distance)
         routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", miles, minutes)
+    }
+    
+    private func learnedSpeed(for paceType: PaceType) -> Double {
+        switch paceType {
+        case .walk:
+            return walkSampleCount >= 10 ? avgWalkingSpeed : 1.4
+        case .jog:
+            return jogSampleCount >= 10 ? avgJoggingSpeed : 2.7
+        case .run:
+            return runSampleCount >= 10 ? avgRunningSpeed : 4.0
+        }
+    }
+    
+    private func paceType(at distance: CLLocationDistance, totalDistance: CLLocationDistance? = nil) -> PaceType? {
+        let routeDistance = totalDistance ?? totalRouteDistance
+        guard routeDistance > 0 else { return nil }
+        
+        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
+        guard !activePaceOrder.isEmpty else { return nil }
+        
+        let clampedDistance = min(max(distance, 0), routeDistance)
+        var segmentStart: CLLocationDistance = 0
+        
+        for (index, pace) in activePaceOrder.enumerated() {
+            let segmentLength = pace.percentage * routeDistance
+            let segmentEnd = (index == activePaceOrder.count - 1) ? routeDistance : min(routeDistance, segmentStart + segmentLength)
+            if clampedDistance <= segmentEnd || index == activePaceOrder.count - 1 {
+                return pace.paceType
+            }
+            segmentStart = segmentEnd
+        }
+        
+        return activePaceOrder.last?.paceType
+    }
+    
+    private func estimatedRouteMinutes(totalDistance: CLLocationDistance, traveledDistance: CLLocationDistance = 0) -> Double {
+        let remainingDistance = max(0, totalDistance - traveledDistance)
+        guard remainingDistance > 0 else { return 0 }
+        
+        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
+        guard !activePaceOrder.isEmpty else {
+            return (remainingDistance / learnedSpeed(for: .walk)) / 60.0
+        }
+        
+        var remainingMinutes: Double = 0
+        var segmentStart: CLLocationDistance = 0
+        
+        for (index, pace) in activePaceOrder.enumerated() {
+            let segmentLength = pace.percentage * totalDistance
+            let segmentEnd = (index == activePaceOrder.count - 1) ? totalDistance : min(totalDistance, segmentStart + segmentLength)
+            let overlapStart = max(traveledDistance, segmentStart)
+            let overlapEnd = min(totalDistance, segmentEnd)
+            
+            if overlapEnd > overlapStart {
+                remainingMinutes += ((overlapEnd - overlapStart) / learnedSpeed(for: pace.paceType)) / 60.0
+            }
+            
+            segmentStart = segmentEnd
+        }
+        
+        return remainingMinutes
+    }
+    
+    private func refreshDisplayedRouteInfo() {
+        guard totalRouteDistance > 0 else { return }
+        
+        if traveledDistance > 0 {
+            let remainingMeters = max(0, totalRouteDistance - traveledDistance)
+            let remainingMinutes = estimatedRouteMinutes(totalDistance: totalRouteDistance, traveledDistance: traveledDistance)
+            routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMeters / 1609.34, remainingMinutes)
+        } else {
+            let totalMinutes = estimatedRouteMinutes(totalDistance: totalRouteDistance)
+            routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", totalRouteDistance / 1609.34, totalMinutes)
+        }
     }
     
     private func setRouteDisplayName(_ name: String?) {
@@ -1826,56 +1900,8 @@ extension ViewController {
 
     private func updateLiveRouteInfo() {
         guard totalRouteDistance > 0 else { return }
-        let remainingMeters = max(0, totalRouteDistance - traveledDistance)
-        
-        // CALCULATE TIME BASED ON PACE SEGMENTS
-        var remainingMinutes: Double = 0
-        
-        if !paceOrder.isEmpty {
-            // Calculate remaining distance per pace type
-            var remainingPerPace: [PaceType: Double] = [:]
-            
-            // Figure out which segment we're in and what's left
-            var distanceCovered: Double = 0
-            for pace in paceOrder {
-                let segmentDistance = pace.percentage * totalRouteDistance
-                
-                if traveledDistance < distanceCovered + segmentDistance {
-                    // We're in this segment
-                    let remainingInSegment = (distanceCovered + segmentDistance) - traveledDistance
-                    remainingPerPace[pace.paceType, default: 0] += remainingInSegment
-                } else if traveledDistance >= distanceCovered + segmentDistance {
-                    // Haven't reached this segment yet - add full distance
-                    remainingPerPace[pace.paceType, default: 0] += segmentDistance
-                }
-                
-                distanceCovered += segmentDistance
-            }
-            
-            // Calculate time for each pace type
-            for (paceType, distance) in remainingPerPace {
-                let speedMPS: Double
-                switch paceType {
-                case .walk:
-                    speedMPS = walkSampleCount >= 10 ? avgWalkingSpeed : 1.4
-                case .jog:
-                    speedMPS = jogSampleCount >= 10 ? avgJoggingSpeed : 2.7
-                case .run:
-                    speedMPS = runSampleCount >= 10 ? avgRunningSpeed : 4.0
-                }
-                
-                let timeSeconds = distance / speedMPS
-                remainingMinutes += timeSeconds / 60.0
-            }
-        } else {
-            // No pacing - use walk speed
-            let remainingMiles = remainingMeters / 1609.34
-            let speedMPH = walkSampleCount >= 10 ? avgWalkingSpeed * 2.23694 : 3.5
-            remainingMinutes = (remainingMiles / speedMPH) * 60
-        }
-        
         DispatchQueue.main.async {
-            self.routeInfoLabel.text = String(format: "%.2f mi left • ~%.0f min", remainingMeters / 1609.34, remainingMinutes)
+            self.refreshDisplayedRouteInfo()
         }
     }
 }
@@ -2259,6 +2285,7 @@ extension ViewController {
             let pacedSegments = applyPaceToRoute(coordinates: currentRouteCoordinates, totalDistance: totalRouteDistance)
             mapView.removeOverlays(mapView.overlays)
             pacedSegments.forEach { mapView.addOverlay($0) }
+            refreshDisplayedRouteInfo()
         }
     }
     
@@ -2402,6 +2429,7 @@ extension ViewController {
         paceOrder.swapAt(index, nextIndex)
         
         updatePaceChips()
+        refreshDisplayedRouteInfo()
         
         print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
@@ -2461,6 +2489,7 @@ extension ViewController {
                 let pacedSegments = self.applyPaceToRoute(coordinates: self.currentRouteCoordinates, totalDistance: self.totalRouteDistance)
                 self.mapView.removeOverlays(self.mapView.overlays.filter { $0 is StyledPolyline })
                 pacedSegments.forEach { self.mapView.addOverlay($0) }
+                self.refreshDisplayedRouteInfo()
             }
             
         default:
@@ -2486,6 +2515,7 @@ extension ViewController {
     @objc private func shufflePaceOrder() {
         paceOrder.shuffle()
         updatePaceChips()
+        refreshDisplayedRouteInfo()
         print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
@@ -2494,19 +2524,36 @@ extension ViewController {
 extension ViewController {
     private func updateSpeedAverages(speed: CLLocationSpeed) {
         guard speed > 0 else { return }
-        enum SpeedCategory { case walking, jogging, running }
-        let category: SpeedCategory
-        switch speed { case ..<2.0: category = .walking; case 2.0..<3.5: category = .jogging; default: category = .running }
-        switch category {
-        case .walking:
+        
+        let learnedPaceType: PaceType?
+        if isActivelyWalkingRoute {
+            learnedPaceType = paceType(at: traveledDistance)
+        } else {
+            learnedPaceType = nil
+        }
+        
+        switch learnedPaceType {
+        case .walk?:
             avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
             walkSampleCount += 1
-        case .jogging:
+        case .jog?:
             avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
             jogSampleCount += 1
-        case .running:
+        case .run?:
             avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
             runSampleCount += 1
+        case nil:
+            switch speed {
+            case ..<2.0:
+                avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
+                walkSampleCount += 1
+            case 2.0..<3.5:
+                avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
+                jogSampleCount += 1
+            default:
+                avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
+                runSampleCount += 1
+            }
         }
         let totalSamples = walkSampleCount + jogSampleCount + runSampleCount
         if totalSamples % 10 == 0 { saveSpeeds() }
