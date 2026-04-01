@@ -272,6 +272,8 @@ class ViewController: UIViewController {
     private var jogPercentLabel: UILabel!
     private var runPercentLabel: UILabel!
     private var paceChipsContainer: UIStackView!
+    private var pulseModeButton: UIButton!
+    private var pulsePickerInputField: UITextField!
     private var isPacePanelOpen = false
 
     // MARK: - State
@@ -350,6 +352,8 @@ class ViewController: UIViewController {
     private var paceOrder: [PaceSegmentConfig] = []
     private var lastPaceOrder: [PaceType] = []
     private var pacePercentLabels: [UILabel] = []
+    private let pulseOptions = Array(1...12)
+    private var pulseSegmentCount = 1
     
 
     enum RouteSheetState {
@@ -1017,8 +1021,45 @@ extension ViewController {
         )
         pacePanel.addSubview(shuffleOrderButton)
         
+        currentY += 44
+        
+        let pulseButton = createPaceButton(
+            title: "Pulse: Off",
+            color: .systemTeal,
+            y: currentY,
+            action: #selector(showPulsePicker)
+        )
+        pulseButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        pacePanel.addSubview(pulseButton)
+        pulseModeButton = pulseButton
+        
+        let pulseField = UITextField(frame: .zero)
+        pulseField.isHidden = true
+        pacePanel.addSubview(pulseField)
+        pulsePickerInputField = pulseField
+        
+        let picker = UIPickerView()
+        picker.dataSource = self
+        picker.delegate = self
+        
+        let pickerContainer = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 316))
+        picker.backgroundColor = .systemBackground
+        picker.frame = CGRect(x: 0, y: 0, width: pickerContainer.bounds.width, height: pickerContainer.bounds.height)
+        picker.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        pickerContainer.addSubview(picker)
+        pulseField.inputView = pickerContainer
+        
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissPulsePicker))
+        let flexItem = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let doneItem = UIBarButtonItem(title: "Done", style: .plain, target: self, action: #selector(dismissPulsePicker))
+        toolbar.items = [cancelItem, flexItem, doneItem]
+        pulseField.inputAccessoryView = toolbar
+        
         // Initialize pace order
         updatePaceConfiguration()
+        updatePulseButtonTitle()
     }
     
     private func createVerticalSlider(label: String, color: UIColor, x: CGFloat, width: CGFloat, action: Selector) -> UIView {
@@ -1093,10 +1134,29 @@ extension ViewController {
         container.addSubview(label)
         return y + 25
     }
+    
+    private func updatePulseButtonTitle() {
+        pulseModeButton?.setTitle(pulseSegmentCount == 1 ? "Pulse: Off" : "Pulse: \(pulseSegmentCount)", for: .normal)
+    }
 }
 
 // MARK: - Pace Panel Toggle
 extension ViewController {
+    @objc private func showPulsePicker() {
+        guard let pickerContainer = pulsePickerInputField.inputView,
+              let picker = pickerContainer.subviews.compactMap({ $0 as? UIPickerView }).first,
+              let selectedRow = pulseOptions.firstIndex(of: pulseSegmentCount) else {
+            pulsePickerInputField.becomeFirstResponder()
+            return
+        }
+        picker.selectRow(selectedRow, inComponent: 0, animated: false)
+        pulsePickerInputField.becomeFirstResponder()
+    }
+    
+    @objc private func dismissPulsePicker() {
+        pulsePickerInputField.resignFirstResponder()
+    }
+    
     private func openPacePanel() {
         UIView.animate(withDuration: 0.3) {
             self.pacePanel.frame.origin.x = 0
@@ -1473,7 +1533,8 @@ extension ViewController {
             waypoints: waypoints ?? selectedCoordinates,
             fullRoute: coordinates,
             name: name,
-            paceConfig: paceOrder.isEmpty ? nil : paceOrder
+            paceConfig: paceOrder.isEmpty ? nil : paceOrder,
+            pulseSegmentCount: pulseSegmentCount
         )
     }
     
@@ -1555,39 +1616,39 @@ extension ViewController {
         let routeDistance = totalDistance ?? totalRouteDistance
         guard routeDistance > 0 else { return nil }
         
-        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
-        guard !activePaceOrder.isEmpty else { return nil }
+        let activePaceSegments = effectivePaceSegments(totalDistance: routeDistance)
+        guard !activePaceSegments.isEmpty else { return nil }
         
         let clampedDistance = min(max(distance, 0), routeDistance)
         var segmentStart: CLLocationDistance = 0
         
-        for (index, pace) in activePaceOrder.enumerated() {
+        for (index, pace) in activePaceSegments.enumerated() {
             let segmentLength = pace.percentage * routeDistance
-            let segmentEnd = (index == activePaceOrder.count - 1) ? routeDistance : min(routeDistance, segmentStart + segmentLength)
-            if clampedDistance <= segmentEnd || index == activePaceOrder.count - 1 {
+            let segmentEnd = (index == activePaceSegments.count - 1) ? routeDistance : min(routeDistance, segmentStart + segmentLength)
+            if clampedDistance <= segmentEnd || index == activePaceSegments.count - 1 {
                 return pace.paceType
             }
             segmentStart = segmentEnd
         }
         
-        return activePaceOrder.last?.paceType
+        return activePaceSegments.last?.paceType
     }
     
     private func estimatedRouteMinutes(totalDistance: CLLocationDistance, traveledDistance: CLLocationDistance = 0) -> Double {
         let remainingDistance = max(0, totalDistance - traveledDistance)
         guard remainingDistance > 0 else { return 0 }
         
-        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
-        guard !activePaceOrder.isEmpty else {
+        let activePaceSegments = effectivePaceSegments(totalDistance: totalDistance)
+        guard !activePaceSegments.isEmpty else {
             return (remainingDistance / learnedSpeed(for: .walk)) / 60.0
         }
         
         var remainingMinutes: Double = 0
         var segmentStart: CLLocationDistance = 0
         
-        for (index, pace) in activePaceOrder.enumerated() {
+        for (index, pace) in activePaceSegments.enumerated() {
             let segmentLength = pace.percentage * totalDistance
-            let segmentEnd = (index == activePaceOrder.count - 1) ? totalDistance : min(totalDistance, segmentStart + segmentLength)
+            let segmentEnd = (index == activePaceSegments.count - 1) ? totalDistance : min(totalDistance, segmentStart + segmentLength)
             let overlapStart = max(traveledDistance, segmentStart)
             let overlapEnd = min(totalDistance, segmentEnd)
             
@@ -1732,6 +1793,80 @@ extension ViewController {
 
 // MARK: - Pace Segment Calculation
 extension ViewController {
+    private func effectivePaceSegments(totalDistance: Double) -> [PaceSegmentConfig] {
+        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
+        guard !activePaceOrder.isEmpty else { return [] }
+        guard pulseSegmentCount > 1 else {
+            return activePaceOrder.map {
+                PaceSegmentConfig(
+                    paceType: $0.paceType,
+                    percentage: $0.percentage,
+                    distance: $0.percentage * totalDistance
+                )
+            }
+        }
+        
+        var chunkCounts = activePaceOrder.map { max(0, Int(floor($0.percentage * Double(pulseSegmentCount)))) }
+        let fractionalParts = activePaceOrder.enumerated().map {
+            (index: $0.offset, fraction: ($0.element.percentage * Double(pulseSegmentCount)) - Double(chunkCounts[$0.offset]))
+        }
+        
+        var assignedChunks = chunkCounts.reduce(0, +)
+        let sortedFractions = fractionalParts.sorted { lhs, rhs in
+            if lhs.fraction == rhs.fraction {
+                return lhs.index < rhs.index
+            }
+            return lhs.fraction > rhs.fraction
+        }
+        
+        var fractionIndex = 0
+        while assignedChunks < pulseSegmentCount && !sortedFractions.isEmpty {
+            let targetIndex = sortedFractions[fractionIndex % sortedFractions.count].index
+            chunkCounts[targetIndex] += 1
+            assignedChunks += 1
+            fractionIndex += 1
+        }
+        
+        while assignedChunks > pulseSegmentCount, let removableIndex = chunkCounts.firstIndex(where: { $0 > 0 }) {
+            chunkCounts[removableIndex] -= 1
+            assignedChunks -= 1
+        }
+        
+        var remainingChunkCounts = chunkCounts
+        var effectiveSegments: [PaceSegmentConfig] = []
+        var nextStartIndex = 0
+        
+        while remainingChunkCounts.contains(where: { $0 > 0 }) {
+            for offset in 0..<activePaceOrder.count {
+                let paceIndex = (nextStartIndex + offset) % activePaceOrder.count
+                guard remainingChunkCounts[paceIndex] > 0 else { continue }
+                
+                let pace = activePaceOrder[paceIndex]
+                let repeatedCount = max(1, chunkCounts[paceIndex])
+                let chunkPercentage = pace.percentage / Double(repeatedCount)
+                effectiveSegments.append(
+                    PaceSegmentConfig(
+                        paceType: pace.paceType,
+                        percentage: chunkPercentage,
+                        distance: chunkPercentage * totalDistance
+                    )
+                )
+                remainingChunkCounts[paceIndex] -= 1
+                nextStartIndex = (paceIndex + 1) % activePaceOrder.count
+                break
+            }
+        }
+        
+        if let lastIndex = effectiveSegments.indices.last {
+            let totalPercentage = effectiveSegments.reduce(0) { $0 + $1.percentage }
+            let correction = 1.0 - totalPercentage
+            effectiveSegments[lastIndex].percentage += correction
+            effectiveSegments[lastIndex].distance = effectiveSegments[lastIndex].percentage * totalDistance
+        }
+        
+        return effectiveSegments.filter { $0.percentage > 0.0001 }
+    }
+    
     private func applyPaceToRoute(coordinates: [CLLocationCoordinate2D], totalDistance: Double) -> [StyledPolyline] {
         guard coordinates.count > 1 else { return [] }
         guard !paceOrder.isEmpty else {
@@ -1743,7 +1878,7 @@ extension ViewController {
         print("🎨 Applying pace pattern to route...")
         
         // Calculate segment boundaries based on pace order
-        let activePaceOrder = paceOrder.filter { $0.percentage >= 0.01 }
+        let activePaceOrder = effectivePaceSegments(totalDistance: totalDistance)
         guard !activePaceOrder.isEmpty else {
             let polyline = StyledPolyline(coordinates: coordinates, count: coordinates.count)
             return [polyline]
@@ -2376,6 +2511,21 @@ extension ViewController {
 
 // MARK: - Pace Panel Actions
 extension ViewController {
+    private func redrawCurrentPacedRouteIfNeeded() {
+        guard !currentRouteCoordinates.isEmpty, totalRouteDistance > 0 else { return }
+        let pacedSegments = applyPaceToRoute(coordinates: currentRouteCoordinates, totalDistance: totalRouteDistance)
+        mapView.removeOverlays(mapView.overlays.filter { $0 is StyledPolyline })
+        pacedSegments.forEach { mapView.addOverlay($0) }
+        refreshDisplayedRouteInfo()
+    }
+    
+    private func applyPulseSegmentCount(_ count: Int) {
+        pulseSegmentCount = max(1, count)
+        updatePulseButtonTitle()
+        redrawCurrentPacedRouteIfNeeded()
+        print("〰️ Pulse mode set to \(pulseSegmentCount == 1 ? "Off" : "\(pulseSegmentCount) segments")")
+    }
+    
     @objc private func paceSliderChanged(_ sender: UISlider) {
         let allSliders = [walkSlider, jogSlider, runSlider].compactMap { $0 }
         let otherSliders = allSliders.filter { $0 !== sender }
@@ -2588,7 +2738,7 @@ extension ViewController {
         paceOrder.swapAt(index, nextIndex)
         
         updatePaceChips()
-        refreshDisplayedRouteInfo()
+        redrawCurrentPacedRouteIfNeeded()
         
         print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
@@ -2645,10 +2795,7 @@ extension ViewController {
             
             // Redraw route with new pace order
             if !self.currentRouteCoordinates.isEmpty && self.totalRouteDistance > 0 {
-                let pacedSegments = self.applyPaceToRoute(coordinates: self.currentRouteCoordinates, totalDistance: self.totalRouteDistance)
-                self.mapView.removeOverlays(self.mapView.overlays.filter { $0 is StyledPolyline })
-                pacedSegments.forEach { self.mapView.addOverlay($0) }
-                self.refreshDisplayedRouteInfo()
+                self.redrawCurrentPacedRouteIfNeeded()
             }
             
         default:
@@ -2674,7 +2821,7 @@ extension ViewController {
     @objc private func shufflePaceOrder() {
         paceOrder.shuffle()
         updatePaceChips()
-        refreshDisplayedRouteInfo()
+        redrawCurrentPacedRouteIfNeeded()
         print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
@@ -2911,6 +3058,25 @@ extension ViewController: CLLocationManagerDelegate {
 // MARK: - UITextFieldDelegate
 extension ViewController: UITextFieldDelegate { }
 
+extension ViewController: UIPickerViewDataSource, UIPickerViewDelegate {
+    func numberOfComponents(in pickerView: UIPickerView) -> Int {
+        1
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int {
+        pulseOptions.count
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? {
+        let value = pulseOptions[row]
+        return value == 1 ? "Off" : "\(value) segments"
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+        applyPulseSegmentCount(pulseOptions[row])
+    }
+}
+
 // MARK: - UITableViewDataSource
 extension ViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -3087,8 +3253,10 @@ extension ViewController {
 
         // Restore pace configuration
         if let paceData = route.paceOrderData,
-           let savedPaceOrder = CoreDataManager.shared.decodePaceConfig(paceData) {
-            paceOrder = savedPaceOrder
+           let savedPaceConfig = CoreDataManager.shared.decodePaceConfig(paceData) {
+            paceOrder = savedPaceConfig.segments
+            pulseSegmentCount = savedPaceConfig.pulseSegmentCount
+            updatePulseButtonTitle()
             
             if let walkPace = paceOrder.first(where: { $0.paceType == .walk }) {
                 walkSlider.value = Float(walkPace.percentage)

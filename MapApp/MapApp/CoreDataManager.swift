@@ -13,6 +13,11 @@ class CoreDataManager {
         let type: String
         let percentage: Double
     }
+    
+    private struct StoredPaceConfiguration: Codable {
+        let pulseSegmentCount: Int
+        let segments: [StoredPaceSegment]
+    }
 
     // Singleton - one instance for whole app
     static let shared = CoreDataManager()
@@ -106,7 +111,8 @@ class CoreDataManager {
         waypoints: [CLLocationCoordinate2D],
         fullRoute: [CLLocationCoordinate2D]?,
         name: String? = nil,
-        paceConfig: [PaceSegmentConfig]? = nil
+        paceConfig: [PaceSegmentConfig]? = nil,
+        pulseSegmentCount: Int = 1
     ) {
         // Create new database row
         let route = SavedRoute(context: context)
@@ -130,7 +136,7 @@ class CoreDataManager {
         route.routeNumber = Int32(getNextRouteNumber())
 
         if let paceConfig = paceConfig {
-            route.paceOrderData = encodePaceConfig(paceConfig)
+            route.paceOrderData = encodePaceConfig(paceConfig, pulseSegmentCount: pulseSegmentCount)
         }
         
         // Write to disk
@@ -138,22 +144,35 @@ class CoreDataManager {
         print("✅ Saved route #\(route.routeNumber): \(targetDistance) miles")
     }
 
-    func encodePaceConfig(_ config: [PaceSegmentConfig]) -> Data? {
+    func encodePaceConfig(_ config: [PaceSegmentConfig], pulseSegmentCount: Int = 1) -> Data? {
         let simplified = config.map {
             StoredPaceSegment(type: $0.paceType.rawValue, percentage: $0.percentage)
         }
-        return try? JSONEncoder().encode(simplified)
+        let storedConfig = StoredPaceConfiguration(
+            pulseSegmentCount: max(1, pulseSegmentCount),
+            segments: simplified
+        )
+        return try? JSONEncoder().encode(storedConfig)
     }
 
-    func decodePaceConfig(_ data: Data) -> [PaceSegmentConfig]? {
-        guard let array = try? JSONDecoder().decode([StoredPaceSegment].self, from: data) else {
+    func decodePaceConfig(_ data: Data) -> (segments: [PaceSegmentConfig], pulseSegmentCount: Int)? {
+        if let storedConfig = try? JSONDecoder().decode(StoredPaceConfiguration.self, from: data) {
+            let segments: [PaceSegmentConfig] = storedConfig.segments.compactMap { item in
+                guard let paceType = PaceType(rawValue: item.type) else { return nil }
+                return PaceSegmentConfig(paceType: paceType, percentage: item.percentage, distance: 0)
+            }
+            return (segments, max(1, storedConfig.pulseSegmentCount))
+        }
+        
+        guard let legacyArray = try? JSONDecoder().decode([StoredPaceSegment].self, from: data) else {
             return nil
         }
-
-        return array.compactMap { item in
+        
+        let segments: [PaceSegmentConfig] = legacyArray.compactMap { item in
             guard let paceType = PaceType(rawValue: item.type) else { return nil }
             return PaceSegmentConfig(paceType: paceType, percentage: item.percentage, distance: 0)
         }
+        return (segments, 1)
     }
     
     // MARK: - Fetch Routes
