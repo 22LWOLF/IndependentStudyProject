@@ -8,6 +8,7 @@
 import UIKit
 import MapKit
 import CoreLocation
+import ActivityKit
 import AVFAudio
 
 // MARK: - Color Scheme
@@ -234,6 +235,7 @@ class ViewController: UIViewController {
     private struct NavigationCue {
         let triggerDistance: CLLocationDistance
         let instruction: String
+        let announcementLeadDistance: CLLocationDistance
     }
     
     // MARK: - Outlets
@@ -326,6 +328,9 @@ class ViewController: UIViewController {
     private var speechSynthesizer = AVSpeechSynthesizer()
     private var navigationCues: [NavigationCue] = []
     private var nextNavigationCueIndex = 0
+    private var routeLiveActivity: Activity<MapAppRouteActivityAttributes>?
+    private var lastLiveActivityUpdateDate: Date?
+    private var lastLoggedPaceType: PaceType?
 
     // MARK: - Speed Learning
     private var avgWalkingSpeed: Double = 1.4
@@ -1127,6 +1132,10 @@ extension ViewController {
                 self?.printSavedRoutes()
             }
             
+            let printSpeedAveragesAction = UIAlertAction(title: "Print Speed Averages", style: .default) { [weak self] _ in
+                self?.printSpeedAverages()
+            }
+            
             // Clear all routes AND reset counter (destructive)
             let clearAllAction = UIAlertAction(title: "Clear All Routes", style: .destructive) { [weak self] _ in
                 self?.confirmClearAllData()
@@ -1141,6 +1150,7 @@ extension ViewController {
             
             alert.addAction(resetSpeedAction)
             alert.addAction(printRoutesAction)
+            alert.addAction(printSpeedAveragesAction)
             alert.addAction(clearAllAction)
             alert.addAction(resetEverythingAction)
             alert.addAction(cancelAction)
@@ -1293,7 +1303,8 @@ extension ViewController {
                 cues.append(
                     NavigationCue(
                         triggerDistance: route.distance,
-                        instruction: "Turn around to return to your starting point."
+                        instruction: "Turn around to return to your starting point.",
+                        announcementLeadDistance: 20
                     )
                 )
             }
@@ -1449,6 +1460,8 @@ extension ViewController {
             pendingRouteSave = nil
             setSaveRoutePillVisible(false)
         }
+        
+        startLiveActivityForCurrentRoute()
     }
 
     private func saveRouteToDatabase(coordinates: [CLLocationCoordinate2D], totalDistance: CLLocationDistance, config: RouteConfig, name: String? = nil, waypoints: [CLLocationCoordinate2D]? = nil) {
@@ -1472,7 +1485,24 @@ extension ViewController {
             accumulatedDistance += step.distance
             let instruction = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !instruction.isEmpty else { continue }
-            cues.append(NavigationCue(triggerDistance: accumulatedDistance, instruction: instruction))
+            let leadDistance: CLLocationDistance
+            switch step.distance {
+            case 804...:
+                leadDistance = 804
+            case 321...:
+                leadDistance = 321
+            case 120...:
+                leadDistance = 120
+            default:
+                leadDistance = 45
+            }
+            cues.append(
+                NavigationCue(
+                    triggerDistance: accumulatedDistance,
+                    instruction: instruction,
+                    announcementLeadDistance: leadDistance
+                )
+            )
         }
         
         return cues
@@ -1581,6 +1611,94 @@ extension ViewController {
         } else {
             let totalMinutes = estimatedRouteMinutes(totalDistance: totalRouteDistance)
             routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", totalRouteDistance / 1609.34, totalMinutes)
+        }
+        
+        scheduleLiveActivityUpdateIfNeeded()
+    }
+    
+    private func nextNavigationInstructionText() -> String {
+        guard nextNavigationCueIndex < navigationCues.count else { return "" }
+        return navigationCues[nextNavigationCueIndex].instruction
+    }
+    
+    private func currentPaceTypeForRouteState() -> PaceType {
+        if let livePace = paceType(at: traveledDistance) {
+            return livePace
+        }
+        return paceOrder.first?.paceType ?? .walk
+    }
+    
+    private func liveActivityContentState() -> MapAppRouteActivityAttributes.ContentState {
+        MapAppRouteActivityAttributes.ContentState(
+            routeName: currentRouteDisplayName,
+            remainingMiles: max(0, totalRouteDistance - traveledDistance) / 1609.34,
+            remainingMinutes: Int(estimatedRouteMinutes(totalDistance: totalRouteDistance, traveledDistance: traveledDistance).rounded()),
+            nextInstruction: nextNavigationInstructionText(),
+            currentPaceType: currentPaceTypeForRouteState().rawValue
+        )
+    }
+    
+    private func startLiveActivityForCurrentRoute() {
+        guard totalRouteDistance > 0 else { return }
+        guard #available(iOS 16.1, *) else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("🟡 Live Activities are disabled for this app/device")
+            return
+        }
+        
+        let attributes = MapAppRouteActivityAttributes(routeID: UUID().uuidString)
+        let content = ActivityContent(
+            state: liveActivityContentState(),
+            staleDate: Date().addingTimeInterval(300),
+            relevanceScore: 100
+        )
+        
+        Task {
+            do {
+                for activity in Activity<MapAppRouteActivityAttributes>.activities {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+                routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
+                lastLiveActivityUpdateDate = Date()
+                print("🟢 Live Activity started")
+            } catch {
+                print("🔴 Failed to start Live Activity: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func scheduleLiveActivityUpdateIfNeeded(force: Bool = false) {
+        guard totalRouteDistance > 0 else { return }
+        guard #available(iOS 16.1, *) else { return }
+        guard routeLiveActivity != nil else { return }
+        
+        let now = Date()
+        if !force, let lastUpdate = lastLiveActivityUpdateDate, now.timeIntervalSince(lastUpdate) < 2 {
+            return
+        }
+        
+        let content = ActivityContent(
+            state: liveActivityContentState(),
+            staleDate: now.addingTimeInterval(300),
+            relevanceScore: 100
+        )
+        
+        Task {
+            await routeLiveActivity?.update(content)
+        }
+        lastLiveActivityUpdateDate = now
+    }
+    
+    private func endLiveActivity() {
+        guard #available(iOS 16.1, *) else { return }
+        
+        Task {
+            for activity in Activity<MapAppRouteActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            routeLiveActivity = nil
+            lastLiveActivityUpdateDate = nil
+            print("⚪️ Live Activity ended")
         }
     }
     
@@ -1795,6 +1913,7 @@ extension ViewController {
             traveledDistance = snappedDistance
             let progress = Float(min(max(traveledDistance / totalRouteDistance, 0), 1))
             DispatchQueue.main.async { self.progressView.setProgress(progress, animated: true) }
+            logPaceTransitionIfNeeded()
             speakNextNavigationCueIfNeeded()
         }
         updateWalkedOverlay()
@@ -1804,23 +1923,64 @@ extension ViewController {
     private func speakNextNavigationCueIfNeeded() {
         guard nextNavigationCueIndex < navigationCues.count else { return }
         let cue = navigationCues[nextNavigationCueIndex]
-        let leadDistance: CLLocationDistance = 35
-        guard traveledDistance + leadDistance >= cue.triggerDistance else { return }
+        guard traveledDistance + cue.announcementLeadDistance >= cue.triggerDistance else { return }
         
-        speakNavigationInstruction(cue.instruction)
+        let remainingDistance = max(0, cue.triggerDistance - traveledDistance)
+        speakNavigationInstruction(cue.instruction, remainingDistance: remainingDistance)
         nextNavigationCueIndex += 1
+        scheduleLiveActivityUpdateIfNeeded(force: true)
     }
     
-    private func speakNavigationInstruction(_ instruction: String) {
+    private func speakNavigationInstruction(_ instruction: String, remainingDistance: CLLocationDistance? = nil) {
         guard !instruction.isEmpty else { return }
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)
         }
         
-        let utterance = AVSpeechUtterance(string: instruction)
+        let message: String
+        if let remainingDistance, remainingDistance > 5 {
+            message = "\(spokenDistanceString(for: remainingDistance)), \(instruction)"
+        } else {
+            message = instruction
+        }
+        
+        let utterance = AVSpeechUtterance(string: message)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.48
         speechSynthesizer.speak(utterance)
+    }
+    
+    private func spokenDistanceString(for distance: CLLocationDistance) -> String {
+        if distance >= 804 {
+            return String(format: "In %.1f miles", distance / 1609.34)
+        }
+        if distance >= 321 {
+            return String(format: "In %.1f miles", distance / 1609.34)
+        }
+        let roundedFeet = max(50, (distance * 3.28084 / 50).rounded() * 50)
+        return "In \(Int(roundedFeet)) feet"
+    }
+    
+    private func logPaceTransitionIfNeeded() {
+        guard let currentPace = paceType(at: traveledDistance) else { return }
+        guard currentPace != lastLoggedPaceType else { return }
+        
+        lastLoggedPaceType = currentPace
+        let currentAverage: Double
+        switch currentPace {
+        case .walk:
+            currentAverage = avgWalkingSpeed
+        case .jog:
+            currentAverage = avgJoggingSpeed
+        case .run:
+            currentAverage = avgRunningSpeed
+        }
+        
+        print(
+            "🏁 Pace segment switched to \(currentPace.rawValue) | " +
+            String(format: "avg %.2f m/s (walk %.2f, jog %.2f, run %.2f)",
+                   currentAverage, avgWalkingSpeed, avgJoggingSpeed, avgRunningSpeed)
+        )
     }
     
     private func updateWalkedOverlay() {
@@ -2001,6 +2161,7 @@ extension ViewController {
         selectedCoordinates.removeAll()
         isGeneratingRoute = false
         isActivelyWalkingRoute = false
+        lastLoggedPaceType = nil
         mapView.removeOverlays(mapView.overlays)
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         resetProgressTracking(totalDistance: 0, routeCoords: [])
@@ -2009,6 +2170,7 @@ extension ViewController {
         pendingRouteSave = nil
         setSaveRoutePillVisible(false)
         beginNavigationCues([])
+        endLiveActivity()
     }
 
     private func clearPinsAndOverlays() {
@@ -2533,23 +2695,29 @@ extension ViewController {
         case .walk?:
             avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
             walkSampleCount += 1
+            logSpeedLearningUpdate(paceType: .walk, sampledSpeed: speed)
         case .jog?:
             avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
             jogSampleCount += 1
+            logSpeedLearningUpdate(paceType: .jog, sampledSpeed: speed)
         case .run?:
             avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
             runSampleCount += 1
+            logSpeedLearningUpdate(paceType: .run, sampledSpeed: speed)
         case nil:
             switch speed {
             case ..<2.0:
                 avgWalkingSpeed = ((avgWalkingSpeed * Double(walkSampleCount)) + speed) / Double(walkSampleCount + 1)
                 walkSampleCount += 1
+                logSpeedLearningUpdate(paceType: .walk, sampledSpeed: speed, source: "threshold")
             case 2.0..<3.5:
                 avgJoggingSpeed = ((avgJoggingSpeed * Double(jogSampleCount)) + speed) / Double(jogSampleCount + 1)
                 jogSampleCount += 1
+                logSpeedLearningUpdate(paceType: .jog, sampledSpeed: speed, source: "threshold")
             default:
                 avgRunningSpeed = ((avgRunningSpeed * Double(runSampleCount)) + speed) / Double(runSampleCount + 1)
                 runSampleCount += 1
+                logSpeedLearningUpdate(paceType: .run, sampledSpeed: speed, source: "threshold")
             }
         }
         let totalSamples = walkSampleCount + jogSampleCount + runSampleCount
@@ -2591,6 +2759,42 @@ extension ViewController {
         let routes = CoreDataManager.shared.fetchAllRoutes()
         print("Total saved routes: \(routes.count)")
         for route in routes { print("  - \(route.targetDistance) miles, created \(String(describing: route.createdDate))") }
+    }
+    
+    private func printSpeedAverages() {
+        let currentPace = paceType(at: traveledDistance)?.rawValue ?? "None"
+        print(
+            """
+            📊 Speed averages
+            - Current pace segment: \(currentPace)
+            - Walk: \(String(format: "%.2f", avgWalkingSpeed)) m/s (\(walkSampleCount) samples)
+            - Jog: \(String(format: "%.2f", avgJoggingSpeed)) m/s (\(jogSampleCount) samples)
+            - Run: \(String(format: "%.2f", avgRunningSpeed)) m/s (\(runSampleCount) samples)
+            """
+        )
+    }
+    
+    private func logSpeedLearningUpdate(paceType: PaceType, sampledSpeed: CLLocationSpeed, source: String = "pace segment") {
+        let updatedAverage: Double
+        let sampleCount: Int
+        
+        switch paceType {
+        case .walk:
+            updatedAverage = avgWalkingSpeed
+            sampleCount = walkSampleCount
+        case .jog:
+            updatedAverage = avgJoggingSpeed
+            sampleCount = jogSampleCount
+        case .run:
+            updatedAverage = avgRunningSpeed
+            sampleCount = runSampleCount
+        }
+        
+        print(
+            "📈 Updated \(paceType.rawValue) average via \(source): " +
+            String(format: "sample %.2f m/s -> avg %.2f m/s (%d samples)",
+                   sampledSpeed, updatedAverage, sampleCount)
+        )
     }
 }
 

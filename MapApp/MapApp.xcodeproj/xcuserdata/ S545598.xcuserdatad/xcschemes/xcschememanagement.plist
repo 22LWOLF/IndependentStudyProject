@@ -7,12 +7,25 @@
 		<key>MapApp.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>1</integer>
 		</dict>
 		<key>MapAppLiveActivityExtensionExtension.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>1</integer>
+			<integer>0</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>C0B7BECC2F7C5D1300C934DF</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>FE794D802F1A9A7B000B99B0</key>
+		<dict>
+			<key>primary</key>
+			<true/>
 		</dict>
 	</dict>
 </dict>
