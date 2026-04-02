@@ -11,9 +11,6 @@ import SwiftUI
 @main
 struct MapAppLiveActivityExtensionBundle: WidgetBundle {
     var body: some Widget {
-        MapAppLiveActivityExtension()
-        MapAppLiveActivityExtensionControl()
-        MapAppLiveActivityExtensionLiveActivity()
         MapAppRouteLiveActivity()
     }
 }

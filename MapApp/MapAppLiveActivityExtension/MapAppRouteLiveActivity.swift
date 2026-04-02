@@ -26,13 +26,24 @@ struct MapAppRouteLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(context.state.routeName)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
-                            .font(.caption2)
-                            .lineLimit(2)
+                    HStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(paceColor(for: context.state.currentPaceType))
+                            Image(systemName: paceSymbol(for: context.state.currentPaceType))
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(width: 28, height: 28)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(context.state.routeName)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
+                                .font(.caption2)
+                                .lineLimit(2)
+                        }
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -57,15 +68,30 @@ struct MapAppRouteLiveActivity: Widget {
                     .foregroundStyle(paceColor(for: context.state.currentPaceType))
                 }
             } compactLeading: {
-                Image(systemName: paceSymbol(for: context.state.currentPaceType))
-                    .foregroundStyle(paceColor(for: context.state.currentPaceType))
+                ZStack {
+                    Circle()
+                        .fill(paceColor(for: context.state.currentPaceType))
+                    Image(systemName: paceSymbol(for: context.state.currentPaceType))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 24, height: 24)
             } compactTrailing: {
-                Text("\(context.state.remainingMinutes)m")
-                    .font(.caption2.bold())
+                Text(compactDirectionText(for: context.state.nextInstruction))
+                    .font(.caption2.weight(.black))
+                    .lineLimit(1)
+                    .foregroundStyle(.white)
             } minimal: {
-                Image(systemName: paceSymbol(for: context.state.currentPaceType))
-                    .foregroundStyle(paceColor(for: context.state.currentPaceType))
+                ZStack {
+                    Circle()
+                        .fill(paceColor(for: context.state.currentPaceType))
+                    Image(systemName: paceSymbol(for: context.state.currentPaceType))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 24, height: 24)
             }
+            .keylineTint(paceColor(for: context.state.currentPaceType))
         }
     }
     
@@ -85,7 +111,7 @@ struct MapAppRouteLiveActivity: Widget {
     private func paceSymbol(for paceType: String) -> String {
         switch paceType {
         case "Walk":
-            return "figure.walk"
+            return "tortoise.fill"
         case "Jog":
             return "figure.run"
         case "Run":
@@ -93,5 +119,22 @@ struct MapAppRouteLiveActivity: Widget {
         default:
             return "location.fill"
         }
+    }
+    
+    private func compactDirectionText(for instruction: String) -> String {
+        let lowered = instruction.lowercased()
+        if lowered.contains("left") {
+            return "L"
+        }
+        if lowered.contains("right") {
+            return "R"
+        }
+        if lowered.contains("straight") || lowered.contains("continue") {
+            return "↑"
+        }
+        if lowered.contains("turn around") {
+            return "↺"
+        }
+        return "\(0)".replacingOccurrences(of: "0", with: "")
     }
 }

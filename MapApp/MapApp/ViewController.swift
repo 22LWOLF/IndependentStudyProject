@@ -199,11 +199,11 @@ struct PaceSegmentConfig {
     var percentage: Double
     var distance: Double
     
-    var icon: String {
+    var symbolName: String {
         switch paceType {
-        case .walk: return "🐢"
-        case .jog: return "🏃"
-        case .run: return "🐰"
+        case .walk: return "tortoise.fill"
+        case .jog: return "figure.run"
+        case .run: return "hare.fill"
         }
     }
     
@@ -333,6 +333,7 @@ class ViewController: UIViewController {
     private var routeLiveActivity: Activity<MapAppRouteActivityAttributes>?
     private var lastLiveActivityUpdateDate: Date?
     private var lastLoggedPaceType: PaceType?
+    private var hasAttemptedDebugLiveActivityStart = false
 
     // MARK: - Speed Learning
     private var avgWalkingSpeed: Double = 1.4
@@ -375,6 +376,11 @@ class ViewController: UIViewController {
         routeNameLabel?.text = currentRouteDisplayName
         
         
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startDebugLiveActivityPreviewIfNeeded()
     }
 
     override func viewDidLayoutSubviews() {
@@ -1728,6 +1734,44 @@ extension ViewController {
         }
     }
     
+    private func startDebugLiveActivityPreviewIfNeeded() {
+        guard #available(iOS 16.1, *) else { return }
+        guard !hasAttemptedDebugLiveActivityStart else { return }
+        hasAttemptedDebugLiveActivityStart = true
+        
+        guard totalRouteDistance <= 0 else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("🟡 Debug Live Activity preview skipped because Live Activities are disabled")
+            return
+        }
+        
+        let attributes = MapAppRouteActivityAttributes(routeID: "debug-preview")
+        let content = ActivityContent(
+            state: MapAppRouteActivityAttributes.ContentState(
+                routeName: "MapApp Debug",
+                remainingMiles: 1.25,
+                remainingMinutes: 18,
+                nextInstruction: "Head north to verify the Dynamic Island preview.",
+                currentPaceType: PaceType.walk.rawValue
+            ),
+            staleDate: Date().addingTimeInterval(300),
+            relevanceScore: 100
+        )
+        
+        Task {
+            do {
+                for activity in Activity<MapAppRouteActivityAttributes>.activities {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+                routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
+                lastLiveActivityUpdateDate = Date()
+                print("🧪 Debug Live Activity preview started. Active count: \(Activity<MapAppRouteActivityAttributes>.activities.count)")
+            } catch {
+                print("🔴 Debug Live Activity preview failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
     private func scheduleLiveActivityUpdateIfNeeded(force: Bool = false) {
         guard totalRouteDistance > 0 else { return }
         guard #available(iOS 16.1, *) else { return }
@@ -2695,12 +2739,13 @@ extension ViewController {
         chip.layer.borderWidth = 2
         chip.layer.borderColor = pace.color.cgColor
         
-        let iconLabel = UILabel()
-        iconLabel.text = pace.icon
-        iconLabel.font = .systemFont(ofSize: 24)
-        iconLabel.textAlignment = .center
-        iconLabel.translatesAutoresizingMaskIntoConstraints = false
-        chip.addSubview(iconLabel)
+        let iconImageView = UIImageView()
+        iconImageView.image = UIImage(systemName: pace.symbolName)
+        iconImageView.tintColor = pace.color
+        iconImageView.contentMode = .scaleAspectFit
+        iconImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+        iconImageView.translatesAutoresizingMaskIntoConstraints = false
+        chip.addSubview(iconImageView)
         
         let percentLabel = UILabel()
         percentLabel.text = "\(Int(pace.percentage * 100))%"
@@ -2711,11 +2756,13 @@ extension ViewController {
         chip.addSubview(percentLabel)
         
         NSLayoutConstraint.activate([
-            iconLabel.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
-            iconLabel.topAnchor.constraint(equalTo: chip.topAnchor, constant: 8),
+            iconImageView.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+            iconImageView.topAnchor.constraint(equalTo: chip.topAnchor, constant: 10),
+            iconImageView.widthAnchor.constraint(equalToConstant: 26),
+            iconImageView.heightAnchor.constraint(equalToConstant: 26),
             
             percentLabel.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
-            percentLabel.topAnchor.constraint(equalTo: iconLabel.bottomAnchor, constant: 2)
+            percentLabel.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2)
         ])
         
         // Add tap gesture to swap positions
