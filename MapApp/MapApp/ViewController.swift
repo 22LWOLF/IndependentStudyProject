@@ -334,6 +334,9 @@ class ViewController: UIViewController {
     private var lastLiveActivityUpdateDate: Date?
     private var lastLoggedPaceType: PaceType?
     private var hasAttemptedDebugLiveActivityStart = false
+    private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .soft)
+    private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .medium)
+    private let runPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
 
     // MARK: - Speed Learning
     private var avgWalkingSpeed: Double = 1.4
@@ -365,6 +368,9 @@ class ViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        speechSynthesizer.delegate = self
+        configureSpokenGuidanceAudioSession()
+        preparePaceHaptics()
         setupMap()
         setupLocation()
         setupUI()
@@ -2113,16 +2119,13 @@ extension ViewController {
         guard traveledDistance + cue.announcementLeadDistance >= cue.triggerDistance else { return }
         
         let remainingDistance = max(0, cue.triggerDistance - traveledDistance)
-        speakNavigationInstruction(cue.instruction, remainingDistance: remainingDistance)
+        speakTurnInstruction(cue.instruction, remainingDistance: remainingDistance)
         nextNavigationCueIndex += 1
         scheduleLiveActivityUpdateIfNeeded(force: true)
     }
     
-    private func speakNavigationInstruction(_ instruction: String, remainingDistance: CLLocationDistance? = nil) {
+    private func speakTurnInstruction(_ instruction: String, remainingDistance: CLLocationDistance? = nil) {
         guard !instruction.isEmpty else { return }
-        if speechSynthesizer.isSpeaking {
-            speechSynthesizer.stopSpeaking(at: .immediate)
-        }
         
         let message: String
         if let remainingDistance, remainingDistance > 5 {
@@ -2131,10 +2134,7 @@ extension ViewController {
             message = instruction
         }
         
-        let utterance = AVSpeechUtterance(string: message)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.48
-        speechSynthesizer.speak(utterance)
+        speakGuidance(message, interruptCurrent: true)
     }
     
     private func spokenDistanceString(for distance: CLLocationDistance) -> String {
@@ -2153,6 +2153,8 @@ extension ViewController {
         guard currentPace != lastLoggedPaceType else { return }
         
         lastLoggedPaceType = currentPace
+        playPaceTransitionHaptic(for: currentPace)
+        speakPaceTransition(currentPace)
         let currentAverage: Double
         switch currentPace {
         case .walk:
@@ -2168,6 +2170,86 @@ extension ViewController {
             String(format: "avg %.2f m/s (walk %.2f, jog %.2f, run %.2f)",
                    currentAverage, avgWalkingSpeed, avgJoggingSpeed, avgRunningSpeed)
         )
+    }
+    
+    private func speakPaceTransition(_ paceType: PaceType) {
+        let message: String
+        switch paceType {
+        case .walk:
+            message = "Switch to walk pace."
+        case .jog:
+            message = "Switch to jog pace."
+        case .run:
+            message = "Switch to run pace."
+        }
+        speakGuidance(message, interruptCurrent: false)
+    }
+    
+    private func preparePaceHaptics() {
+        walkPaceFeedback.prepare()
+        jogPaceFeedback.prepare()
+        runPaceFeedback.prepare()
+    }
+    
+    private func playPaceTransitionHaptic(for paceType: PaceType) {
+        switch paceType {
+        case .walk:
+            walkPaceFeedback.impactOccurred(intensity: 0.55)
+        case .jog:
+            jogPaceFeedback.impactOccurred(intensity: 0.8)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                self.jogPaceFeedback.impactOccurred(intensity: 0.55)
+                self.jogPaceFeedback.prepare()
+            }
+        case .run:
+            runPaceFeedback.impactOccurred(intensity: 1.0)
+        }
+        preparePaceHaptics()
+    }
+    
+    private func speakGuidance(_ message: String, interruptCurrent: Bool) {
+        guard !message.isEmpty else { return }
+        activateSpokenGuidanceAudioSession()
+        
+        if interruptCurrent, speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        
+        let utterance = AVSpeechUtterance(string: message)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.48
+        utterance.prefersAssistiveTechnologySettings = true
+        speechSynthesizer.speak(utterance)
+    }
+    
+    private func configureSpokenGuidanceAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playback,
+                mode: .voicePrompt,
+                options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
+            )
+        } catch {
+            print("🔴 Failed to configure spoken guidance audio session: \(error.localizedDescription)")
+        }
+    }
+    
+    private func activateSpokenGuidanceAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("🔴 Failed to activate spoken guidance audio session: \(error.localizedDescription)")
+        }
+    }
+    
+    private func deactivateSpokenGuidanceAudioSessionIfIdle() {
+        guard !speechSynthesizer.isSpeaking, !speechSynthesizer.isPaused else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("🔴 Failed to deactivate spoken guidance audio session: \(error.localizedDescription)")
+        }
     }
     
     private func updateWalkedOverlay() {
@@ -3112,6 +3194,16 @@ extension ViewController: CLLocationManagerDelegate {
 
 // MARK: - UITextFieldDelegate
 extension ViewController: UITextFieldDelegate { }
+
+extension ViewController: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        deactivateSpokenGuidanceAudioSessionIfIdle()
+    }
+    
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        deactivateSpokenGuidanceAudioSessionIfIdle()
+    }
+}
 
 extension ViewController: UIPickerViewDataSource, UIPickerViewDelegate {
     func numberOfComponents(in pickerView: UIPickerView) -> Int {
