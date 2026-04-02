@@ -12,10 +12,196 @@ import ActivityKit
 import AVFAudio
 
 // MARK: - Color Scheme
+struct AppPalette {
+    let primary: UIColor
+    let secondary: UIColor
+    let background: UIColor
+    let floatingButtonBackground: UIColor
+    let floatingButtonForeground: UIColor
+    let sidePanelBackground: UIColor
+}
+
+enum AppTheme: String, CaseIterable {
+    // MARK: Wildflower Trail
+    case wildflowerTrail
+
+    // MARK: Coastal Morning
+    case coastalMorning
+
+    // MARK: Canyon Path
+    case canyonPath
+
+    // MARK: Early Frost
+    case earlyFrost
+
+    // MARK: Urban Fog
+    case urbanFog
+
+    // MARK: Evening Stroll
+    case eveningStroll
+
+    init(index: Int) {
+        let themes = AppTheme.allCases
+        if themes.indices.contains(index) {
+            self = themes[index]
+        } else {
+            self = .wildflowerTrail
+        }
+    }
+
+    var index: Int {
+        AppTheme.allCases.firstIndex(of: self) ?? 0
+    }
+
+    var displayName: String {
+        switch self {
+        case .wildflowerTrail: return "Wildflower Trail"
+        case .coastalMorning: return "Coastal Morning"
+        case .canyonPath: return "Canyon Path"
+        case .earlyFrost: return "Early Frost"
+        case .urbanFog: return "Urban Fog"
+        case .eveningStroll: return "Evening Stroll"
+        }
+    }
+
+    var palette: AppPalette {
+        switch self {
+        case .wildflowerTrail:
+            return AppPalette(
+                primary: UIColor(hex: "#7A8B62"),
+                secondary: UIColor(hex: "#9B6A82"),
+                background: UIColor(hex: "#2A1E24"),
+                floatingButtonBackground: UIColor(hex: "#F9F9F9"),
+                floatingButtonForeground: UIColor(hex: "#1A1A1A"),
+                sidePanelBackground: UIColor(hex: "#F4F1ED")
+            )
+        case .coastalMorning:
+            return AppPalette(
+                primary: UIColor(hex: "#6B8CAE"),
+                secondary: UIColor(hex: "#E0A98B"),
+                background: UIColor(hex: "#1A2430"),
+                floatingButtonBackground: UIColor(hex: "#1A1A1A"),
+                floatingButtonForeground: UIColor(hex: "#FFFFFF"),
+                sidePanelBackground: UIColor(hex: "#EBF0F5")
+            )
+        case .canyonPath:
+            return AppPalette(
+                primary: UIColor(hex: "#C27A62"),
+                secondary: UIColor(hex: "#8BA382"),
+                background: UIColor(hex: "#2D2421"),
+                floatingButtonBackground: UIColor(hex: "#F5EFE9"),
+                floatingButtonForeground: UIColor(hex: "#2D2421"),
+                sidePanelBackground: UIColor(hex: "#EAE3DB")
+            )
+        case .earlyFrost:
+            return AppPalette(
+                primary: UIColor(hex: "#88B7AA"),
+                secondary: UIColor(hex: "#A89BBD"),
+                background: UIColor(hex: "#1F302D"),
+                floatingButtonBackground: UIColor(hex: "#FFFFFF"),
+                floatingButtonForeground: UIColor(hex: "#1F302D"),
+                sidePanelBackground: UIColor(hex: "#EEF2F0")
+            )
+        case .urbanFog:
+            return AppPalette(
+                primary: UIColor(hex: "#7B848A"),
+                secondary: UIColor(hex: "#D1B26E"),
+                background: UIColor(hex: "#1E2022"),
+                floatingButtonBackground: UIColor(hex: "#000000"),
+                floatingButtonForeground: UIColor(hex: "#FFFFFF"),
+                sidePanelBackground: UIColor(hex: "#E1E4E6")
+            )
+        case .eveningStroll:
+            return AppPalette(
+                primary: UIColor(hex: "#C48B8B"),
+                secondary: UIColor(hex: "#CFA16B"),
+                background: UIColor(hex: "#301B20"),
+                floatingButtonBackground: UIColor(hex: "#FAEEEE"),
+                floatingButtonForeground: UIColor(hex: "#301B20"),
+                sidePanelBackground: UIColor(hex: "#F5E6E6")
+            )
+        }
+    }
+}
+
 extension UIColor {
-    static let appPrimary = UIColor(red: 152.0/255.0, green: 168.0/255.0, blue: 105.0/255.0, alpha: 1.0)
-    static let compColor = UIColor(red: 105.0/255.0, green: 120.0/255.0, blue: 168.0/255.0, alpha: 1.0)
-    static let darkColor = UIColor(red: 51.0/255.0, green: 35.0/255.0, blue: 51.0/255.0, alpha: 1.0)
+    static var activeTheme: AppTheme = .coastalMorning
+    static var activeThemeIndex: Int {
+        get { activeTheme.index }
+        set { activeTheme = AppTheme(index: newValue) }
+    }
+
+    static var appPrimary: UIColor { activeTheme.palette.primary }
+    static var compColor: UIColor { activeTheme.palette.secondary }
+    static var darkColor: UIColor { activeTheme.palette.background }
+    static var floatingButtonBackground: UIColor { activeTheme.palette.floatingButtonBackground }
+    static var floatingButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
+    static var sidePanelBackground: UIColor { activeTheme.palette.sidePanelBackground }
+    static var chromeSurface: UIColor { activeTheme.palette.background.withAlphaComponent(0.40) }
+    static var bottomChromeSurface: UIColor { activeTheme.palette.background.withAlphaComponent(0.40) }
+    static var primaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground }
+    static var secondaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground.withAlphaComponent(0.72) }
+    static var panelHeaderTextColor: UIColor {
+        sidePanelBackground.isLightColor
+            ? UIColor(hex: "#1F1F1F").withAlphaComponent(0.72)
+            : UIColor.white.withAlphaComponent(0.82)
+    }
+    static var panelBodyTextColor: UIColor {
+        sidePanelBackground.isLightColor
+            ? UIColor(hex: "#1F1F1F")
+            : UIColor.white.withAlphaComponent(0.92)
+    }
+    static var dividerColor: UIColor { activeTheme.palette.background.withAlphaComponent(0.18) }
+    static var panelNeutralButtonBackground: UIColor { activeTheme.palette.background.withAlphaComponent(0.08) }
+    static var panelNeutralButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
+    static var semanticGenerateColor: UIColor { UIColor(hex: "#8AAF5C").blended(withFraction: 0.22, of: appPrimary) }
+    static var semanticClearColor: UIColor { UIColor(hex: "#D46A74").blended(withFraction: 0.22, of: compColor) }
+
+    convenience init(hex: String) {
+        let cleanedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: cleanedHex).scanHexInt64(&value)
+
+        let red = CGFloat((value >> 16) & 0xFF) / 255.0
+        let green = CGFloat((value >> 8) & 0xFF) / 255.0
+        let blue = CGFloat(value & 0xFF) / 255.0
+
+        self.init(red: red, green: green, blue: blue, alpha: 1.0)
+    }
+
+    func blended(withFraction fraction: CGFloat, of color: UIColor) -> UIColor {
+        let clampedFraction = max(0, min(1, fraction))
+
+        var redA: CGFloat = 0
+        var greenA: CGFloat = 0
+        var blueA: CGFloat = 0
+        var alphaA: CGFloat = 0
+        getRed(&redA, green: &greenA, blue: &blueA, alpha: &alphaA)
+
+        var redB: CGFloat = 0
+        var greenB: CGFloat = 0
+        var blueB: CGFloat = 0
+        var alphaB: CGFloat = 0
+        color.getRed(&redB, green: &greenB, blue: &blueB, alpha: &alphaB)
+
+        return UIColor(
+            red: redA + (redB - redA) * clampedFraction,
+            green: greenA + (greenB - greenA) * clampedFraction,
+            blue: blueA + (blueB - blueA) * clampedFraction,
+            alpha: alphaA + (alphaB - alphaA) * clampedFraction
+        )
+    }
+
+    var isLightColor: Bool {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        let brightness = (red * 299 + green * 587 + blue * 114) / 1000
+        return brightness > 0.68
+    }
 }
 
 // MARK: - Custom Classes
@@ -249,6 +435,13 @@ class ViewController: UIViewController {
     @IBOutlet weak var routesTableView: UITableView!
     @IBOutlet weak var routesSearchBar: UISearchBar!
     @IBOutlet weak var filterButton: UIButton!
+    @IBOutlet weak var settingsButton: UIButton?
+    @IBOutlet weak var goToButton: UIButton?
+    @IBOutlet weak var generateButton: UIButton?
+    @IBOutlet weak var cancelButton: UIButton?
+    @IBOutlet weak var recenterButton: UIButton?
+    @IBOutlet weak var pacePatternButton: UIButton?
+    @IBOutlet weak var routeSettingsButton: UIButton?
 
     // MARK: - UI Components
     private var slidePanel: UIView!
@@ -398,6 +591,8 @@ class ViewController: UIViewController {
         bottomTabContainer.layer.cornerRadius = 44
         bottomTabContainer.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         bottomTabContainer.layer.masksToBounds = true
+
+        applyButtonGeometry()
         
         calculateRouteSheetHeight()
     }
@@ -425,10 +620,216 @@ extension ViewController {
     }
 
     private func setupUI() {
+        applyTheme()
         setupProgressBar()
         setupSlidePanel()
         setupLoopControls()
         setupSaveRoutePill()
+    }
+
+    private func applyTheme(themeIndex: Int? = nil) {
+        if let themeIndex {
+            UIColor.activeThemeIndex = themeIndex
+        }
+
+        view.backgroundColor = .darkColor
+        headerBox.backgroundColor = .chromeSurface
+        bottomTabContainer.backgroundColor = .bottomChromeSurface
+        routeHistorySheet.backgroundColor = .sidePanelBackground
+
+        routeNameLabel?.textColor = .primaryTextColor
+        routeInfoLabel.textColor = .primaryTextColor
+
+        routeTypeSelector.backgroundColor = .sidePanelBackground.withAlphaComponent(0.98)
+        routeTypeSelector.layer.cornerRadius = 16
+        routeTypeSelector.layer.borderWidth = 1
+        routeTypeSelector.layer.borderColor = UIColor.dividerColor.cgColor
+        routeTypeSelector.selectedSegmentTintColor = .appPrimary
+        routeTypeSelector.setTitleTextAttributes([.foregroundColor: UIColor.panelNeutralButtonForeground], for: .selected)
+        routeTypeSelector.setTitleTextAttributes([.foregroundColor: UIColor.panelBodyTextColor], for: .normal)
+
+        routesSearchBar.searchTextField.backgroundColor = .sidePanelBackground
+        routesSearchBar.searchTextField.textColor = .panelNeutralButtonForeground
+        routesSearchBar.searchTextField.leftView?.tintColor = .secondaryTextColor
+        routesSearchBar.tintColor = .appPrimary
+        if var filterConfiguration = filterButton.configuration {
+            filterConfiguration.baseBackgroundColor = .compColor
+            filterConfiguration.baseForegroundColor = .floatingButtonForeground
+            buttonConfigurationPreservingTitle(button: filterButton, configuration: filterConfiguration)
+        } else {
+            filterButton.backgroundColor = .compColor
+            filterButton.tintColor = .floatingButtonForeground
+            filterButton.setTitleColor(.floatingButtonForeground, for: .normal)
+        }
+
+        progressView.progressTintColor = .compColor
+        progressView.trackTintColor = .darkColor
+
+        slidePanel?.backgroundColor = .sidePanelBackground
+        pacePanel?.backgroundColor = .sidePanelBackground
+
+        saveRoutePillButton?.backgroundColor = UIColor.floatingButtonBackground.withAlphaComponent(0.96)
+        saveRoutePillButton?.setTitleColor(.floatingButtonForeground, for: .normal)
+
+        styleThemeButton(settingsButton, role: .secondary)
+        styleThemeButton(goToButton, role: .primary)
+        styleThemeButton(generateButton, role: .generate)
+        styleThemeButton(cancelButton, role: .clear)
+        styleFloatingIconButton(recenterButton, diameter: 50)
+        styleFloatingIconButton(pacePatternButton, diameter: 40)
+        styleFloatingIconButton(routeSettingsButton, diameter: 40)
+
+        applyThemeToStoryboardButtons(in: view)
+    }
+
+    private func applyThemeToStoryboardButtons(in container: UIView) {
+        for subview in container.subviews {
+            if let button = subview as? UIButton {
+                styleThemeButton(button)
+            }
+            applyThemeToStoryboardButtons(in: subview)
+        }
+    }
+
+    private enum ThemeButtonRole {
+        case primary
+        case secondary
+        case generate
+        case clear
+    }
+
+    private func styleThemeButton(_ button: UIButton?, role: ThemeButtonRole) {
+        guard let button else { return }
+        let backgroundColor: UIColor
+        switch role {
+        case .primary:
+            backgroundColor = .appPrimary
+        case .secondary:
+            backgroundColor = .compColor
+        case .generate:
+            backgroundColor = .semanticGenerateColor
+        case .clear:
+            backgroundColor = .semanticClearColor
+        }
+        applyThemeColors(to: button, backgroundColor: backgroundColor)
+        applyButtonOutline(to: button, color: UIColor.floatingButtonForeground.withAlphaComponent(0.45), width: 2)
+
+        if let titleLabel = button.titleLabel {
+            titleLabel.font = .systemFont(ofSize: titleLabel.font.pointSize, weight: .bold)
+        }
+    }
+
+    private func styleThemeButton(_ button: UIButton) {
+        guard let rawTitle = button.title(for: .normal)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawTitle.isEmpty else { return }
+
+        let normalizedTitle = rawTitle.lowercased()
+        let usesPrimaryTheme = normalizedTitle == "go to" || normalizedTitle == "go"
+        let usesSecondaryTheme = normalizedTitle == "settings" || normalizedTitle == "clear settings"
+        let usesGenerateTheme = normalizedTitle == "generate"
+        let usesClearTheme = normalizedTitle == "cancel" || normalizedTitle == "clear"
+
+        guard usesPrimaryTheme || usesSecondaryTheme || usesGenerateTheme || usesClearTheme else { return }
+
+        let backgroundColor: UIColor
+        if usesGenerateTheme {
+            backgroundColor = .semanticGenerateColor
+        } else if usesClearTheme {
+            backgroundColor = .semanticClearColor
+        } else if usesPrimaryTheme {
+            backgroundColor = .appPrimary
+        } else {
+            backgroundColor = .compColor
+        }
+        applyThemeColors(to: button, backgroundColor: backgroundColor)
+    }
+
+    private func styleFloatingIconButton(_ button: UIButton?, diameter: CGFloat) {
+        guard let button else { return }
+        applyThemeColors(to: button, backgroundColor: .floatingButtonBackground)
+        applyButtonOutline(to: button, color: UIColor.floatingButtonForeground.withAlphaComponent(0.35), width: 1.5)
+
+        if var configuration = button.configuration {
+            configuration.title = nil
+            configuration.subtitle = nil
+            configuration.cornerStyle = .fixed
+            configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+            configuration.background.cornerRadius = diameter / 2
+            configuration.background.strokeColor = UIColor.floatingButtonForeground.withAlphaComponent(0.35)
+            configuration.background.strokeWidth = 1.5
+            button.configuration = configuration
+        }
+    }
+
+    private func applyThemeColors(to button: UIButton, backgroundColor: UIColor) {
+        let foregroundColor = UIColor.floatingButtonForeground
+
+        if var configuration = button.configuration {
+            configuration.baseBackgroundColor = backgroundColor
+            configuration.baseForegroundColor = foregroundColor
+            buttonConfigurationPreservingTitle(button: button, configuration: configuration)
+        } else {
+            button.backgroundColor = backgroundColor
+            button.setTitleColor(foregroundColor, for: .normal)
+            button.tintColor = foregroundColor
+        }
+    }
+
+    private func buttonConfigurationPreservingTitle(button: UIButton, configuration: UIButton.Configuration) {
+        var updatedConfiguration = configuration
+        if updatedConfiguration.title == nil {
+            updatedConfiguration.title = button.title(for: .normal)
+        }
+        button.configuration = updatedConfiguration
+    }
+
+    private func applyButtonOutline(to button: UIButton, color: UIColor, width: CGFloat) {
+        button.layer.borderColor = color.cgColor
+        button.layer.borderWidth = width
+    }
+
+    private func applyButtonGeometry() {
+        enforceFixedSize(for: generateButton, width: 100, height: 100)
+        enforceFixedSize(for: cancelButton, width: 100, height: 100)
+        enforceFixedSize(for: recenterButton, width: 50, height: 50)
+        enforceFixedSize(for: pacePatternButton, width: 40, height: 40)
+        enforceFixedSize(for: routeSettingsButton, width: 40, height: 40)
+
+        generateButton?.layer.cornerRadius = 50
+        cancelButton?.layer.cornerRadius = 50
+        recenterButton?.layer.cornerRadius = 25
+        pacePatternButton?.layer.cornerRadius = 20
+        routeSettingsButton?.layer.cornerRadius = 20
+        generateButton?.clipsToBounds = true
+        cancelButton?.clipsToBounds = true
+        recenterButton?.clipsToBounds = true
+        pacePatternButton?.clipsToBounds = true
+        routeSettingsButton?.clipsToBounds = true
+
+        applyCapsuleShape(to: settingsButton)
+        applyCapsuleShape(to: goToButton)
+    }
+
+    private func applyCapsuleShape(to button: UIButton?) {
+        guard let button else { return }
+        button.layer.cornerRadius = button.bounds.height / 2
+        button.clipsToBounds = true
+    }
+
+    private func enforceFixedSize(for button: UIButton?, width: CGFloat, height: CGFloat) {
+        guard let button else { return }
+
+        if let widthConstraint = button.constraints.first(where: { $0.firstAttribute == .width && $0.relation == .equal }) {
+            widthConstraint.constant = width
+        } else {
+            button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        }
+
+        if let heightConstraint = button.constraints.first(where: { $0.firstAttribute == .height && $0.relation == .equal }) {
+            heightConstraint.constant = height
+        } else {
+            button.heightAnchor.constraint(equalToConstant: height).isActive = true
+        }
     }
 
     private func setupProgressBar() {
@@ -767,11 +1168,19 @@ enum BottomSheetState {
 
 // MARK: - Slide Panel Setup      TEMPORARY: CHANGE SSP TO ROUTESETTINGSPANEL
 extension ViewController {
+    private var sidePanelTopY: CGFloat { 165 }
+    private var sidePanelHeight: CGFloat { view.bounds.height - 450 }
+
     private func setupSlidePanel() {
         let screenWidth = view.bounds.width
-        let screenHeight = view.bounds.height
-        slidePanel = UIView(frame: CGRect(x: screenWidth, y: 165, width: 184, height: screenHeight - 450))
-        slidePanel.backgroundColor = .white
+        slidePanel = UIView(frame: CGRect(x: screenWidth, y: sidePanelTopY, width: 184, height: sidePanelHeight))
+        slidePanel.backgroundColor = .sidePanelBackground
+        slidePanel.layer.cornerRadius = 12
+        slidePanel.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        slidePanel.layer.shadowColor = UIColor.black.cgColor
+        slidePanel.layer.shadowOpacity = 0.2
+        slidePanel.layer.shadowOffset = CGSize(width: -2, height: 0)
+        slidePanel.layer.shadowRadius = 8
         view.addSubview(slidePanel)
 
         panelScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: slidePanel.frame.width, height: slidePanel.frame.height))
@@ -811,9 +1220,10 @@ extension ViewController {
         let button = UIButton(type: .system)
         button.frame = CGRect(x: padding, y: y, width: width, height: 36)
         button.setTitle("Clear Settings", for: .normal)
-        button.backgroundColor = .systemRed.withAlphaComponent(0.1)
-        button.setTitleColor(.systemRed, for: .normal)
+        button.backgroundColor = .semanticClearColor
+        button.setTitleColor(.floatingButtonForeground, for: .normal)
         button.layer.cornerRadius = 8
+        applyButtonOutline(to: button, color: UIColor.floatingButtonForeground.withAlphaComponent(0.45), width: 2)
         button.addTarget(self, action: #selector(clearRandomSettings), for: .touchUpInside)
         container.addSubview(button)
         return y + 40
@@ -823,7 +1233,7 @@ extension ViewController {
         let label = UILabel(frame: CGRect(x: padding, y: y, width: width, height: 20))
         label.text = text
         label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .systemGray
+        label.textColor = .panelHeaderTextColor
         container.addSubview(label)
         return y + 25
     }
@@ -842,6 +1252,7 @@ extension ViewController {
         let label = UILabel(frame: CGRect(x: padding, y: currentY, width: width, height: 20))
         label.text = "Distance (miles)"
         label.font = .systemFont(ofSize: 14)
+        label.textColor = .panelBodyTextColor
         container.addSubview(label)
         distanceOrTimeLabel = label
         currentY += 25
@@ -865,6 +1276,7 @@ extension ViewController {
         let label = UILabel(frame: CGRect(x: padding, y: y, width: width - 50, height: 20))
         label.text = "Use Time Instead"
         label.font = .systemFont(ofSize: 13)
+        label.textColor = .panelBodyTextColor
         container.addSubview(label)
         let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
         toggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
@@ -879,6 +1291,7 @@ extension ViewController {
         label.text = "Direction"
         label.font = .systemFont(ofSize: 14)
         label.textAlignment = .center
+        label.textColor = .panelBodyTextColor
         container.addSubview(label)
         currentY += 25
         let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
@@ -892,8 +1305,8 @@ extension ViewController {
                 let button = UIButton(type: .system)
                 button.frame = CGRect(x: startX + CGFloat(col) * (buttonSize + gap), y: currentY + CGFloat(row) * (buttonSize + gap), width: buttonSize, height: buttonSize)
                 button.setTitle(title, for: .normal)
-                button.setTitleColor(.black, for: .normal)
-                button.backgroundColor = .systemGray3
+                button.setTitleColor(.panelBodyTextColor, for: .normal)
+                button.backgroundColor = .panelNeutralButtonBackground
                 button.layer.cornerRadius = 8
                 if title == "." {
                     button.setTitleColor(.clear, for: .normal)
@@ -913,6 +1326,7 @@ extension ViewController {
         label.text = "Loop Points: 4"
         label.font = .systemFont(ofSize: 14)
         label.textAlignment = .center
+        label.textColor = .panelBodyTextColor
         label.isEnabled = false
         container.addSubview(label)
         loopPointLabel = label
@@ -930,7 +1344,7 @@ extension ViewController {
 
     private func addDivider(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
         let divider = UIView(frame: CGRect(x: padding, y: y, width: width, height: 1))
-        divider.backgroundColor = .systemGray4
+        divider.backgroundColor = .dividerColor
         container.addSubview(divider)
         return y + 15
     }
@@ -939,13 +1353,11 @@ extension ViewController {
 // MARK: - Pace Panel Setup
 extension ViewController {
     private func setupPacePanel() {
-        let screenWidth = view.bounds.width
-        let screenHeight = view.bounds.height
         let panelWidth: CGFloat = 140  // Skinny panel
         
         // Create panel (starts off-screen to the left)
-        pacePanel = UIView(frame: CGRect(x: -panelWidth, y: 165, width: panelWidth, height: screenHeight - 450))
-        pacePanel.backgroundColor = .white
+        pacePanel = UIView(frame: CGRect(x: -panelWidth, y: sidePanelTopY, width: panelWidth, height: sidePanelHeight))
+        pacePanel.backgroundColor = .sidePanelBackground
         pacePanel.layer.cornerRadius = 12
         pacePanel.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]  // Round right corners
         pacePanel.layer.shadowColor = UIColor.black.cgColor
@@ -1055,7 +1467,7 @@ extension ViewController {
         picker.delegate = self
         
         let pickerContainer = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 316))
-        picker.backgroundColor = .systemBackground
+        picker.backgroundColor = .sidePanelBackground
         picker.frame = CGRect(x: 0, y: 0, width: pickerContainer.bounds.width, height: pickerContainer.bounds.height)
         picker.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         pickerContainer.addSubview(picker)
@@ -1141,7 +1553,7 @@ extension ViewController {
         let label = UILabel(frame: CGRect(x: padding, y: y, width: container.frame.width - (padding * 2), height: 20))
         label.text = text
         label.font = .systemFont(ofSize: 10, weight: .semibold)
-        label.textColor = .systemGray
+        label.textColor = .panelHeaderTextColor
         label.textAlignment = .center
         container.addSubview(label)
         return y + 25
@@ -2374,6 +2786,10 @@ extension ViewController {
         if pendingRouteSave != nil {
             setSaveRoutePillVisible(!shouldHideSavePill)
         }
+
+        let isFullyCollapsed = height <= (routeSheetCollapsedHeight + 1)
+        routeHistorySheet.backgroundColor = isFullyCollapsed ? .clear : .sidePanelBackground
+        routeHistorySheet.layer.shadowOpacity = isFullyCollapsed ? 0 : 0.1
         
         if animated {
             UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
@@ -2499,11 +2915,11 @@ extension ViewController {
         isFollowingUser.toggle()
         if isFollowingUser {
             button.setImage(UIImage(systemName: "location.fill"), for: .normal)
-            button.tintColor = .systemBlue
+            button.tintColor = .compColor
             if let location = userLocation { safelyCenterMap(on: location, distance: 3000) }
         } else {
             button.setImage(UIImage(systemName: "location"), for: .normal)
-            button.tintColor = .systemGray
+            button.tintColor = .floatingButtonForeground
         }
     }
 
@@ -2561,11 +2977,11 @@ extension ViewController {
 
     @objc private func directionButtonTapped(_ sender: UIButton) {
         guard let direction = sender.title(for: .normal) else { return }
-        selectedDirectionButton?.backgroundColor = .systemGray3
-        selectedDirectionButton?.setTitleColor(.black, for: .normal)
+        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
+        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
         if selectedDirectionButton == sender { selectedDirectionButton = nil; selectedDirection = "random"; return }
         sender.backgroundColor = .appPrimary
-        sender.setTitleColor(.black, for: .normal)
+        sender.setTitleColor(.floatingButtonForeground, for: .normal)
         selectedDirectionButton = sender
         selectedDirection = direction
     }
@@ -2574,8 +2990,8 @@ extension ViewController {
 
     @objc private func clearRandomSettings() {
         distanceTextField?.text = ""
-        selectedDirectionButton?.backgroundColor = .systemGray3
-        selectedDirectionButton?.setTitleColor(.black, for: .normal)
+        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
+        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
         selectedDirectionButton = nil
         selectedDirection = "random"
         useTimeInput = false
