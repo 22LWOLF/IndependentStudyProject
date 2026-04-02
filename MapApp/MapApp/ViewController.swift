@@ -125,7 +125,7 @@ enum AppTheme: String, CaseIterable {
 }
 
 extension UIColor {
-    static var activeTheme: AppTheme = .coastalMorning
+    static var activeTheme: AppTheme = .earlyFrost
     static var activeThemeIndex: Int {
         get { activeTheme.index }
         set { activeTheme = AppTheme(index: newValue) }
@@ -137,8 +137,74 @@ extension UIColor {
     static var floatingButtonBackground: UIColor { activeTheme.palette.floatingButtonBackground }
     static var floatingButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
     static var sidePanelBackground: UIColor { activeTheme.palette.sidePanelBackground }
-    static var chromeSurface: UIColor { activeTheme.palette.background.withAlphaComponent(0.40) }
-    static var bottomChromeSurface: UIColor { activeTheme.palette.background.withAlphaComponent(0.40) }
+    static var headerBG: UIColor {
+        switch activeTheme {
+        case .wildflowerTrail:
+            return darkColor
+                .blended(withFraction: 0.42, of: compColor)
+                .blended(withFraction: 0.12, of: appPrimary)
+                .withAlphaComponent(0.58)
+        case .coastalMorning:
+            return darkColor
+                .blended(withFraction: 0.38, of: appPrimary)
+                .blended(withFraction: 0.10, of: UIColor(hex: "#BBD5E8"))
+                .withAlphaComponent(0.54)
+        case .canyonPath:
+            return darkColor
+                .blended(withFraction: 0.34, of: appPrimary)
+                .blended(withFraction: 0.14, of: compColor)
+                .withAlphaComponent(0.60)
+        case .earlyFrost:
+            return darkColor
+                .blended(withFraction: 0.34, of: appPrimary)
+                .blended(withFraction: 0.10, of: compColor)
+                .withAlphaComponent(0.54)
+        case .urbanFog:
+            return darkColor
+                .blended(withFraction: 0.18, of: compColor)
+                .blended(withFraction: 0.08, of: UIColor(hex: "#A6B0B8"))
+                .withAlphaComponent(0.62)
+        case .eveningStroll:
+            return darkColor
+                .blended(withFraction: 0.36, of: compColor)
+                .blended(withFraction: 0.14, of: appPrimary)
+                .withAlphaComponent(0.58)
+        }
+    }
+    static var bottomBG: UIColor {
+        switch activeTheme {
+        case .wildflowerTrail:
+            return darkColor
+                .blended(withFraction: 0.42, of: compColor)
+                .blended(withFraction: 0.12, of: appPrimary)
+                .withAlphaComponent(0.58)
+        case .coastalMorning:
+            return darkColor
+                .blended(withFraction: 0.38, of: appPrimary)
+                .blended(withFraction: 0.10, of: UIColor(hex: "#BBD5E8"))
+                .withAlphaComponent(0.54)
+        case .canyonPath:
+            return darkColor
+                .blended(withFraction: 0.34, of: appPrimary)
+                .blended(withFraction: 0.14, of: compColor)
+                .withAlphaComponent(0.60)
+        case .earlyFrost:
+            return darkColor
+                .blended(withFraction: 0.34, of: appPrimary)
+                .blended(withFraction: 0.10, of: compColor)
+                .withAlphaComponent(0.54)
+        case .urbanFog:
+            return darkColor
+                .blended(withFraction: 0.18, of: compColor)
+                .blended(withFraction: 0.08, of: UIColor(hex: "#A6B0B8"))
+                .withAlphaComponent(0.62)
+        case .eveningStroll:
+            return darkColor
+                .blended(withFraction: 0.36, of: compColor)
+                .blended(withFraction: 0.14, of: appPrimary)
+                .withAlphaComponent(0.58)
+        }
+    }
     static var primaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground }
     static var secondaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground.withAlphaComponent(0.72) }
     static var panelHeaderTextColor: UIColor {
@@ -151,8 +217,56 @@ extension UIColor {
             ? UIColor(hex: "#1F1F1F")
             : UIColor.white.withAlphaComponent(0.92)
     }
-    static var dividerColor: UIColor { activeTheme.palette.background.withAlphaComponent(0.18) }
-    static var panelNeutralButtonBackground: UIColor { activeTheme.palette.background.withAlphaComponent(0.08) }
+    static var elevatedPanelSurface: UIColor {
+        switch activeTheme {
+        case .wildflowerTrail:
+            return sidePanelBackground.blended(withFraction: 0.18, of: compColor)
+        case .coastalMorning:
+            return sidePanelBackground.blended(withFraction: 0.14, of: appPrimary)
+        case .canyonPath:
+            return sidePanelBackground.blended(withFraction: 0.18, of: appPrimary)
+        case .earlyFrost:
+            return sidePanelBackground.blended(withFraction: 0.16, of: appPrimary)
+        case .urbanFog:
+            return sidePanelBackground.blended(withFraction: 0.10, of: darkColor)
+        case .eveningStroll:
+            return sidePanelBackground.blended(withFraction: 0.18, of: compColor)
+        }
+    }
+    static var searchFieldSurface: UIColor {
+        switch activeTheme {
+        case .wildflowerTrail:
+            return sidePanelBackground.blended(withFraction: 0.16, of: appPrimary)
+        case .coastalMorning:
+            return sidePanelBackground.blended(withFraction: 0.14, of: compColor)
+        case .canyonPath:
+            return sidePanelBackground.blended(withFraction: 0.18, of: compColor)
+        case .earlyFrost:
+            return sidePanelBackground.blended(withFraction: 0.15, of: compColor)
+        case .urbanFog:
+            return sidePanelBackground.blended(withFraction: 0.12, of: compColor)
+        case .eveningStroll:
+            return sidePanelBackground.blended(withFraction: 0.18, of: appPrimary)
+        }
+    }
+    static var selectorSurface: UIColor {
+        switch activeTheme {
+        case .wildflowerTrail:
+            return sidePanelBackground.blended(withFraction: 0.22, of: compColor)
+        case .coastalMorning:
+            return sidePanelBackground.blended(withFraction: 0.20, of: appPrimary)
+        case .canyonPath:
+            return sidePanelBackground.blended(withFraction: 0.24, of: appPrimary)
+        case .earlyFrost:
+            return sidePanelBackground.blended(withFraction: 0.22, of: appPrimary)
+        case .urbanFog:
+            return sidePanelBackground.blended(withFraction: 0.16, of: darkColor)
+        case .eveningStroll:
+            return sidePanelBackground.blended(withFraction: 0.24, of: compColor)
+        }
+    }
+    static var dividerColor: UIColor { compColor.withAlphaComponent(0.32) }
+    static var panelNeutralButtonBackground: UIColor { sidePanelBackground.blended(withFraction: 0.18, of: darkColor) }
     static var panelNeutralButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
     static var semanticGenerateColor: UIColor { UIColor(hex: "#8AAF5C").blended(withFraction: 0.22, of: appPrimary) }
     static var semanticClearColor: UIColor { UIColor(hex: "#D46A74").blended(withFraction: 0.22, of: compColor) }
@@ -302,7 +416,7 @@ class RouteTableViewCell: UITableViewCell {
     }
     
     @objc private func moreButtonTapped() {
-        print("🔘 More tapped, revealed: \(isRevealed)")
+        print("More tapped, revealed: \(isRevealed)")
         if isRevealed {
             hideOptionsButton()
         } else {
@@ -311,19 +425,19 @@ class RouteTableViewCell: UITableViewCell {
     }
     
     @objc private func editButtonTapped() {
-        print("✏️ Edit tapped")
+        print("Edit tapped")
         editAction?()
         hideOptionsButton()
     }
     
     @objc private func deleteButtonTapped() {
-        print("🗑️ Delete tapped")
+        print("Delete tapped")
         deleteAction?()
         hideOptionsButton()
     }
     
     @objc private func favoriteButtonTapped() {
-        print("❤️ Favorite tapped")
+        print("Favorite tapped")
         favoriteAction?()
         // Don't hide buttons - let user tap multiple actions
         
@@ -633,14 +747,16 @@ extension ViewController {
         }
 
         view.backgroundColor = .darkColor
-        headerBox.backgroundColor = .chromeSurface
-        bottomTabContainer.backgroundColor = .bottomChromeSurface
-        routeHistorySheet.backgroundColor = .sidePanelBackground
+        headerBox.backgroundColor = .headerBG
+        bottomTabContainer.backgroundColor = .bottomBG
+        routeHistorySheet.backgroundColor = .elevatedPanelSurface
+        routeHistorySheet.layer.borderWidth = 0
+        routeHistorySheet.layer.borderColor = UIColor.clear.cgColor
 
         routeNameLabel?.textColor = .primaryTextColor
         routeInfoLabel.textColor = .primaryTextColor
 
-        routeTypeSelector.backgroundColor = .sidePanelBackground.withAlphaComponent(0.98)
+        routeTypeSelector.backgroundColor = .selectorSurface
         routeTypeSelector.layer.cornerRadius = 16
         routeTypeSelector.layer.borderWidth = 1
         routeTypeSelector.layer.borderColor = UIColor.dividerColor.cgColor
@@ -648,7 +764,7 @@ extension ViewController {
         routeTypeSelector.setTitleTextAttributes([.foregroundColor: UIColor.panelNeutralButtonForeground], for: .selected)
         routeTypeSelector.setTitleTextAttributes([.foregroundColor: UIColor.panelBodyTextColor], for: .normal)
 
-        routesSearchBar.searchTextField.backgroundColor = .sidePanelBackground
+        routesSearchBar.searchTextField.backgroundColor = .searchFieldSurface
         routesSearchBar.searchTextField.textColor = .panelNeutralButtonForeground
         routesSearchBar.searchTextField.leftView?.tintColor = .secondaryTextColor
         routesSearchBar.tintColor = .appPrimary
@@ -665,11 +781,16 @@ extension ViewController {
         progressView.progressTintColor = .compColor
         progressView.trackTintColor = .darkColor
 
-        slidePanel?.backgroundColor = .sidePanelBackground
-        pacePanel?.backgroundColor = .sidePanelBackground
+        slidePanel?.backgroundColor = .elevatedPanelSurface
+        pacePanel?.backgroundColor = .elevatedPanelSurface
+        slidePanel?.layer.borderWidth = 1
+        slidePanel?.layer.borderColor = UIColor.dividerColor.cgColor
+        pacePanel?.layer.borderWidth = 1
+        pacePanel?.layer.borderColor = UIColor.dividerColor.cgColor
 
         saveRoutePillButton?.backgroundColor = UIColor.floatingButtonBackground.withAlphaComponent(0.96)
         saveRoutePillButton?.setTitleColor(.floatingButtonForeground, for: .normal)
+        styleRouteSheetGrabber()
 
         styleThemeButton(settingsButton, role: .secondary)
         styleThemeButton(goToButton, role: .primary)
@@ -688,6 +809,17 @@ extension ViewController {
                 styleThemeButton(button)
             }
             applyThemeToStoryboardButtons(in: subview)
+        }
+    }
+
+    private func styleRouteSheetGrabber() {
+        guard let grabberView = routeHistorySheet.subviews.first else { return }
+        grabberView.backgroundColor = .darkColor.withAlphaComponent(0.34)
+        grabberView.layer.borderWidth = 1
+        grabberView.layer.borderColor = UIColor.dividerColor.cgColor
+
+        if let imageView = grabberView.subviews.compactMap({ $0 as? UIImageView }).first {
+            imageView.tintColor = .floatingButtonForeground.withAlphaComponent(0.88)
         }
     }
 
@@ -1174,7 +1306,7 @@ extension ViewController {
     private func setupSlidePanel() {
         let screenWidth = view.bounds.width
         slidePanel = UIView(frame: CGRect(x: screenWidth, y: sidePanelTopY, width: 184, height: sidePanelHeight))
-        slidePanel.backgroundColor = .sidePanelBackground
+        slidePanel.backgroundColor = .elevatedPanelSurface
         slidePanel.layer.cornerRadius = 12
         slidePanel.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
         slidePanel.layer.shadowColor = UIColor.black.cgColor
@@ -1357,7 +1489,7 @@ extension ViewController {
         
         // Create panel (starts off-screen to the left)
         pacePanel = UIView(frame: CGRect(x: -panelWidth, y: sidePanelTopY, width: panelWidth, height: sidePanelHeight))
-        pacePanel.backgroundColor = .sidePanelBackground
+        pacePanel.backgroundColor = .elevatedPanelSurface
         pacePanel.layer.cornerRadius = 12
         pacePanel.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]  // Round right corners
         pacePanel.layer.shadowColor = UIColor.black.cgColor
@@ -1427,8 +1559,8 @@ extension ViewController {
         // === SECTION 3: BUTTONS ===
         // Randomize percentages button
         let randomizePercentButton = createPaceButton(
-            title: "🎲",
-            color: .systemBlue,
+            symbolName: "dice.fill",
+            color: .appPrimary,
             y: currentY,
             action: #selector(randomizePacePercentages)
         )
@@ -1438,8 +1570,8 @@ extension ViewController {
         
         // Shuffle order button
         let shuffleOrderButton = createPaceButton(
-            title: "🔀",
-            color: .systemPurple,
+            symbolName: "shuffle",
+            color: .compColor,
             y: currentY,
             action: #selector(shufflePaceOrder)
         )
@@ -1467,7 +1599,7 @@ extension ViewController {
         picker.delegate = self
         
         let pickerContainer = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 316))
-        picker.backgroundColor = .sidePanelBackground
+        picker.backgroundColor = .elevatedPanelSurface
         picker.frame = CGRect(x: 0, y: 0, width: pickerContainer.bounds.width, height: pickerContainer.bounds.height)
         picker.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         pickerContainer.addSubview(picker)
@@ -1537,11 +1669,18 @@ extension ViewController {
         return container
     }
     
-    private func createPaceButton(title: String, color: UIColor, y: CGFloat, action: Selector) -> UIButton {
+    private func createPaceButton(title: String? = nil, symbolName: String? = nil, color: UIColor, y: CGFloat, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.frame = CGRect(x: 12, y: y, width: pacePanel.frame.width - 24, height: 36)
-        button.setTitle(title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 20)
+        if let title {
+            button.setTitle(title, for: .normal)
+            button.titleLabel?.font = .systemFont(ofSize: 20)
+        }
+        if let symbolName {
+            button.setImage(UIImage(systemName: symbolName), for: .normal)
+            button.setPreferredSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold), forImageIn: .normal)
+            button.tintColor = color
+        }
         button.backgroundColor = color.withAlphaComponent(0.1)
         button.setTitleColor(color, for: .normal)
         button.layer.cornerRadius = 8
@@ -2788,7 +2927,7 @@ extension ViewController {
         }
 
         let isFullyCollapsed = height <= (routeSheetCollapsedHeight + 1)
-        routeHistorySheet.backgroundColor = isFullyCollapsed ? .clear : .sidePanelBackground
+        routeHistorySheet.backgroundColor = isFullyCollapsed ? .clear : .elevatedPanelSurface
         routeHistorySheet.layer.shadowOpacity = isFullyCollapsed ? 0 : 0.1
         
         if animated {

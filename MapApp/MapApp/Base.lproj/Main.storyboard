@@ -167,7 +167,6 @@
                                         </constraints>
                                     </stackView>
                                 </subviews>
-                                <color key="backgroundColor" red="0.4226074219" green="0.4697265625" blue="0.6420898438" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="displayP3"/>
                                 <constraints>
                                     <constraint firstAttribute="bottom" secondItem="Psu-8x-qz8" secondAttribute="bottom" constant="16" id="RpI-ky-Q4A"/>
                                     <constraint firstAttribute="trailing" secondItem="Psu-8x-qz8" secondAttribute="trailing" constant="8" id="Ylg-Im-7Rg"/>
@@ -253,7 +252,6 @@
                                         </connections>
                                     </button>
                                 </subviews>
-                                <color key="backgroundColor" red="0.4226074219" green="0.4697265625" blue="0.6420898438" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="displayP3"/>
                                 <accessibility key="accessibilityConfiguration">
                                     <bool key="isElement" value="YES"/>
                                 </accessibility>
