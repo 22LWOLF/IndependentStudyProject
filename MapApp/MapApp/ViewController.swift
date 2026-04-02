@@ -1688,6 +1688,12 @@ extension ViewController {
         return navigationCues[nextNavigationCueIndex].instruction
     }
     
+    private func nextNavigationInstructionDistanceFeet() -> Int {
+        guard nextNavigationCueIndex < navigationCues.count else { return 0 }
+        let remainingDistance = max(0, navigationCues[nextNavigationCueIndex].triggerDistance - traveledDistance)
+        return Int((remainingDistance * 3.28084).rounded())
+    }
+    
     private func currentPaceTypeForRouteState() -> PaceType {
         if let livePace = paceType(at: traveledDistance) {
             return livePace
@@ -1701,6 +1707,7 @@ extension ViewController {
             remainingMiles: max(0, totalRouteDistance - traveledDistance) / 1609.34,
             remainingMinutes: Int(estimatedRouteMinutes(totalDistance: totalRouteDistance, traveledDistance: traveledDistance).rounded()),
             nextInstruction: nextNavigationInstructionText(),
+            nextInstructionDistanceFeet: nextNavigationInstructionDistanceFeet(),
             currentPaceType: currentPaceTypeForRouteState().rawValue
         )
     }
@@ -1752,6 +1759,7 @@ extension ViewController {
                 remainingMiles: 1.25,
                 remainingMinutes: 18,
                 nextInstruction: "Head north to verify the Dynamic Island preview.",
+                nextInstructionDistanceFeet: 500,
                 currentPaceType: PaceType.walk.rawValue
             ),
             staleDate: Date().addingTimeInterval(300),

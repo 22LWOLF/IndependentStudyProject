@@ -26,25 +26,28 @@ struct MapAppRouteLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    HStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(paceColor(for: context.state.currentPaceType))
-                            Image(systemName: paceSymbol(for: context.state.currentPaceType))
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 28, height: 28)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(context.state.routeName)
-                                .font(.headline)
-                                .lineLimit(1)
-                            Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
-                                .font(.caption2)
-                                .lineLimit(2)
-                        }
+                    ZStack {
+                        Circle()
+                            .fill(paceColor(for: context.state.currentPaceType))
+                        Image(systemName: paceSymbol(for: context.state.currentPaceType))
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
                     }
+                    .frame(width: 30, height: 30)
+                    .padding(.leading, 10)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(context.state.routeName)
+                            .font(.headline)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
+                            .font(.caption2)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 10)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 4) {
@@ -54,6 +57,7 @@ struct MapAppRouteLiveActivity: Widget {
                             .font(.caption)
                     }
                     .foregroundStyle(paceColor(for: context.state.currentPaceType))
+                    .padding(.trailing, 10)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
@@ -63,9 +67,11 @@ struct MapAppRouteLiveActivity: Widget {
                         Spacer()
                         Text(context.state.nextInstruction.isEmpty ? "Continue on route" : context.state.nextInstruction)
                             .font(.caption)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
                     }
                     .foregroundStyle(paceColor(for: context.state.currentPaceType))
+                    .padding(.horizontal, 10)
                 }
             } compactLeading: {
                 ZStack {
@@ -77,10 +83,15 @@ struct MapAppRouteLiveActivity: Widget {
                 }
                 .frame(width: 24, height: 24)
             } compactTrailing: {
-                Text(compactDirectionText(for: context.state.nextInstruction))
-                    .font(.caption2.weight(.black))
-                    .lineLimit(1)
-                    .foregroundStyle(.white)
+                HStack(spacing: 3) {
+                    Image(systemName: directionSymbol(for: context.state.nextInstruction))
+                        .font(.caption2.weight(.bold))
+                    Text(compactDistanceText(feet: context.state.nextInstructionDistanceFeet))
+                        .font(.caption2.weight(.black))
+                        .monospacedDigit()
+                }
+                .lineLimit(1)
+                .foregroundStyle(.white)
             } minimal: {
                 ZStack {
                     Circle()
@@ -121,20 +132,40 @@ struct MapAppRouteLiveActivity: Widget {
         }
     }
     
-    private func compactDirectionText(for instruction: String) -> String {
+    private func directionSymbol(for instruction: String) -> String {
         let lowered = instruction.lowercased()
+        if lowered.contains("turn around") || lowered.contains("u-turn") {
+            return "arrow.uturn.backward"
+        }
+        if lowered.contains("slight left") {
+            return "arrow.up.left"
+        }
+        if lowered.contains("slight right") {
+            return "arrow.up.right"
+        }
+        if lowered.contains("sharp left") {
+            return "arrowshape.turn.up.left"
+        }
+        if lowered.contains("sharp right") {
+            return "arrowshape.turn.up.right"
+        }
         if lowered.contains("left") {
-            return "L"
+            return "arrowshape.turn.up.left"
         }
         if lowered.contains("right") {
-            return "R"
+            return "arrowshape.turn.up.right"
         }
-        if lowered.contains("straight") || lowered.contains("continue") {
-            return "↑"
+        if lowered.contains("straight") || lowered.contains("continue") || lowered.contains("head") {
+            return "arrow.up"
         }
-        if lowered.contains("turn around") {
-            return "↺"
+        return "location.fill"
+    }
+    
+    private func compactDistanceText(feet: Int) -> String {
+        guard feet > 0 else { return "" }
+        if feet >= 1320 {
+            return String(format: "%.1f mi", Double(feet) / 5280.0)
         }
-        return "\(0)".replacingOccurrences(of: "0", with: "")
+        return "\(feet)ft"
     }
 }
