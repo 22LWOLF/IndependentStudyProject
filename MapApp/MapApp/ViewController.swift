@@ -125,7 +125,7 @@ enum AppTheme: String, CaseIterable {
 }
 
 extension UIColor {
-    static var activeTheme: AppTheme = .earlyFrost
+    static var activeTheme: AppTheme = .urbanFog
     static var activeThemeIndex: Int {
         get { activeTheme.index }
         set { activeTheme = AppTheme(index: newValue) }
@@ -631,7 +631,7 @@ class ViewController: UIViewController {
     private var routeSegments: [CLLocationCoordinate2D] = []
     private var cumulativeSegmentLengths: [CLLocationDistance] = []
     private var currentRouteType: RouteConfig.RouteType = .oneWay
-    private var currentRouteDisplayName = "Welcome Back"
+    private var currentRouteDisplayName = "Welcome to APPNAME"
     private var lastRouteTypeSelection = 0
     private var pendingRouteSave: PendingRouteSave?
     private var speechSynthesizer = AVSpeechSynthesizer()
@@ -1797,7 +1797,10 @@ extension ViewController {
         }
     }
 
-    @IBAction func clearRouteBTN(_ sender: UIButton) { clearAllRoutes() }
+    @IBAction func clearRouteBTN(_ sender: UIButton) {
+        clearAllRoutes()
+        routeInfoLabel.text = nil
+    }
 
     @IBAction func routeTypeChanged(_ sender: UISegmentedControl) {
         let wasLoopSelected = lastRouteTypeSelection == RouteConfig.RouteType.loop.rawValue
@@ -2076,9 +2079,9 @@ extension ViewController {
         if !isReloadingExistingRoute {
             pendingRouteSave = PendingRouteSave(waypoints: selectedCoordinates, coordinates: coordinates, totalDistance: totalDistance, config: config)
             setSaveRoutePillVisible(true)
-            print("💾 Route ready to save")
+            print("Route ready to save")
         } else {
-            print("♻️ Reloaded existing route - not saving duplicate")
+            print("Reloaded existing route - not saving duplicate")
             isReloadingExistingRoute = false  // Reset flag for next route
             pendingRouteSave = nil
             setSaveRoutePillVisible(false)
@@ -2273,7 +2276,7 @@ extension ViewController {
         guard totalRouteDistance > 0 else { return }
         guard #available(iOS 16.1, *) else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            print("🟡 Live Activities are disabled for this app/device")
+            print("Live Activities are disabled for this app/device")
             return
         }
         
@@ -2291,9 +2294,9 @@ extension ViewController {
                 }
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
-                print("🟢 Live Activity started")
+                print("Live Activity started")
             } catch {
-                print("🔴 Failed to start Live Activity: \(error.localizedDescription)")
+                print("Failed to start Live Activity: \(error.localizedDescription)")
             }
         }
     }
@@ -2305,7 +2308,7 @@ extension ViewController {
         
         guard totalRouteDistance <= 0 else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            print("🟡 Debug Live Activity preview skipped because Live Activities are disabled")
+            print("Debug Live Activity preview skipped because Live Activities are disabled")
             return
         }
         
@@ -2330,9 +2333,9 @@ extension ViewController {
                 }
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
-                print("🧪 Debug Live Activity preview started. Active count: \(Activity<MapAppRouteActivityAttributes>.activities.count)")
+                print("Debug Live Activity preview started. Active count: \(Activity<MapAppRouteActivityAttributes>.activities.count)")
             } catch {
-                print("🔴 Debug Live Activity preview failed: \(error.localizedDescription)")
+                print("Debug Live Activity preview failed: \(error.localizedDescription)")
             }
         }
     }
@@ -2368,13 +2371,13 @@ extension ViewController {
             }
             routeLiveActivity = nil
             lastLiveActivityUpdateDate = nil
-            print("⚪️ Live Activity ended")
+            print("Live Activity ended")
         }
     }
     
     private func setRouteDisplayName(_ name: String?) {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        currentRouteDisplayName = (trimmedName?.isEmpty == false) ? trimmedName! : "Welcome Back"
+        currentRouteDisplayName = (trimmedName?.isEmpty == false) ? trimmedName! : "Welcome to APPNAME"
         routeNameLabel?.text = currentRouteDisplayName
     }
     
@@ -4359,9 +4362,26 @@ ISSUE: 3/31/2026
  Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black.
  
  
- Small:
- when go from loop selected to One way or OAB call Clear
+More stuff I'd like to do: 4/2/2026:
+    I added color themes for later use, but I would also like to make darkmode versions for all of the themes I got.
  
- Idea that I kind of like that my prof gave me. Have it to where I have 3 sliders instead of 2 and a label. But instead of having it to where values are changed dynamically EX if walk is at 50% and jog is at 50% and I move walk up to 60% then jog goes to 40%. instead make it realitive is the best way to describe it. For example with 3 sliders you have walk = 50% jog = 50% and run = 50% on the math/visual side where the route is being displayed it is essentially 33% for each. Does that make sense? if not lmk, but I kind of and kind of don't like the idea. Also my prof mentioned that he was worried about everytime a route is gneerated it being saved he said that he think it would be better to have a "positive" reaction behind it so instead of being done for you, you need to click a "Save Route" button, thoughts on this? And 3rd which is something I def want to add is the routes name at the top above the distance and time stuff.
-
+    whenver clear is hit also clear out the route info label up top.
+    
+    Make go too into more of a google search thing not lat and long for locations.
+ 
+    Make it to where settings actually does settings things:
+        1. allow user to pick color theme
+        2. allow user to turn off and on talking and vibrations
+        3. allow user to reset there average speeds for each pace (allow to reset individually) and this would also be the place that they can see there average speeds for each pace.
+        4. F.A.Q. thing or maybe a way to contact me if issue occurs (maybe)
+    
+    Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does.
+    
+    when the user is on a route have it to where if center on user button on whatever direction the user is walking is north (that way left and rights don't get confusing)
+    
+    Add animaitons to just about everthing to make it feel more professional.
+ 
+ 
+ Way in the future additions:
+ add apple watch compatability
  */
