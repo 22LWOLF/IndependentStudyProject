@@ -3158,7 +3158,6 @@ extension ViewController {
         alert.addTextField { textField in
             textField.placeholder = "e.g., Kansas City, MO or McDonalds"
             textField.returnKeyType = .search
-            textField.
         }
         
         let searchAction = UIAlertAction(title: "Search", style: .default) { [weak self, weak alert] _ in
@@ -4442,6 +4441,8 @@ More stuff I'd like to do: :
     I added color themes for later use, but I would also like to make darkmode versions for all of the themes I got. 4/2/2026 done (partial)
  
     whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
+ 
+    Make it to when the app is completely closed out it stops widget use.
     
     Make go to into more of a google search thing not lat and long for locations. 4/3/2026 Partially done need to add auto complete but priamary funcanality is there.
  
