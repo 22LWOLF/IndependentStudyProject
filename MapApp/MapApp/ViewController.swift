@@ -691,10 +691,7 @@ class ViewController: UIViewController {
         
     }
     
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        startDebugLiveActivityPreviewIfNeeded()
-    }
+
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -1737,7 +1734,7 @@ extension ViewController {
 
 // MARK: - IBActions
 extension ViewController {
-    @IBAction func showCoordinateEntry(_ sender: Any) { presentCoordinateEntryDialog() }
+    @IBAction func showCoordinateEntry(_ sender: Any) { goToButtonTapped() }
     
     
 
@@ -1796,7 +1793,6 @@ extension ViewController {
             generateManualRoute(config: config)
         }
     }
-
     @IBAction func clearRouteBTN(_ sender: UIButton) {
         clearAllRoutes()
         routeInfoLabel.text = nil
@@ -3093,7 +3089,10 @@ extension ViewController {
         }
         return value
     }
+    
+    
 }
+
 
 // MARK: - @objc Handlers     TEMPORARY NEED TO ADD SECTION FOR EACH AREA
 extension ViewController {
@@ -3144,29 +3143,93 @@ extension ViewController {
 
     @objc private func dismissKeyboard() { view.endEditing(true); closePanel() }
     
+    @objc private func goToButtonTapped() {
+        let alert = UIAlertController(title: "Search Destination", message: "Enter a city, address, or place.", preferredStyle: .alert)
+        
+        alert.addTextField { textField in
+            textField.placeholder = "e.g., Kansas City, MO or McDonalds"
+            textField.returnKeyType = .search
+        }
+        
+        let searchAction = UIAlertAction(title: "Search", style: .default) { [weak self, weak alert] _ in
+            guard let query = alert?.textFields?.first?.text, !query.isEmpty else { return }
+            self?.searchAndGo(to: query)
+        }
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        
+        alert.addAction(searchAction)
+        alert.addAction(cancelAction)
+        
+        present(alert, animated: true, completion: nil)
+    }
+    
     @objc private func saveRoutePillTapped() {
         guard pendingRouteSave != nil else { return }
         presentSaveRouteDialog()
     }
-
-    private func presentCoordinateEntryDialog() {
-        let alert = UIAlertController(title: "Enter Coordinates", message: "Enter Latitude and Longitude", preferredStyle: .alert)
-        alert.addTextField { $0.placeholder = "Latitude (-90 to 90)"; $0.keyboardType = .numbersAndPunctuation }
-        alert.addTextField { $0.placeholder = "Longitude (-180 to 180)"; $0.keyboardType = .numbersAndPunctuation }
-        let goAction = UIAlertAction(title: "Go", style: .default) { [weak self] _ in
-            guard let self = self,
-                  let latText = alert.textFields?[0].text, !latText.isEmpty,
-                  let longText = alert.textFields?[1].text, !longText.isEmpty,
-                  let lat = Double(latText), let long = Double(longText),
-                  lat >= -90, lat <= 90, long >= -180, long <= 180 else {
-                self?.showErrorAlert(message: "Invalid coordinates"); return }
-            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: long)
-            self.safelyCenterMap(on: coordinate, distance: 10000)
+    func searchAndGo(to query: String) {
+            // 1. Create a search request
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            
+            // Optional: Bias the search results to the area the user is currently viewing
+            // This helps if they search "McDonalds" so it finds the closest one, not one in another state.
+            request.region = mapView.region
+            
+            // 2. Initialize the search
+            let search = MKLocalSearch(request: request)
+            
+            // Show a loading indicator here if you have one
+            
+            // 3. Start the search
+            search.start { [weak self] (response, error) in
+                guard let self = self else { return }
+                
+                // Handle errors (e.g., no internet)
+                if let error = error {
+                    print("Search failed with error: \(error.localizedDescription)")
+                    // You might want to show a UIAlertController here letting the user know
+                    return
+                }
+                
+                // Ensure we got a valid response with at least one map item
+                guard let response = response, let topResult = response.mapItems.first else {
+                    print("No results found for \(query).")
+                    return
+                }
+                
+                // 4. Extract the data
+                let coordinate = topResult.placemark.coordinate
+                let name = topResult.name ?? "Unknown Location"
+                let address = topResult.placemark.title ?? "" // Usually contains the full formatted address
+                
+                print("Found: \(name) at \(address)")
+                
+                // Optional: Clear old search pins before adding a new one
+                // Let's assume you only want one "Go To" pin at a time.
+                let existingAnnotations = self.mapView.annotations.filter { !($0 is MKUserLocation) }
+                self.mapView.removeAnnotations(existingAnnotations)
+                
+                // 5. Create and add the new pin (Annotation)
+                let annotation = MKPointAnnotation()
+                annotation.coordinate = coordinate
+                annotation.title = name
+                annotation.subtitle = address
+                self.mapView.addAnnotation(annotation)
+                
+                // 6. Move the camera to the new location
+                // Apple provides a bounding region in the response which is perfectly sized for the result
+                // (e.g., zoomed out for a city, zoomed in for a restaurant)
+                self.mapView.setRegion(response.boundingRegion, animated: true)
+                
+                // Select the annotation so the title/subtitle bubble pops up automatically
+                self.mapView.selectAnnotation(annotation, animated: true)
+            }
+            
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(goAction)
-        present(alert, animated: true)
-    }
+        
+    
     
     private func presentSaveRouteDialog() {
         guard let pendingRouteSave else { return }
@@ -4345,6 +4408,8 @@ extension ViewController: UIGestureRecognizerDelegate {
         }
         return true
     }
+    
+    
 }
 /*
 
@@ -4367,7 +4432,7 @@ More stuff I'd like to do: 4/2/2026:
  
     whenver clear is hit also clear out the route info label up top.
     
-    Make go too into more of a google search thing not lat and long for locations.
+    Make go to into more of a google search thing not lat and long for locations.
  
     Make it to where settings actually does settings things:
         1. allow user to pick color theme

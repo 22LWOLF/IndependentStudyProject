@@ -2,7 +2,7 @@ import ActivityKit
 import Foundation
 
 struct MapAppRouteActivityAttributes: ActivityAttributes {
-    struct ContentState: Codable, Hashable {
+    public struct ContentState: Codable, Hashable {
         var routeName: String
         var remainingMiles: Double
         var remainingMinutes: Int
@@ -10,6 +10,6 @@ struct MapAppRouteActivityAttributes: ActivityAttributes {
         var nextInstructionDistanceFeet: Int
         var currentPaceType: String
     }
-
+    
     var routeID: String
 }
