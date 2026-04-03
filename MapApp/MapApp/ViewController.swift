@@ -524,7 +524,7 @@ enum PaceType: String {
 
 
 // MARK: - ViewController
-class ViewController: UIViewController {
+class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
     private struct PendingRouteSave {
         let waypoints: [CLLocationCoordinate2D]
         let coordinates: [CLLocationCoordinate2D]
@@ -623,6 +623,9 @@ class ViewController: UIViewController {
     // MARK: - Location
     private var locationManager: CLLocationManager!
     private var userLocation: CLLocationCoordinate2D?
+    
+    // MARK: - Go To search completer
+    private var searchCompleter = MKLocalSearchCompleter()
 
     // MARK: - Route Tracking
     private var currentRouteCoordinates: [CLLocationCoordinate2D] = []
@@ -687,6 +690,12 @@ class ViewController: UIViewController {
         CoreDataManager.shared.migrateExistingRoutes()
         lastRouteTypeSelection = routeTypeSelector.selectedSegmentIndex
         routeNameLabel?.text = currentRouteDisplayName
+        
+        searchCompleter = MKLocalSearchCompleter()
+           searchCompleter.delegate = self
+           // Limit to search results to the map view's current region.
+            searchCompleter.region = mapView.region
+
         
         
     }
@@ -3149,6 +3158,7 @@ extension ViewController {
         alert.addTextField { textField in
             textField.placeholder = "e.g., Kansas City, MO or McDonalds"
             textField.returnKeyType = .search
+            textField.
         }
         
         let searchAction = UIAlertAction(title: "Search", style: .default) { [weak self, weak alert] _ in
@@ -3802,6 +3812,7 @@ extension ViewController: CLLocationManagerDelegate {
         updateSpeedAverages(speed: location.speed)
         if !hasAlreadyCentered { safelyCenterMap(on: location.coordinate, distance: 10000); hasAlreadyCentered = true }
         else if isFollowingUser { safelyCenterMap(on: location.coordinate, distance: 3000) }
+        searchCompleter.region = mapView.region
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
@@ -4427,12 +4438,12 @@ ISSUE: 3/31/2026
  Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black.
  
  
-More stuff I'd like to do: 4/2/2026:
-    I added color themes for later use, but I would also like to make darkmode versions for all of the themes I got.
+More stuff I'd like to do: :
+    I added color themes for later use, but I would also like to make darkmode versions for all of the themes I got. 4/2/2026 done (partial)
  
-    whenver clear is hit also clear out the route info label up top.
+    whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
     
-    Make go to into more of a google search thing not lat and long for locations.
+    Make go to into more of a google search thing not lat and long for locations. 4/3/2026 Partially done need to add auto complete but priamary funcanality is there.
  
     Make it to where settings actually does settings things:
         1. allow user to pick color theme
