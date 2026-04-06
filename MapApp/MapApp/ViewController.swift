@@ -694,6 +694,334 @@ extension PlaceSearchViewController: MKLocalSearchCompleterDelegate {
     }
 }
 
+final class SettingsViewController: UIViewController {
+    struct SpeedStat {
+        let title: String
+        let metersPerSecond: Double
+        let sampleCount: Int
+    }
+
+    var selectedThemeIndex: Int = 0
+    var isVoiceGuidanceEnabled: Bool = true
+    var isHapticsEnabled: Bool = true
+    var speedStats: [SpeedStat] = []
+    var onThemeSelected: ((Int) -> Void)?
+    var onVoiceGuidanceChanged: ((Bool) -> Void)?
+    var onHapticsChanged: ((Bool) -> Void)?
+    var onResetSpeed: ((Int) -> Void)?
+
+    private let scrollView = UIScrollView()
+    private let contentView = UIStackView()
+    private let voiceToggle = UISwitch()
+    private let hapticsToggle = UISwitch()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Settings"
+        view.backgroundColor = .systemGroupedBackground
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(closeTapped)
+        )
+
+        setupLayout()
+        renderSections()
+    }
+
+    private func setupLayout() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.axis = .vertical
+        contentView.spacing = 18
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 20),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 16),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -16),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -24)
+        ])
+    }
+
+    func renderSections() {
+        contentView.arrangedSubviews.forEach { view in
+            contentView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        contentView.addArrangedSubview(makeThemeSection())
+        contentView.addArrangedSubview(makeNavigationSection())
+        contentView.addArrangedSubview(makeSpeedSection())
+        contentView.addArrangedSubview(makeSupportSection())
+    }
+
+    private func makeSectionCard(title: String) -> UIStackView {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 14
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.layoutMargins = UIEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
+        stack.backgroundColor = .secondarySystemGroupedBackground
+        stack.layer.cornerRadius = 18
+
+        let label = UILabel()
+        label.text = title
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .secondaryLabel
+        stack.addArrangedSubview(label)
+
+        return stack
+    }
+
+    private func makeThemeSection() -> UIView {
+        let section = makeSectionCard(title: "THEME")
+
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        row.distribution = .fill
+
+        let themeButton = UIButton(type: .system)
+        themeButton.configuration = .filled()
+        themeButton.configuration?.title = AppTheme(index: selectedThemeIndex).displayName
+        themeButton.configuration?.image = UIImage(systemName: "chevron.up.chevron.down")
+        themeButton.configuration?.imagePlacement = .trailing
+        themeButton.configuration?.imagePadding = 8
+        themeButton.configuration?.baseBackgroundColor = .systemPink
+        themeButton.configuration?.baseForegroundColor = .white
+        themeButton.configuration?.cornerStyle = .capsule
+
+        let actions = AppTheme.allCases.enumerated().map { index, theme in
+            UIAction(
+                title: theme.displayName,
+                state: index == selectedThemeIndex ? .on : .off
+            ) { [weak self] _ in
+                self?.selectedThemeIndex = index
+                self?.onThemeSelected?(index)
+                self?.renderSections()
+            }
+        }
+        themeButton.menu = UIMenu(title: "Choose Theme", options: .displayInline, children: actions)
+        themeButton.showsMenuAsPrimaryAction = true
+        themeButton.translatesAutoresizingMaskIntoConstraints = false
+        themeButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
+
+        let swatchRow = makeThemeSwatchRow(theme: AppTheme(index: selectedThemeIndex))
+
+        row.addArrangedSubview(themeButton)
+        row.addArrangedSubview(swatchRow)
+        section.addArrangedSubview(row)
+        return section
+    }
+
+    private func makeThemeSwatchRow(theme: AppTheme) -> UIView {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 8
+        stack.alignment = .center
+
+        let colors = [
+            theme.palette.primary,
+            theme.palette.secondary,
+            theme.palette.background
+        ]
+
+        for color in colors {
+            let swatch = UIView()
+            swatch.translatesAutoresizingMaskIntoConstraints = false
+            swatch.backgroundColor = color
+            swatch.layer.cornerRadius = 8
+            swatch.layer.borderWidth = 1
+            swatch.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+            NSLayoutConstraint.activate([
+                swatch.widthAnchor.constraint(equalToConstant: 24),
+                swatch.heightAnchor.constraint(equalToConstant: 24)
+            ])
+            stack.addArrangedSubview(swatch)
+        }
+
+        return stack
+    }
+
+    private func makeNavigationSection() -> UIView {
+        let section = makeSectionCard(title: "NAVIGATION")
+        voiceToggle.isOn = isVoiceGuidanceEnabled
+        hapticsToggle.isOn = isHapticsEnabled
+        voiceToggle.addTarget(self, action: #selector(voiceChanged(_:)), for: .valueChanged)
+        hapticsToggle.addTarget(self, action: #selector(hapticsChanged(_:)), for: .valueChanged)
+
+        section.addArrangedSubview(makeToggleRow(title: "Voice Directions", subtitle: "Spoken turn cues and pace prompts", toggle: voiceToggle))
+        section.addArrangedSubview(makeDivider())
+        section.addArrangedSubview(makeToggleRow(title: "Vibrations", subtitle: "Pace transition haptics", toggle: hapticsToggle))
+        return section
+    }
+
+    private func makeSpeedSection() -> UIView {
+        let section = makeSectionCard(title: "PACE STATS")
+
+        for (index, stat) in speedStats.enumerated() {
+            section.addArrangedSubview(makeSpeedRow(stat: stat, index: index))
+            if index < speedStats.count - 1 {
+                section.addArrangedSubview(makeDivider())
+            }
+        }
+
+        return section
+    }
+
+    private func makeSupportSection() -> UIView {
+        let section = makeSectionCard(title: "HELP")
+
+        let faqLabel = UILabel()
+        faqLabel.numberOfLines = 0
+        faqLabel.font = .systemFont(ofSize: 15)
+        faqLabel.textColor = .label
+        faqLabel.text = "FAQ: Use Go To to search places, Generate to build a route, and tap the location button to follow yourself on-map."
+        section.addArrangedSubview(faqLabel)
+
+        let contactButton = UIButton(type: .system)
+        contactButton.configuration = .filled()
+        contactButton.configuration?.title = "Contact Support"
+        contactButton.configuration?.baseBackgroundColor = .systemOrange
+        contactButton.configuration?.baseForegroundColor = .white
+        contactButton.configuration?.cornerStyle = .capsule
+        contactButton.addTarget(self, action: #selector(contactSupportTapped), for: .touchUpInside)
+        section.addArrangedSubview(contactButton)
+
+        return section
+    }
+
+    private func makeToggleRow(title: String, subtitle: String, toggle: UISwitch) -> UIView {
+        let container = UIView()
+        let titleLabel = UILabel()
+        let subtitleLabel = UILabel()
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 17, weight: .medium)
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = .systemFont(ofSize: 13)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.numberOfLines = 0
+
+        container.addSubview(titleLabel)
+        container.addSubview(subtitleLabel)
+        container.addSubview(toggle)
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: container.topAnchor),
+
+            subtitleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            subtitleLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -12),
+
+            toggle.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            toggle.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return container
+    }
+
+    private func makeSpeedRow(stat: SpeedStat, index: Int) -> UIView {
+        let container = UIView()
+        let titleLabel = UILabel()
+        let detailLabel = UILabel()
+        let resetButton = UIButton(type: .system)
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailLabel.translatesAutoresizingMaskIntoConstraints = false
+        resetButton.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.text = stat.title
+        titleLabel.font = .systemFont(ofSize: 17, weight: .medium)
+
+        let mph = stat.metersPerSecond * 2.23694
+        detailLabel.text = String(format: "%.2f m/s • %.2f mph • %d samples", stat.metersPerSecond, mph, stat.sampleCount)
+        detailLabel.font = .systemFont(ofSize: 13)
+        detailLabel.textColor = .secondaryLabel
+        detailLabel.numberOfLines = 0
+
+        resetButton.setTitle("Reset", for: .normal)
+        resetButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        resetButton.configuration = .tinted()
+        resetButton.configuration?.baseForegroundColor = .systemRed
+        resetButton.configuration?.cornerStyle = .capsule
+        resetButton.tag = index
+        resetButton.addTarget(self, action: #selector(resetSpeedTapped(_:)), for: .touchUpInside)
+
+        container.addSubview(titleLabel)
+        container.addSubview(detailLabel)
+        container.addSubview(resetButton)
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: container.topAnchor),
+
+            detailLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            detailLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            detailLabel.trailingAnchor.constraint(equalTo: resetButton.leadingAnchor, constant: -12),
+
+            resetButton.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            resetButton.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return container
+    }
+
+    private func makeDivider() -> UIView {
+        let divider = UIView()
+        divider.backgroundColor = .separator
+        divider.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale).isActive = true
+        return divider
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+
+    @objc private func voiceChanged(_ sender: UISwitch) {
+        onVoiceGuidanceChanged?(sender.isOn)
+    }
+
+    @objc private func hapticsChanged(_ sender: UISwitch) {
+        onHapticsChanged?(sender.isOn)
+    }
+
+    @objc private func resetSpeedTapped(_ sender: UIButton) {
+        onResetSpeed?(sender.tag)
+    }
+
+    @objc private func contactSupportTapped() {
+        let email = "mailto:mapapp.support@example.com?subject=MapApp%20Issue"
+        if let url = URL(string: email), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else {
+            let alert = UIAlertController(
+                title: "Contact Support",
+                message: "Email mapapp.support@example.com with a description of the issue.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+        }
+    }
+}
+
 final class IrisLoadingView: UIView {
     private let bladeCount = 12
     private let bladeGradientColors: [CGColor] = [
@@ -734,7 +1062,8 @@ final class IrisLoadingView: UIView {
         }
 
         let angleStep = (2 * CGFloat.pi) / CGFloat(bladeCount)
-        let openSpread = angleStep * 0.72
+        let openSpread = angleStep * 0.92
+        let swirlBoost = angleStep * 0.22
 
         for (index, blade) in bladeLayers.enumerated() {
             blade.opacity = 1
@@ -746,17 +1075,37 @@ final class IrisLoadingView: UIView {
         placeholderCircle.transform = .identity
         alpha = 1
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            UIView.animate(
-                withDuration: 1.45,
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+            UIView.animateKeyframes(
+                withDuration: 2.4,
                 delay: 0,
-                options: [.curveEaseInOut, .allowUserInteraction]
+                options: [.calculationModeCubic, .allowUserInteraction]
             ) {
-                for (index, blade) in self.bladeLayers.enumerated() {
-                    blade.setAffineTransform(CGAffineTransform(rotationAngle: self.bladeBaseAngles[index] + openSpread))
+                UIView.addKeyframe(withRelativeStartTime: 0.0, relativeDuration: 0.68) {
+                    for (index, blade) in self.bladeLayers.enumerated() {
+                        let progressiveSwirl = swirlBoost * (CGFloat(index) / CGFloat(max(self.bladeCount - 1, 1)))
+                        blade.setAffineTransform(
+                            CGAffineTransform(
+                                rotationAngle: self.bladeBaseAngles[index] + openSpread + progressiveSwirl
+                            )
+                        )
+                    }
+                    self.placeholderCircle.alpha = 0.30
+                    self.placeholderCircle.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
                 }
-                self.placeholderCircle.alpha = 0.18
-                self.placeholderCircle.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+
+                UIView.addKeyframe(withRelativeStartTime: 0.68, relativeDuration: 0.32) {
+                    for (index, blade) in self.bladeLayers.enumerated() {
+                        let settlingSpread = openSpread + (swirlBoost * 0.45)
+                        blade.setAffineTransform(
+                            CGAffineTransform(
+                                rotationAngle: self.bladeBaseAngles[index] + settlingSpread
+                            )
+                        )
+                    }
+                    self.placeholderCircle.alpha = 0.08
+                    self.placeholderCircle.transform = CGAffineTransform(scaleX: 0.82, y: 0.82)
+                }
             } completion: { _ in
                 completion()
             }
@@ -972,6 +1321,7 @@ class ViewController: UIViewController {
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
     private var isVoiceGuidanceEnabled = true
+    private var isHapticsEnabled = true
     
     // MARK: - Route History
     private var savedRoutes: [SavedRoute] = []
@@ -1041,11 +1391,13 @@ class ViewController: UIViewController {
         speechSynthesizer.delegate = self
         configureSpokenGuidanceAudioSession()
         preparePaceHaptics()
+        loadThemePreference()
+        loadVoiceGuidancePreference()
+        loadHapticsPreference()
         setupMap()
         setupLocation()
         setupUI()
         loadSavedSpeeds()
-        loadVoiceGuidancePreference()
         setupRouteHistorySheet()
         setupPacePanel()
         CoreDataManager.shared.migrateExistingRoutes()
@@ -1079,6 +1431,45 @@ class ViewController: UIViewController {
 
 // MARK: - Setup Methods
 extension ViewController {
+    private func presentSettingsScreen() {
+        let settingsViewController = SettingsViewController()
+        settingsViewController.selectedThemeIndex = UIColor.activeThemeIndex
+        settingsViewController.isVoiceGuidanceEnabled = isVoiceGuidanceEnabled
+        settingsViewController.isHapticsEnabled = isHapticsEnabled
+        settingsViewController.speedStats = [
+            .init(title: "Walk", metersPerSecond: avgWalkingSpeed, sampleCount: walkSampleCount),
+            .init(title: "Jog", metersPerSecond: avgJoggingSpeed, sampleCount: jogSampleCount),
+            .init(title: "Run", metersPerSecond: avgRunningSpeed, sampleCount: runSampleCount)
+        ]
+
+        settingsViewController.onThemeSelected = { [weak self] selectedIndex in
+            self?.saveThemePreference(index: selectedIndex)
+            self?.applyTheme(themeIndex: selectedIndex)
+        }
+        settingsViewController.onVoiceGuidanceChanged = { [weak self] isEnabled in
+            self?.isVoiceGuidanceEnabled = isEnabled
+            UserDefaults.standard.set(isEnabled, forKey: "isVoiceGuidanceEnabled")
+            self?.voiceGuidanceToggle?.isOn = isEnabled
+        }
+        settingsViewController.onHapticsChanged = { [weak self] isEnabled in
+            self?.isHapticsEnabled = isEnabled
+            UserDefaults.standard.set(isEnabled, forKey: "isHapticsEnabled")
+        }
+        settingsViewController.onResetSpeed = { [weak self, weak settingsViewController] index in
+            self?.resetSpeedData(for: index)
+            settingsViewController?.speedStats = [
+                .init(title: "Walk", metersPerSecond: self?.avgWalkingSpeed ?? 1.4, sampleCount: self?.walkSampleCount ?? 0),
+                .init(title: "Jog", metersPerSecond: self?.avgJoggingSpeed ?? 2.7, sampleCount: self?.jogSampleCount ?? 0),
+                .init(title: "Run", metersPerSecond: self?.avgRunningSpeed ?? 4.0, sampleCount: self?.runSampleCount ?? 0)
+            ]
+            settingsViewController?.renderSections()
+        }
+
+        let navigationController = UINavigationController(rootViewController: settingsViewController)
+        navigationController.modalPresentationStyle = .fullScreen
+        present(navigationController, animated: true)
+    }
+
     private func playIntroLoadingAnimationIfNeeded() {
         guard !hasShownIntroLoadingAnimation else { return }
         guard view.window != nil else { return }
@@ -1151,7 +1542,8 @@ extension ViewController {
         view.backgroundColor = .darkColor
         headerBox.backgroundColor = .headerBG
         bottomTabContainer.backgroundColor = .bottomBG
-        routeHistorySheet.backgroundColor = .elevatedPanelSurface
+        let isRouteSheetCollapsed = routeHistorySheet.frame.height <= (routeSheetCollapsedHeight + 1)
+        routeHistorySheet.backgroundColor = isRouteSheetCollapsed ? .clear : .elevatedPanelSurface
         routeHistorySheet.layer.borderWidth = 0
         routeHistorySheet.layer.borderColor = UIColor.clear.cgColor
 
@@ -2163,51 +2555,9 @@ extension ViewController {
     
     
 
-    @IBAction func settingsBTN(_ sender: UIButton) { //TEMPORARY
-        // Show action sheet with options
-            let alert = UIAlertController(title: "Settings", message: "Choose an action", preferredStyle: .actionSheet)
-            
-            // Reset speed data
-            let resetSpeedAction = UIAlertAction(title: "Reset Speed Data", style: .default) { [weak self] _ in
-                self?.resetSpeedData()
-            }
-            
-            // Print saved routes (debug)
-            let printRoutesAction = UIAlertAction(title: "Print Routes (Debug)", style: .default) { [weak self] _ in
-                self?.printSavedRoutes()
-            }
-            
-            let printSpeedAveragesAction = UIAlertAction(title: "Print Speed Averages", style: .default) { [weak self] _ in
-                self?.printSpeedAverages()
-            }
-            
-            // Clear all routes AND reset counter (destructive)
-            let clearAllAction = UIAlertAction(title: "Clear All Routes", style: .destructive) { [weak self] _ in
-                self?.confirmClearAllData()
-            }
-            
-            // Reset Everything (nuclear option)
-            let resetEverythingAction = UIAlertAction(title: "Reset Everything", style: .destructive) { [weak self] _ in
-                self?.confirmResetEverything()
-            }
-            
-            let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
-            
-            alert.addAction(resetSpeedAction)
-            alert.addAction(printRoutesAction)
-            alert.addAction(printSpeedAveragesAction)
-            alert.addAction(clearAllAction)
-            alert.addAction(resetEverythingAction)
-            alert.addAction(cancelAction)
-            
-            // For iPad (action sheets need a source)
-            if let popover = alert.popoverPresentationController {
-                popover.sourceView = sender
-                popover.sourceRect = sender.bounds
-            }
-            
-            present(alert, animated: true)
-        }
+    @IBAction func settingsBTN(_ sender: UIButton) {
+        presentSettingsScreen()
+    }
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         let config = buildRouteConfig()
@@ -3189,6 +3539,8 @@ extension ViewController {
     }
     
     private func playPaceTransitionHaptic(for paceType: PaceType) {
+        guard isHapticsEnabled else { return }
+
         switch paceType {
         case .walk:
             walkPaceFeedback.impactOccurred(intensity: 1.0)
@@ -4141,6 +4493,28 @@ extension ViewController {
         voiceGuidanceToggle?.isOn = isVoiceGuidanceEnabled
     }
 
+    private func loadHapticsPreference() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "isHapticsEnabled") == nil {
+            isHapticsEnabled = true
+        } else {
+            isHapticsEnabled = defaults.bool(forKey: "isHapticsEnabled")
+        }
+    }
+
+    private func loadThemePreference() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "selectedThemeIndex") == nil {
+            UIColor.activeThemeIndex = AppTheme.urbanFog.index
+        } else {
+            UIColor.activeThemeIndex = defaults.integer(forKey: "selectedThemeIndex")
+        }
+    }
+
+    private func saveThemePreference(index: Int) {
+        UserDefaults.standard.set(index, forKey: "selectedThemeIndex")
+    }
+
     private func saveSpeeds() {
         let defaults = UserDefaults.standard
         defaults.set(avgWalkingSpeed, forKey: "avgWalkingSpeed")
@@ -4160,6 +4534,24 @@ extension ViewController {
         runSampleCount = 50
         saveSpeeds()
         showInfoAlert(message: "Speed data reset to defaults")
+    }
+
+    private func resetSpeedData(for paceIndex: Int) {
+        switch paceIndex {
+        case 0:
+            avgWalkingSpeed = 1.4
+            walkSampleCount = 50
+        case 1:
+            avgJoggingSpeed = 2.7
+            jogSampleCount = 50
+        case 2:
+            avgRunningSpeed = 4.0
+            runSampleCount = 50
+        default:
+            return
+        }
+
+        saveSpeeds()
     }
 }
 
@@ -4977,7 +5369,7 @@ More stuff I'd like to do: :
     
     Add animaitons to just about everthing to make it feel more professional.
  
-    add a loading screen on launch. 4/6/2026 MAYBE FIXED NEED TESTING
+    add a loading screen on launch. 4/6/2026 Paritally implemented needs refinement
  
  
  Way in the future additions:
