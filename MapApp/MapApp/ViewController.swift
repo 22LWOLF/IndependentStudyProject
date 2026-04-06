@@ -644,6 +644,7 @@ class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
     private var lastLiveActivityUpdateDate: Date?
     private var lastLoggedPaceType: PaceType?
     private var hasAttemptedDebugLiveActivityStart = false
+    private let liveActivityStaleInterval: TimeInterval = 20
     private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .soft)
     private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .medium)
     private let runPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
@@ -735,8 +736,17 @@ extension ViewController {
         locationManager.activityType = .fitness
         locationManager.distanceFilter = 5.0
         locationManager.pausesLocationUpdatesAutomatically = true
+        locationManager.allowsBackgroundLocationUpdates = false
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
+    }
+
+    private func updateLocationManagerForRouteTracking() {
+        guard locationManager != nil else { return }
+
+        let shouldTrackInBackground = isActivelyWalkingRoute
+        locationManager.pausesLocationUpdatesAutomatically = !shouldTrackInBackground
+        locationManager.allowsBackgroundLocationUpdates = shouldTrackInBackground
     }
 
     private func setupUI() {
@@ -2063,6 +2073,7 @@ extension ViewController {
         updateRouteInfoLabel(distance: totalDistance, time: totalTime)
         resetProgressTracking(totalDistance: totalDistance, routeCoords: coordinates)
         isActivelyWalkingRoute = true
+        updateLocationManagerForRouteTracking()
         isGeneratingRoute = false
         currentRouteType = config.type
         beginNavigationCues(navigationCues)
@@ -2276,6 +2287,14 @@ extension ViewController {
             currentPaceType: currentPaceTypeForRouteState().rawValue
         )
     }
+
+    private func currentLiveActivityContent() -> ActivityContent<MapAppRouteActivityAttributes.ContentState> {
+        ActivityContent(
+            state: liveActivityContentState(),
+            staleDate: Date().addingTimeInterval(liveActivityStaleInterval),
+            relevanceScore: 100
+        )
+    }
     
     private func startLiveActivityForCurrentRoute() {
         guard totalRouteDistance > 0 else { return }
@@ -2286,17 +2305,11 @@ extension ViewController {
         }
         
         let attributes = MapAppRouteActivityAttributes(routeID: UUID().uuidString)
-        let content = ActivityContent(
-            state: liveActivityContentState(),
-            staleDate: Date().addingTimeInterval(300),
-            relevanceScore: 100
-        )
+        let content = currentLiveActivityContent()
         
         Task {
             do {
-                for activity in Activity<MapAppRouteActivityAttributes>.activities {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
+                await LiveActivityManager.endAllRouteActivities()
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
                 print("Live Activity started")
@@ -2327,15 +2340,13 @@ extension ViewController {
                 nextInstructionDistanceFeet: 500,
                 currentPaceType: PaceType.walk.rawValue
             ),
-            staleDate: Date().addingTimeInterval(300),
+            staleDate: Date().addingTimeInterval(liveActivityStaleInterval),
             relevanceScore: 100
         )
         
         Task {
             do {
-                for activity in Activity<MapAppRouteActivityAttributes>.activities {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
+                await LiveActivityManager.endAllRouteActivities()
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
                 print("Debug Live Activity preview started. Active count: \(Activity<MapAppRouteActivityAttributes>.activities.count)")
@@ -2357,7 +2368,7 @@ extension ViewController {
         
         let content = ActivityContent(
             state: liveActivityContentState(),
-            staleDate: now.addingTimeInterval(300),
+            staleDate: now.addingTimeInterval(liveActivityStaleInterval),
             relevanceScore: 100
         )
         
@@ -2371,9 +2382,7 @@ extension ViewController {
         guard #available(iOS 16.1, *) else { return }
         
         Task {
-            for activity in Activity<MapAppRouteActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
+            await LiveActivityManager.endAllRouteActivities()
             routeLiveActivity = nil
             lastLiveActivityUpdateDate = nil
             print("Live Activity ended")
@@ -2753,15 +2762,23 @@ extension ViewController {
     private func playPaceTransitionHaptic(for paceType: PaceType) {
         switch paceType {
         case .walk:
-            walkPaceFeedback.impactOccurred(intensity: 0.55)
+            walkPaceFeedback.impactOccurred(intensity: 1.0)
         case .jog:
-            jogPaceFeedback.impactOccurred(intensity: 0.8)
+            jogPaceFeedback.impactOccurred(intensity: 1.0)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                self.jogPaceFeedback.impactOccurred(intensity: 0.55)
+                self.jogPaceFeedback.impactOccurred(intensity: 1.00)
                 self.jogPaceFeedback.prepare()
             }
         case .run:
             runPaceFeedback.impactOccurred(intensity: 1.0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                self.runPaceFeedback.impactOccurred(intensity: 1.00)
+                self.runPaceFeedback.prepare()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01){
+                    self.runPaceFeedback.impactOccurred(intensity: 1.00)
+                    self.runPaceFeedback.prepare()
+                }
+            }
         }
         preparePaceHaptics()
     }
@@ -2993,6 +3010,7 @@ extension ViewController {
         selectedCoordinates.removeAll()
         isGeneratingRoute = false
         isActivelyWalkingRoute = false
+        updateLocationManagerForRouteTracking()
         lastLoggedPaceType = nil
         mapView.removeOverlays(mapView.overlays)
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
@@ -3816,7 +3834,9 @@ extension ViewController: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         switch status {
-        case .authorizedWhenInUse, .authorizedAlways: locationManager.startUpdatingLocation()
+        case .authorizedWhenInUse, .authorizedAlways:
+            updateLocationManagerForRouteTracking()
+            locationManager.startUpdatingLocation()
         case .denied, .restricted: showInfoAlert(message: "Location access denied - using default location")
         default: break
         }
@@ -4433,8 +4453,8 @@ extension ViewController: UIGestureRecognizerDelegate {
  
  
 ISSUE: 3/31/2026
- Walked route breaks colro stuff. See if only drawing over user has walked is possible on top layer onstead of redrawing evertime a new segment is done.
- Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black.
+ Walked route breaks colro stuff. See if only drawing over user has walked is possible on top layer onstead of redrawing evertime a new segment is done. DONE
+ Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black. DONE
  
  
 More stuff I'd like to do: :

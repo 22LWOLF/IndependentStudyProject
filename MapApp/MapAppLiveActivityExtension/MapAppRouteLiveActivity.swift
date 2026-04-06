@@ -15,10 +15,10 @@ struct MapAppRouteLiveActivity: Widget {
                     Label("~\(context.state.remainingMinutes) min", systemImage: "clock")
                 }
                 .font(.subheadline)
-                Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
+                Text(statusText(for: context))
                     .font(.caption)
                     .lineLimit(2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(context.isStale ? .orange : .secondary)
             }
             .padding(.vertical, 10)
             .activityBackgroundTint(paceColor(for: context.state.currentPaceType).opacity(0.16))
@@ -42,9 +42,10 @@ struct MapAppRouteLiveActivity: Widget {
                             .font(.headline)
                             .lineLimit(2)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(context.state.nextInstruction.isEmpty ? "Follow route" : context.state.nextInstruction)
+                        Text(statusText(for: context))
                             .font(.caption2)
                             .lineLimit(2)
+                            .foregroundStyle(context.isStale ? .orange : .secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.horizontal, 10)
@@ -65,12 +66,12 @@ struct MapAppRouteLiveActivity: Widget {
                         Text(context.state.currentPaceType)
                             .font(.caption.weight(.semibold))
                         Spacer()
-                        Text(context.state.nextInstruction.isEmpty ? "Continue on route" : context.state.nextInstruction)
+                        Text(statusText(for: context, fallback: "Continue on route"))
                             .font(.caption)
                             .lineLimit(2)
                             .multilineTextAlignment(.trailing)
                     }
-                    .foregroundStyle(paceColor(for: context.state.currentPaceType))
+                    .foregroundStyle(context.isStale ? .orange : paceColor(for: context.state.currentPaceType))
                     .padding(.horizontal, 10)
                 }
             } compactLeading: {
@@ -84,26 +85,41 @@ struct MapAppRouteLiveActivity: Widget {
                 .frame(width: 24, height: 24)
             } compactTrailing: {
                 HStack(spacing: 3) {
-                    Image(systemName: directionSymbol(for: context.state.nextInstruction))
-                        .font(.caption2.weight(.bold))
-                    Text(compactDistanceText(feet: context.state.nextInstructionDistanceFeet))
-                        .font(.caption2.weight(.black))
-                        .monospacedDigit()
+                    if context.isStale {
+                        Image(systemName: "pause.circle.fill")
+                            .font(.caption2.weight(.bold))
+                        Text("Stale")
+                            .font(.caption2.weight(.black))
+                    } else {
+                        Image(systemName: directionSymbol(for: context.state.nextInstruction))
+                            .font(.caption2.weight(.bold))
+                        Text(compactDistanceText(feet: context.state.nextInstructionDistanceFeet))
+                            .font(.caption2.weight(.black))
+                            .monospacedDigit()
+                    }
                 }
                 .lineLimit(1)
                 .foregroundStyle(.white)
             } minimal: {
                 ZStack {
                     Circle()
-                        .fill(paceColor(for: context.state.currentPaceType))
-                    Image(systemName: paceSymbol(for: context.state.currentPaceType))
+                        .fill(context.isStale ? .orange : paceColor(for: context.state.currentPaceType))
+                    Image(systemName: context.isStale ? "pause.fill" : paceSymbol(for: context.state.currentPaceType))
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                 }
                 .frame(width: 24, height: 24)
             }
-            .keylineTint(paceColor(for: context.state.currentPaceType))
+            .keylineTint(context.isStale ? .orange : paceColor(for: context.state.currentPaceType))
         }
+    }
+
+    private func statusText(for context: ActivityViewContext<MapAppRouteActivityAttributes>, fallback: String = "Follow route") -> String {
+        if context.isStale {
+            return "Route updates paused. Reopen the app to continue."
+        }
+
+        return context.state.nextInstruction.isEmpty ? fallback : context.state.nextInstruction
     }
     
     private func paceColor(for paceType: String) -> Color {

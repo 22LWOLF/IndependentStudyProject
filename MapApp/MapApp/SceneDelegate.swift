@@ -24,6 +24,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This occurs shortly after the scene enters the background, or when its session is discarded.
         // Release any resources associated with this scene that can be re-created the next time the scene connects.
         // The scene may re-connect later, as its session was not necessarily discarded (see `application:didDiscardSceneSessions` instead).
+        let remainingScenes = UIApplication.shared.connectedScenes.filter {
+            $0 != scene && $0.session.role == .windowApplication
+        }
+
+        if remainingScenes.isEmpty {
+            LiveActivityManager.requestEndAllRouteActivities(using: UIApplication.shared)
+        }
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -49,4 +56,3 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 
 }
-
