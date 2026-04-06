@@ -1162,39 +1162,30 @@ final class IrisLoadingView: UIView {
         let angleStep = (2 * CGFloat.pi) / CGFloat(bladeCount)
         let centerAngle = angleStep * CGFloat(index)
         let outerRadius = hypot(bounds.width, bounds.height) * 0.92
-        let innerRadius = min(bounds.width, bounds.height) * 0.13
-        let outerStart = centerAngle - (angleStep * 0.80)
-        let outerEnd = centerAngle + (angleStep * 0.30)
+        let outerStart = centerAngle - (angleStep * 0.86)
+        let outerEnd = centerAngle + (angleStep * 0.18)
+        let innerRadius = outerRadius * 0.28
+        let innerLeadAngle = centerAngle + (angleStep * 0.24)
+        let innerTrailAngle = centerAngle - (angleStep * 0.08)
 
         let outerStartPoint = CGPoint(
             x: center.x + cos(outerStart) * outerRadius,
             y: center.y + sin(outerStart) * outerRadius
         )
-        let tipAngle = centerAngle + (angleStep * 0.24)
-        let tipRadius = innerRadius * 0.55
-        let tipPoint = CGPoint(
-            x: center.x + cos(tipAngle) * tipRadius,
-            y: center.y + sin(tipAngle) * tipRadius
+        let innerLeadPoint = CGPoint(
+            x: center.x + cos(innerLeadAngle) * innerRadius,
+            y: center.y + sin(innerLeadAngle) * innerRadius
         )
-
-        let leadingControl = CGPoint(
-            x: center.x + cos(centerAngle - angleStep * 0.08) * (outerRadius * 0.64),
-            y: center.y + sin(centerAngle - angleStep * 0.08) * (outerRadius * 0.64)
-        )
-        let trailingControl = CGPoint(
-            x: center.x + cos(centerAngle + angleStep * 0.58) * (outerRadius * 0.58),
-            y: center.y + sin(centerAngle + angleStep * 0.58) * (outerRadius * 0.58)
-        )
-        let bellyControlA = CGPoint(
-            x: center.x + cos(centerAngle + angleStep * 0.46) * (outerRadius * 0.54),
-            y: center.y + sin(centerAngle + angleStep * 0.46) * (outerRadius * 0.54)
+        let innerTrailPoint = CGPoint(
+            x: center.x + cos(innerTrailAngle) * innerRadius,
+            y: center.y + sin(innerTrailAngle) * innerRadius
         )
 
         let path = UIBezierPath()
-        path.move(to: tipPoint)
-        path.addQuadCurve(to: outerStartPoint, controlPoint: leadingControl)
+        path.move(to: outerStartPoint)
         path.addArc(withCenter: center, radius: outerRadius, startAngle: outerStart, endAngle: outerEnd, clockwise: true)
-        path.addCurve(to: tipPoint, controlPoint1: trailingControl, controlPoint2: bellyControlA)
+        path.addLine(to: innerLeadPoint)
+        path.addLine(to: innerTrailPoint)
         path.close()
 
         return path
