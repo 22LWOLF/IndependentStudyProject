@@ -739,6 +739,7 @@ class ViewController: UIViewController {
     private var loopPointStepper: UIStepper?
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
+    private var voiceGuidanceToggle: UISwitch?
     private var progressView = UIProgressView(progressViewStyle: .default)
     private var saveRoutePillButton: UIButton!
     
@@ -787,6 +788,7 @@ class ViewController: UIViewController {
     private var useTimeInput = false
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
+    private var isVoiceGuidanceEnabled = true
     
     // MARK: - Route History
     private var savedRoutes: [SavedRoute] = []
@@ -859,6 +861,7 @@ class ViewController: UIViewController {
         setupLocation()
         setupUI()
         loadSavedSpeeds()
+        loadVoiceGuidancePreference()
         setupRouteHistorySheet()
         setupPacePanel()
         CoreDataManager.shared.migrateExistingRoutes()
@@ -1533,6 +1536,10 @@ extension ViewController {
         currentY = addDirectionGrid(to: container, y: currentY, width: fieldWidth)
         currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
 
+        currentY = addSectionHeader(to: container, text: "NAVIGATION", y: currentY, width: fieldWidth, padding: padding)
+        currentY = addVoiceGuidanceToggle(to: container, y: currentY, width: fieldWidth, padding: padding)
+        currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
+
         currentY = addSectionHeader(to: container, text: "LOOP OPTIONS", y: currentY, width: fieldWidth, padding: padding)
         currentY = addLoopPointControls(to: container, y: currentY, width: fieldWidth, padding: padding)
 
@@ -1605,6 +1612,22 @@ extension ViewController {
         toggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
         container.addSubview(toggle)
         timeToggle = toggle
+        return y + 40
+    }
+
+    private func addVoiceGuidanceToggle(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+        let label = UILabel(frame: CGRect(x: padding, y: y, width: width - 60, height: 20))
+        label.text = "Voice Directions"
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = .panelBodyTextColor
+        container.addSubview(label)
+
+        let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
+        toggle.isOn = isVoiceGuidanceEnabled
+        toggle.addTarget(self, action: #selector(voiceGuidanceToggleChanged(_:)), for: .valueChanged)
+        container.addSubview(toggle)
+        voiceGuidanceToggle = toggle
+
         return y + 40
     }
 
@@ -2298,17 +2321,34 @@ extension ViewController {
     private func buildNavigationCues(from steps: [MKRoute.Step], distanceOffset: CLLocationDistance) -> [NavigationCue] {
         var cues: [NavigationCue] = []
         var accumulatedDistance = distanceOffset
+        let longStretchThreshold: CLLocationDistance = 304.8
+        let nearTurnLeadDistance: CLLocationDistance = 30.48
         
         for step in steps {
             accumulatedDistance += step.distance
             let instruction = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !instruction.isEmpty else { continue }
+
+            if step.distance >= longStretchThreshold {
+                cues.append(
+                    NavigationCue(
+                        triggerDistance: accumulatedDistance,
+                        instruction: instruction,
+                        announcementLeadDistance: step.distance / 2
+                    )
+                )
+                cues.append(
+                    NavigationCue(
+                        triggerDistance: accumulatedDistance,
+                        instruction: instruction,
+                        announcementLeadDistance: nearTurnLeadDistance
+                    )
+                )
+                continue
+            }
+
             let leadDistance: CLLocationDistance
             switch step.distance {
-            case 804...:
-                leadDistance = 804
-            case 321...:
-                leadDistance = 321
             case 120...:
                 leadDistance = 120
             default:
@@ -2327,7 +2367,12 @@ extension ViewController {
     }
     
     private func beginNavigationCues(_ cues: [NavigationCue]) {
-        navigationCues = cues.sorted { $0.triggerDistance < $1.triggerDistance }
+        navigationCues = cues.sorted {
+            if $0.triggerDistance == $1.triggerDistance {
+                return $0.announcementLeadDistance > $1.announcementLeadDistance
+            }
+            return $0.triggerDistance < $1.triggerDistance
+        }
         nextNavigationCueIndex = 0
     }
 }
@@ -2884,11 +2929,12 @@ extension ViewController {
         if distance >= 804 {
             return String(format: "In %.1f miles", distance / 1609.34)
         }
-        if distance >= 321 {
-            return String(format: "In %.1f miles", distance / 1609.34)
-        }
-        let roundedFeet = max(50, (distance * 3.28084 / 50).rounded() * 50)
-        return "In \(Int(roundedFeet)) feet"
+
+        let roundedFeet = max(50, Int((distance * 3.28084 / 50).rounded() * 50))
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .spellOut
+        let spokenFeet = formatter.string(from: NSNumber(value: roundedFeet)) ?? "\(roundedFeet)"
+        return "In \(spokenFeet) feet"
     }
     
     private func logPaceTransitionIfNeeded() {
@@ -2960,6 +3006,7 @@ extension ViewController {
     
     private func speakGuidance(_ message: String, interruptCurrent: Bool) {
         guard !message.isEmpty else { return }
+        guard isVoiceGuidanceEnabled else { return }
         activateSpokenGuidanceAudioSession()
         
         if interruptCurrent, speechSynthesizer.isSpeaking {
@@ -3392,6 +3439,11 @@ extension ViewController {
         distanceOrTimeLabel?.text = sender.isOn ? "Time (min)" : "Distance (miles)"
         distanceTextField?.placeholder = sender.isOn ? "e.g. 30" : "e.g. 3.1"
         distanceTextField?.text = ""
+    }
+
+    @objc private func voiceGuidanceToggleChanged(_ sender: UISwitch) {
+        isVoiceGuidanceEnabled = sender.isOn
+        UserDefaults.standard.set(sender.isOn, forKey: "isVoiceGuidanceEnabled")
     }
 
     @objc private func directionButtonTapped(_ sender: UIButton) {
@@ -3869,6 +3921,16 @@ extension ViewController {
         if defaults.double(forKey: "avgWalkingSpeed") > 0 { avgWalkingSpeed = defaults.double(forKey: "avgWalkingSpeed"); walkSampleCount = defaults.integer(forKey: "walkSampleCount") }
         if defaults.double(forKey: "avgJoggingSpeed") > 0 { avgJoggingSpeed = defaults.double(forKey: "avgJoggingSpeed"); jogSampleCount = defaults.integer(forKey: "jogSampleCount") }
         if defaults.double(forKey: "avgRunningSpeed") > 0 { avgRunningSpeed = defaults.double(forKey: "avgRunningSpeed"); runSampleCount = defaults.integer(forKey: "runSampleCount") }
+    }
+
+    private func loadVoiceGuidancePreference() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "isVoiceGuidanceEnabled") == nil {
+            isVoiceGuidanceEnabled = true
+        } else {
+            isVoiceGuidanceEnabled = defaults.bool(forKey: "isVoiceGuidanceEnabled")
+        }
+        voiceGuidanceToggle?.isOn = isVoiceGuidanceEnabled
     }
 
     private func saveSpeeds() {
