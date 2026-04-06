@@ -694,6 +694,189 @@ extension PlaceSearchViewController: MKLocalSearchCompleterDelegate {
     }
 }
 
+final class IrisLoadingView: UIView {
+    private let bladeCount = 12
+    private let bladeGradientColors: [CGColor] = [
+        UIColor(red: 1.00, green: 0.39, blue: 0.66, alpha: 1.0).cgColor,
+        UIColor(red: 1.00, green: 0.58, blue: 0.22, alpha: 1.0).cgColor
+    ]
+    private let seamColor = UIColor.white.withAlphaComponent(0.24)
+    private let backdropColor = UIColor(red: 0.19, green: 0.04, blue: 0.14, alpha: 1.0)
+    private let placeholderCircle = UIView()
+    private var bladeLayers: [CAShapeLayer] = []
+    private var bladeBaseAngles: [CGFloat] = []
+    private var hasBuiltBlades = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        placeholderCircle.center = CGPoint(x: bounds.midX, y: bounds.midY)
+
+        if !hasBuiltBlades || bladeLayers.first?.bounds != bounds {
+            rebuildBladeLayers()
+        }
+    }
+
+    func playAnimation(completion: @escaping () -> Void) {
+        layoutIfNeeded()
+        guard !bladeLayers.isEmpty else {
+            completion()
+            return
+        }
+
+        let angleStep = (2 * CGFloat.pi) / CGFloat(bladeCount)
+        let openSpread = angleStep * 0.72
+
+        for (index, blade) in bladeLayers.enumerated() {
+            blade.opacity = 1
+            blade.setAffineTransform(CGAffineTransform(rotationAngle: bladeBaseAngles[index]))
+        }
+
+        backgroundColor = backdropColor
+        placeholderCircle.alpha = 1
+        placeholderCircle.transform = .identity
+        alpha = 1
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            UIView.animate(
+                withDuration: 1.45,
+                delay: 0,
+                options: [.curveEaseInOut, .allowUserInteraction]
+            ) {
+                for (index, blade) in self.bladeLayers.enumerated() {
+                    blade.setAffineTransform(CGAffineTransform(rotationAngle: self.bladeBaseAngles[index] + openSpread))
+                }
+                self.placeholderCircle.alpha = 0.18
+                self.placeholderCircle.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+            } completion: { _ in
+                completion()
+            }
+        }
+    }
+
+    private func setupView() {
+        backgroundColor = backdropColor
+        isUserInteractionEnabled = false
+
+        placeholderCircle.bounds = CGRect(x: 0, y: 0, width: 86, height: 86)
+        placeholderCircle.layer.cornerRadius = 43
+        placeholderCircle.layer.borderWidth = 2
+        placeholderCircle.layer.borderColor = UIColor.white.withAlphaComponent(0.75).cgColor
+        placeholderCircle.backgroundColor = UIColor.clear
+        addSubview(placeholderCircle)
+    }
+
+    private func rebuildBladeLayers() {
+        bladeLayers.forEach { $0.removeFromSuperlayer() }
+        bladeLayers.removeAll()
+        bladeBaseAngles.removeAll()
+
+        let angleStep = (2 * CGFloat.pi) / CGFloat(bladeCount)
+        let closedTilt = angleStep * 0.22
+
+        for index in 0..<bladeCount {
+            let blade = CAShapeLayer()
+            blade.frame = bounds
+            blade.path = bladePath(for: index).cgPath
+            blade.fillColor = gradientColor(for: index)
+            blade.strokeColor = seamColor.cgColor
+            blade.lineWidth = 1
+            blade.shadowColor = UIColor(red: 1.00, green: 0.39, blue: 0.66, alpha: 1.0).cgColor
+            blade.shadowOpacity = 0.30
+            blade.shadowRadius = 18
+            blade.shadowOffset = CGSize(width: 0, height: 8)
+            blade.zPosition = CGFloat(bladeCount - index)
+
+            let baseAngle = angleStep * CGFloat(index) + closedTilt
+            blade.setAffineTransform(CGAffineTransform(rotationAngle: baseAngle))
+
+            layer.addSublayer(blade)
+            bladeLayers.append(blade)
+            bladeBaseAngles.append(baseAngle)
+        }
+
+        bringSubviewToFront(placeholderCircle)
+        hasBuiltBlades = true
+    }
+
+    private func bladePath(for index: Int) -> UIBezierPath {
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let angleStep = (2 * CGFloat.pi) / CGFloat(bladeCount)
+        let centerAngle = angleStep * CGFloat(index)
+        let outerRadius = hypot(bounds.width, bounds.height) * 0.92
+        let innerRadius = min(bounds.width, bounds.height) * 0.13
+        let outerStart = centerAngle - (angleStep * 0.80)
+        let outerEnd = centerAngle + (angleStep * 0.30)
+
+        let outerStartPoint = CGPoint(
+            x: center.x + cos(outerStart) * outerRadius,
+            y: center.y + sin(outerStart) * outerRadius
+        )
+        let tipAngle = centerAngle + (angleStep * 0.24)
+        let tipRadius = innerRadius * 0.55
+        let tipPoint = CGPoint(
+            x: center.x + cos(tipAngle) * tipRadius,
+            y: center.y + sin(tipAngle) * tipRadius
+        )
+
+        let leadingControl = CGPoint(
+            x: center.x + cos(centerAngle - angleStep * 0.08) * (outerRadius * 0.64),
+            y: center.y + sin(centerAngle - angleStep * 0.08) * (outerRadius * 0.64)
+        )
+        let trailingControl = CGPoint(
+            x: center.x + cos(centerAngle + angleStep * 0.58) * (outerRadius * 0.58),
+            y: center.y + sin(centerAngle + angleStep * 0.58) * (outerRadius * 0.58)
+        )
+        let bellyControlA = CGPoint(
+            x: center.x + cos(centerAngle + angleStep * 0.46) * (outerRadius * 0.54),
+            y: center.y + sin(centerAngle + angleStep * 0.46) * (outerRadius * 0.54)
+        )
+
+        let path = UIBezierPath()
+        path.move(to: tipPoint)
+        path.addQuadCurve(to: outerStartPoint, controlPoint: leadingControl)
+        path.addArc(withCenter: center, radius: outerRadius, startAngle: outerStart, endAngle: outerEnd, clockwise: true)
+        path.addCurve(to: tipPoint, controlPoint1: trailingControl, controlPoint2: bellyControlA)
+        path.close()
+
+        return path
+    }
+
+    private func gradientColor(for index: Int) -> CGColor {
+        let progress = CGFloat(index) / CGFloat(max(bladeCount - 1, 1))
+        let start = UIColor(cgColor: bladeGradientColors[0])
+        let end = UIColor(cgColor: bladeGradientColors[1])
+
+        var startRed: CGFloat = 0
+        var startGreen: CGFloat = 0
+        var startBlue: CGFloat = 0
+        var startAlpha: CGFloat = 0
+        start.getRed(&startRed, green: &startGreen, blue: &startBlue, alpha: &startAlpha)
+
+        var endRed: CGFloat = 0
+        var endGreen: CGFloat = 0
+        var endBlue: CGFloat = 0
+        var endAlpha: CGFloat = 0
+        end.getRed(&endRed, green: &endGreen, blue: &endBlue, alpha: &endAlpha)
+
+        return UIColor(
+            red: startRed + ((endRed - startRed) * progress),
+            green: startGreen + ((endGreen - startGreen) * progress),
+            blue: startBlue + ((endBlue - startBlue) * progress),
+            alpha: startAlpha + ((endAlpha - startAlpha) * progress)
+        ).cgColor
+    }
+}
+
 
 // MARK: - ViewController
 class ViewController: UIViewController {
@@ -820,6 +1003,7 @@ class ViewController: UIViewController {
     private var latestUserHeading: CLLocationDirection?
     private var followCameraDistance: CLLocationDistance = 3000
     private var isUpdatingFollowCamera = false
+    private var hasShownIntroLoadingAnimation = false
     private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .soft)
     private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .medium)
     private let runPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
@@ -886,10 +1070,34 @@ class ViewController: UIViewController {
         
         calculateRouteSheetHeight()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        playIntroLoadingAnimationIfNeeded()
+    }
 }
 
 // MARK: - Setup Methods
 extension ViewController {
+    private func playIntroLoadingAnimationIfNeeded() {
+        guard !hasShownIntroLoadingAnimation else { return }
+        guard view.window != nil else { return }
+
+        hasShownIntroLoadingAnimation = true
+
+        let irisView = IrisLoadingView(frame: view.bounds)
+        irisView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(irisView)
+
+        irisView.playAnimation {
+            UIView.animate(withDuration: 0.18, animations: {
+                irisView.alpha = 0
+            }) { _ in
+                irisView.removeFromSuperview()
+            }
+        }
+    }
+
     private func setupMap() {
         mapView.delegate = self
         mapView.showsUserLocation = true
@@ -4769,7 +4977,7 @@ More stuff I'd like to do: :
     
     Add animaitons to just about everthing to make it feel more professional.
  
-    add a loading screen on launch
+    add a loading screen on launch. 4/6/2026 MAYBE FIXED NEED TESTING
  
  
  Way in the future additions:
