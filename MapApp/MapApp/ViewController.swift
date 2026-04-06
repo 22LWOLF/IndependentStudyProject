@@ -522,9 +522,181 @@ enum PaceType: String {
     case run = "Run"
 }
 
+final class PlaceSearchViewController: UIViewController {
+    var onSelection: ((MKMapItem, MKCoordinateRegion?) -> Void)?
+
+    private let searchBar = UISearchBar()
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let completer = MKLocalSearchCompleter()
+    private var completions: [MKLocalSearchCompletion] = []
+    private var currentSearch: MKLocalSearch?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Search Destination"
+        view.backgroundColor = .systemBackground
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(closeTapped)
+        )
+
+        setupSearchBar()
+        setupTableView()
+        setupCompleter()
+    }
+
+    private func setupSearchBar() {
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.placeholder = "Search for a place or address"
+        searchBar.returnKeyType = .search
+        searchBar.autocapitalizationType = .words
+        searchBar.delegate = self
+        view.addSubview(searchBar)
+
+        NSLayoutConstraint.activate([
+            searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+    }
+
+    private func setupTableView() {
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.keyboardDismissMode = .onDrag
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "PlaceResultCell")
+        view.addSubview(tableView)
+
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func setupCompleter() {
+        completer.delegate = self
+        completer.resultTypes = [.address, .pointOfInterest, .query]
+    }
+
+    private func updateSearchResults(for query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            completions = []
+            tableView.reloadData()
+            return
+        }
+
+        completer.queryFragment = trimmedQuery
+    }
+
+    private func resolveCompletion(_ completion: MKLocalSearchCompletion) {
+        let request = MKLocalSearch.Request(completion: completion)
+        executeSearch(request: request)
+    }
+
+    private func executeNaturalLanguageSearch(_ query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return }
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = trimmedQuery
+        executeSearch(request: request)
+    }
+
+    private func executeSearch(request: MKLocalSearch.Request) {
+        request.resultTypes = .address
+        currentSearch?.cancel()
+
+        let search = MKLocalSearch(request: request)
+        currentSearch = search
+
+        search.start { [weak self] response, error in
+            guard let self else { return }
+
+            if let error {
+                self.presentError(message: error.localizedDescription)
+                return
+            }
+
+            guard let response, let mapItem = response.mapItems.first else {
+                self.presentError(message: "No matching locations were found.")
+                return
+            }
+
+            self.onSelection?(mapItem, response.boundingRegion)
+            self.dismiss(animated: true)
+        }
+    }
+
+    private func presentError(message: String) {
+        let alert = UIAlertController(title: "Search Failed", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+}
+
+extension PlaceSearchViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        updateSearchResults(for: searchText)
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        executeNaturalLanguageSearch(searchBar.text ?? "")
+    }
+}
+
+extension PlaceSearchViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        completions.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "PlaceResultCell", for: indexPath)
+        let completion = completions[indexPath.row]
+
+        var content = cell.defaultContentConfiguration()
+        content.text = completion.title
+        content.secondaryText = completion.subtitle
+        content.textProperties.numberOfLines = 2
+        content.secondaryTextProperties.numberOfLines = 2
+        cell.contentConfiguration = content
+        cell.accessoryType = .disclosureIndicator
+
+        return cell
+    }
+}
+
+extension PlaceSearchViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        resolveCompletion(completions[indexPath.row])
+    }
+}
+
+extension PlaceSearchViewController: MKLocalSearchCompleterDelegate {
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        completions = completer.results
+        tableView.reloadData()
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        completions = []
+        tableView.reloadData()
+        print("Place autocomplete failed: \(error.localizedDescription)")
+    }
+}
+
 
 // MARK: - ViewController
-class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
+class ViewController: UIViewController {
     private struct PendingRouteSave {
         let waypoints: [CLLocationCoordinate2D]
         let coordinates: [CLLocationCoordinate2D]
@@ -625,8 +797,6 @@ class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
     private var userLocation: CLLocationCoordinate2D?
     
     // MARK: - Go To search completer
-    private var searchCompleter = MKLocalSearchCompleter()
-
     // MARK: - Route Tracking
     private var currentRouteCoordinates: [CLLocationCoordinate2D] = []
     private var totalRouteDistance: CLLocationDistance = 0
@@ -645,6 +815,9 @@ class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
     private var lastLoggedPaceType: PaceType?
     private var hasAttemptedDebugLiveActivityStart = false
     private let liveActivityStaleInterval: TimeInterval = 20
+    private var latestUserHeading: CLLocationDirection?
+    private var followCameraDistance: CLLocationDistance = 3000
+    private var isUpdatingFollowCamera = false
     private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .soft)
     private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .medium)
     private let runPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
@@ -692,13 +865,6 @@ class ViewController: UIViewController, MKLocalSearchCompleterDelegate {
         lastRouteTypeSelection = routeTypeSelector.selectedSegmentIndex
         routeNameLabel?.text = currentRouteDisplayName
         
-        searchCompleter = MKLocalSearchCompleter()
-           searchCompleter.delegate = self
-           // Limit to search results to the map view's current region.
-            searchCompleter.region = mapView.region
-
-        
-        
     }
     
 
@@ -725,6 +891,7 @@ extension ViewController {
         mapView.delegate = self
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .none
+        mapView.isZoomEnabled = true
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleMapTap))
         mapView.addGestureRecognizer(tapGesture)
     }
@@ -734,6 +901,7 @@ extension ViewController {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
+        locationManager.headingFilter = 5
         locationManager.distanceFilter = 5.0
         locationManager.pausesLocationUpdatesAutomatically = true
         locationManager.allowsBackgroundLocationUpdates = false
@@ -747,6 +915,13 @@ extension ViewController {
         let shouldTrackInBackground = isActivelyWalkingRoute
         locationManager.pausesLocationUpdatesAutomatically = !shouldTrackInBackground
         locationManager.allowsBackgroundLocationUpdates = shouldTrackInBackground
+        locationManager.distanceFilter = (shouldTrackInBackground && isFollowingUser) ? 2.0 : 5.0
+
+        if isFollowingUser && isActivelyWalkingRoute, CLLocationManager.headingAvailable() {
+            locationManager.startUpdatingHeading()
+        } else {
+            locationManager.stopUpdatingHeading()
+        }
     }
 
     private func setupUI() {
@@ -3054,6 +3229,76 @@ extension ViewController {
         mapView.setCamera(camera, animated: true)
     }
 
+    private func coordinate(from origin: CLLocationCoordinate2D, distanceMeters: CLLocationDistance, heading: CLLocationDirection) -> CLLocationCoordinate2D {
+        let earthRadius = 6_378_137.0
+        let angularDistance = distanceMeters / earthRadius
+        let headingRadians = heading * .pi / 180
+        let originLatitude = origin.latitude * .pi / 180
+        let originLongitude = origin.longitude * .pi / 180
+
+        let destinationLatitude = asin(
+            sin(originLatitude) * cos(angularDistance) +
+            cos(originLatitude) * sin(angularDistance) * cos(headingRadians)
+        )
+
+        let destinationLongitude = originLongitude + atan2(
+            sin(headingRadians) * sin(angularDistance) * cos(originLatitude),
+            cos(angularDistance) - sin(originLatitude) * sin(destinationLatitude)
+        )
+
+        return CLLocationCoordinate2D(
+            latitude: destinationLatitude * 180 / .pi,
+            longitude: destinationLongitude * 180 / .pi
+        )
+    }
+
+    private func effectiveHeading(for location: CLLocation) -> CLLocationDirection? {
+        if location.course >= 0, location.speed > 0.5 {
+            return location.course
+        }
+
+        if let latestUserHeading {
+            return latestUserHeading
+        }
+
+        return nil
+    }
+
+    private func updateMapInteractionModeForFollowState() {
+        mapView.isScrollEnabled = !isFollowingUser
+        mapView.isZoomEnabled = true
+        mapView.isRotateEnabled = !isFollowingUser
+        mapView.isPitchEnabled = !isFollowingUser
+    }
+
+    private func updateFollowCamera(with location: CLLocation, animated: Bool) {
+        guard isFollowingUser else { return }
+
+        let distance = max(300, followCameraDistance)
+        guard isActivelyWalkingRoute, let heading = effectiveHeading(for: location) else {
+            safelyCenterMap(on: location.coordinate, distance: distance)
+            return
+        }
+
+        let camera = MKMapCamera(
+            lookingAtCenter: location.coordinate,
+            fromDistance: distance,
+            pitch: 0,
+            heading: heading
+        )
+
+        isUpdatingFollowCamera = true
+        UIView.animate(
+            withDuration: animated ? 0.55 : 0.0,
+            delay: 0,
+            options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]
+        ) {
+            self.mapView.camera = camera
+        } completion: { _ in
+            self.isUpdatingFollowCamera = false
+        }
+    }
+
     private func determineStartLocation() -> CLLocationCoordinate2D { isFollowingUser ? (userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)) : (userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)) }
 
     private func validatePinCount(for type: RouteConfig.RouteType) -> Bool {
@@ -3078,10 +3323,16 @@ extension ViewController {
 
     private func toggleFollowUser(button: UIButton) {
         isFollowingUser.toggle()
+        updateMapInteractionModeForFollowState()
+        updateLocationManagerForRouteTracking()
         if isFollowingUser {
             button.setImage(UIImage(systemName: "location.fill"), for: .normal)
             button.tintColor = .compColor
-            if let location = userLocation { safelyCenterMap(on: location, distance: 3000) }
+            followCameraDistance = max(300, mapView.camera.centerCoordinateDistance)
+            if let userLocation {
+                let location = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                updateFollowCamera(with: location, animated: true)
+            }
         } else {
             button.setImage(UIImage(systemName: "location"), for: .normal)
             button.tintColor = .floatingButtonForeground
@@ -3171,93 +3422,50 @@ extension ViewController {
     @objc private func dismissKeyboard() { view.endEditing(true); closePanel() }
     
     @objc private func goToButtonTapped() {
-        let alert = UIAlertController(title: "Search Destination", message: "Enter a city, address, or place.", preferredStyle: .alert)
-        
-        alert.addTextField { textField in
-            textField.placeholder = "e.g., Kansas City, MO or McDonalds"
-            textField.returnKeyType = .search
+        let searchController = PlaceSearchViewController()
+        searchController.onSelection = { [weak self] mapItem, region in
+            self?.displayGoToResult(mapItem, preferredRegion: region)
         }
-        
-        let searchAction = UIAlertAction(title: "Search", style: .default) { [weak self, weak alert] _ in
-            guard let query = alert?.textFields?.first?.text, !query.isEmpty else { return }
-            self?.searchAndGo(to: query)
-        }
-        
-        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
-        
-        alert.addAction(searchAction)
-        alert.addAction(cancelAction)
-        
-        present(alert, animated: true, completion: nil)
+
+        let navigationController = UINavigationController(rootViewController: searchController)
+        navigationController.modalPresentationStyle = .fullScreen
+        present(navigationController, animated: true)
     }
     
     @objc private func saveRoutePillTapped() {
         guard pendingRouteSave != nil else { return }
         presentSaveRouteDialog()
     }
-    func searchAndGo(to query: String) {
-            // 1. Create a search request
-            let request = MKLocalSearch.Request()
-            request.naturalLanguageQuery = query
-            
-            // Optional: Bias the search results to the area the user is currently viewing
-            // This helps if they search "McDonalds" so it finds the closest one, not one in another state.
-            request.region = mapView.region
-            
-            // 2. Initialize the search
-            let search = MKLocalSearch(request: request)
-            
-            // Show a loading indicator here if you have one
-            
-            // 3. Start the search
-            search.start { [weak self] (response, error) in
-                guard let self = self else { return }
-                
-                // Handle errors (e.g., no internet)
-                if let error = error {
-                    print("Search failed with error: \(error.localizedDescription)")
-                    // You might want to show a UIAlertController here letting the user know
-                    return
-                }
-                
-                // Ensure we got a valid response with at least one map item
-                guard let response = response, let topResult = response.mapItems.first else {
-                    print("No results found for \(query).")
-                    return
-                }
-                
-                // 4. Extract the data
-                let coordinate = topResult.placemark.coordinate
-                let name = topResult.name ?? "Unknown Location"
-                let address = topResult.placemark.title ?? "" // Usually contains the full formatted address
-                
-                print("Found: \(name) at \(address)")
-                
-                // Optional: Clear old search pins before adding a new one
-                // Let's assume you only want one "Go To" pin at a time.
-                let existingAnnotations = self.mapView.annotations.filter { !($0 is MKUserLocation) }
-                self.mapView.removeAnnotations(existingAnnotations)
-                
-                // 5. Create and add the new pin (Annotation)
-                let annotation = MKPointAnnotation()
-                annotation.coordinate = coordinate
-                annotation.title = name
-                annotation.subtitle = address
-                self.mapView.addAnnotation(annotation)
-                
-                // 6. Move the camera to the new location
-                // Apple provides a bounding region in the response which is perfectly sized for the result
-                // (e.g., zoomed out for a city, zoomed in for a restaurant)
-                self.mapView.setRegion(response.boundingRegion, animated: true)
-                
-                // Select the annotation so the title/subtitle bubble pops up automatically
-                self.mapView.selectAnnotation(annotation, animated: true)
-            }
-            
+    private func displayGoToResult(_ mapItem: MKMapItem, preferredRegion: MKCoordinateRegion?) {
+        let coordinate = mapItem.placemark.coordinate
+        let name = mapItem.name ?? "Unknown Location"
+        let address = mapItem.placemark.title ?? ""
+
+        print("Found: \(name) at \(address)")
+
+        let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
+        mapView.removeAnnotations(existingAnnotations)
+
+        let annotation = MKPointAnnotation()
+        annotation.coordinate = coordinate
+        annotation.title = name
+        annotation.subtitle = address
+        mapView.addAnnotation(annotation)
+
+        let suggestedDistance: CLLocationDistance
+        if let preferredRegion {
+            let latMeters = preferredRegion.span.latitudeDelta * 111_000
+            let lonMeters = preferredRegion.span.longitudeDelta * 111_000 * cos(coordinate.latitude * .pi / 180)
+            suggestedDistance = max(600, min(max(latMeters, lonMeters) * 1.2, 12_000))
+        } else {
+            suggestedDistance = 1_800
         }
-        
-    
-    
+
+        safelyCenterMap(on: coordinate, distance: suggestedDistance)
+
+        mapView.selectAnnotation(annotation, animated: true)
+    }
+
     private func presentSaveRouteDialog() {
         guard let pendingRouteSave else { return }
         
@@ -3751,6 +3959,11 @@ extension ViewController {
 
 // MARK: - MKMapViewDelegate
 extension ViewController: MKMapViewDelegate {
+    func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        guard isFollowingUser, !isUpdatingFollowCamera else { return }
+        followCameraDistance = max(300, mapView.camera.centerCoordinateDistance)
+    }
+
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let styled = overlay as? StyledPolyline {
             let renderer = MKPolylineRenderer(polyline: styled)
@@ -3828,8 +4041,7 @@ extension ViewController: CLLocationManagerDelegate {
         if isActivelyWalkingRoute { updateProgress(with: location) }
         updateSpeedAverages(speed: location.speed)
         if !hasAlreadyCentered { safelyCenterMap(on: location.coordinate, distance: 10000); hasAlreadyCentered = true }
-        else if isFollowingUser { safelyCenterMap(on: location.coordinate, distance: 3000) }
-        searchCompleter.region = mapView.region
+        else if isFollowingUser { updateFollowCamera(with: location, animated: true) }
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
@@ -3840,6 +4052,20 @@ extension ViewController: CLLocationManagerDelegate {
         case .denied, .restricted: showInfoAlert(message: "Location access denied - using default location")
         default: break
         }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        guard heading >= 0 else { return }
+        latestUserHeading = heading
+
+        guard isFollowingUser, isActivelyWalkingRoute, let userLocation else { return }
+        let location = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+        updateFollowCamera(with: location, animated: false)
+    }
+
+    func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+        false
     }
 }
 
@@ -4463,8 +4689,10 @@ More stuff I'd like to do: :
     whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
  
     Make it to when the app is completely closed out it stops widget use.
+        MAYBE FIXED HAVE TO TEST 4/6/2026
+ 
     
-    Make go to into more of a google search thing not lat and long for locations. 4/3/2026 Partially done need to add auto complete but priamary funcanality is there.
+    Make go to into more of a google search thing not lat and long for locations. 4/6/2026 DONE
  
     Make it to where settings actually does settings things:
         1. allow user to pick color theme
@@ -4475,8 +4703,11 @@ More stuff I'd like to do: :
     Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does.
     
     when the user is on a route have it to where if center on user button on whatever direction the user is walking is north (that way left and rights don't get confusing)
+            4/6/2026 DONE
     
     Add animaitons to just about everthing to make it feel more professional.
+ 
+    add a loading screen on launch
  
  
  Way in the future additions:
