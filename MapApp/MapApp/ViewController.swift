@@ -2655,11 +2655,20 @@ extension ViewController {
             if let error = error { self.showErrorAlert(message: "Route failed: \(error.localizedDescription)"); self.isGeneratingRoute = false; return }
             guard let routes = response?.routes, !routes.isEmpty else { self.isGeneratingRoute = false; return }
             let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
-            if let targetMiles = targetMiles, retryCount < 4 {
-                let actualDistance = isOutAndBack ? selectedRoute.distance * 2 : selectedRoute.distance
-                let targetMeters = targetMiles * 1609.34
-                let ratio = actualDistance / targetMeters
-                if abs(ratio - 1.0) > 0.25 {
+            if retryCount < 4 {
+                let ratio: Double?
+                if self.useTimeInput, let targetSeconds = self.getUserInputMinutes().map({ $0 * 60.0 }), targetSeconds > 0 {
+                    let actualTime = isOutAndBack ? selectedRoute.expectedTravelTime * 2 : selectedRoute.expectedTravelTime
+                    ratio = actualTime / targetSeconds
+                } else if let targetMiles = targetMiles {
+                    let actualDistance = isOutAndBack ? selectedRoute.distance * 2 : selectedRoute.distance
+                    let targetMeters = targetMiles * 1609.34
+                    ratio = targetMeters > 0 ? (actualDistance / targetMeters) : nil
+                } else {
+                    ratio = nil
+                }
+
+                if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > 0.25 {
                     let currentDistance = CLLocation(latitude: start.latitude, longitude: start.longitude).distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
                     let adjustedRadius = currentDistance / ratio
                     let newEndpoint = self.generateRandomCoordinate(around: start, radius: adjustedRadius, direction: config.direction ?? "random")
@@ -2701,7 +2710,7 @@ extension ViewController {
     }
 
     private func syncSingleLegEndpointAnnotation(with coordinates: [CLLocationCoordinate2D], isOutAndBack: Bool) {
-        guard !isOutAndBack, let actualEndpoint = coordinates.last, selectedCoordinates.count > 1 else { return }
+        guard let actualEndpoint = coordinates.last, selectedCoordinates.count > 1 else { return }
         selectedCoordinates[1] = actualEndpoint
         for annotation in mapView.annotations {
             guard let routeAnnotation = annotation as? RouteAnnotation, routeAnnotation.index == 1 else { continue }
@@ -3611,25 +3620,17 @@ extension ViewController {
         
         guard currentRouteCoordinates.count > 1 else { return }
         
-        // Find nearest point on route
-        var closestIndex = 0
-        var closestDistance = CLLocationDistance.greatestFiniteMagnitude
-        guard let userLoc = userLocation else { return }
-        let location = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
-        
-        for (index, coord) in currentRouteCoordinates.enumerated() {
-            let routePoint = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-            let distance = location.distance(from: routePoint)
-            if distance < closestDistance {
-                closestDistance = distance
-                closestIndex = index
-            }
+        let overlayStartDistance: CLLocationDistance
+        if currentRouteType == .outAndBack && traveledDistance >= (totalRouteDistance / 2) {
+            overlayStartDistance = totalRouteDistance / 2
+        } else {
+            overlayStartDistance = 0
         }
-        
-        guard closestIndex < currentRouteCoordinates.count else { return }
-        
-        // Create walked-only overlay so the underlying pace colors stay visible.
-        let walkedCoords = Array(currentRouteCoordinates[0...closestIndex])
+
+        let walkedCoords = routeSliceCoordinates(
+            from: overlayStartDistance,
+            to: traveledDistance
+        )
         guard walkedCoords.count > 1 else { return }
         
         let walkedLine = StyledPolyline(coordinates: walkedCoords, count: walkedCoords.count)
@@ -3638,6 +3639,62 @@ extension ViewController {
         DispatchQueue.main.async {
             self.mapView.addOverlay(walkedLine)
         }
+    }
+
+    private func routeSliceCoordinates(from startDistance: CLLocationDistance, to endDistance: CLLocationDistance) -> [CLLocationCoordinate2D] {
+        guard currentRouteCoordinates.count > 1 else { return [] }
+
+        let clampedStart = max(0, min(startDistance, totalRouteDistance))
+        let clampedEnd = max(clampedStart, min(endDistance, totalRouteDistance))
+        guard clampedEnd > clampedStart else { return [] }
+
+        var slice: [CLLocationCoordinate2D] = []
+        let startCoordinate = coordinateAlongCurrentRoute(at: clampedStart)
+        let endCoordinate = coordinateAlongCurrentRoute(at: clampedEnd)
+        slice.append(startCoordinate)
+
+        for (index, distance) in cumulativeSegmentLengths.enumerated() where distance > clampedStart && distance < clampedEnd {
+            slice.append(currentRouteCoordinates[index])
+        }
+
+        if slice.last?.latitude != endCoordinate.latitude || slice.last?.longitude != endCoordinate.longitude {
+            slice.append(endCoordinate)
+        }
+
+        return slice
+    }
+
+    private func coordinateAlongCurrentRoute(at distance: CLLocationDistance) -> CLLocationCoordinate2D {
+        guard let first = currentRouteCoordinates.first else {
+            return kCLLocationCoordinate2DInvalid
+        }
+        guard currentRouteCoordinates.count > 1 else { return first }
+
+        let clampedDistance = max(0, min(distance, totalRouteDistance))
+        if clampedDistance <= 0 {
+            return first
+        }
+        if clampedDistance >= totalRouteDistance {
+            return currentRouteCoordinates.last ?? first
+        }
+
+        for index in 1..<currentRouteCoordinates.count {
+            let segmentEndDistance = cumulativeSegmentLengths[index]
+            guard segmentEndDistance >= clampedDistance else { continue }
+
+            let segmentStartDistance = cumulativeSegmentLengths[index - 1]
+            let segmentLength = segmentEndDistance - segmentStartDistance
+            guard segmentLength > 0 else { return currentRouteCoordinates[index] }
+
+            let progress = (clampedDistance - segmentStartDistance) / segmentLength
+            return interpolatedCoordinate(
+                from: currentRouteCoordinates[index - 1],
+                to: currentRouteCoordinates[index],
+                progress: progress
+            )
+        }
+
+        return currentRouteCoordinates.last ?? first
     }
 
     private func calculateSnappedProgress(for location: CLLocation) -> CLLocationDistance? {
@@ -3952,6 +4009,14 @@ extension ViewController {
 
 // MARK: - Input Helpers
 extension ViewController {
+    private func getUserInputMinutes() -> Double? {
+        guard useTimeInput,
+              let text = distanceTextField?.text,
+              !text.isEmpty,
+              let value = Double(text) else { return nil }
+        return value
+    }
+
     private func getUserInputMiles() -> Double? {
         guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text) else { return nil }
         if useTimeInput {
@@ -5361,6 +5426,8 @@ More stuff I'd like to do: :
     Add animaitons to just about everthing to make it feel more professional.
  
     add a loading screen on launch. 4/6/2026 Paritally implemented needs refinement
+ 
+    fix out and back route type random and just in general. 4/7/2026 NEED TO TEST TO MAKE SURE
  
  
  Way in the future additions:
