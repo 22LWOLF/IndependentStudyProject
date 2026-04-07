@@ -3301,6 +3301,7 @@ extension ViewController {
                 await LiveActivityManager.endAllRouteActivities()
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
+                LiveActivityManager.markRouteActivityStarted()
                 print("Live Activity started")
             } catch {
                 print("Failed to start Live Activity: \(error.localizedDescription)")
@@ -3338,6 +3339,7 @@ extension ViewController {
                 await LiveActivityManager.endAllRouteActivities()
                 routeLiveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
                 lastLiveActivityUpdateDate = Date()
+                LiveActivityManager.markRouteActivityStarted()
                 print("Debug Live Activity preview started. Active count: \(Activity<MapAppRouteActivityAttributes>.activities.count)")
             } catch {
                 print("Debug Live Activity preview failed: \(error.localizedDescription)")
@@ -3365,6 +3367,7 @@ extension ViewController {
             await routeLiveActivity?.update(content)
         }
         lastLiveActivityUpdateDate = now
+        LiveActivityManager.markRouteActivityHeartbeat()
     }
     
     private func endLiveActivity() {
@@ -5618,16 +5621,17 @@ More stuff I'd like to do: :
     whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
  
     Make it to when the app is completely closed out it stops widget use.
-        MAYBE FIXED HAVE TO TEST 4/6/2026
- 
+        MAYBE FIXED HAVE TO TEST 4/6/2026 last attempt didn't work trying new fix.
     
     Make go to into more of a google search thing not lat and long for locations. 4/6/2026 DONE
  
-    Make it to where settings actually does settings things:
+    Make it to where settings actually does settings things:       4/7/2026 Mostly done just need to set up email and test.
         1. allow user to pick color theme
         2. allow user to turn off and on talking and vibrations
         3. allow user to reset there average speeds for each pace (allow to reset individually) and this would also be the place that they can see there average speeds for each pace.
         4. F.A.Q. thing or maybe a way to contact me if issue occurs (maybe)
+ 
+ 
     
     Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does.
     
