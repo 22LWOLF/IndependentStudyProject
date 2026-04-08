@@ -5591,7 +5591,7 @@ extension ViewController: UIGestureRecognizerDelegate {
                 return false // disable sheet pan- let table scroll instead
             }
             
-            //otherwise let it pan (touching pill, search bar, or bg
+            //otherwise let it pan (touching pill, search bar, or bg)
             return true
         }
         return true
@@ -5621,7 +5621,7 @@ More stuff I'd like to do: :
     whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
  
     Make it to when the app is completely closed out it stops widget use.
-        MAYBE FIXED HAVE TO TEST 4/6/2026 last attempt didn't work trying new fix.
+        MAYBE FIXED HAVE TO TEST 4/6/2026 last attempt didn't work trying new fix. 4/7/2026 Working way better now so DONE
     
     Make go to into more of a google search thing not lat and long for locations. 4/6/2026 DONE
  
@@ -5630,8 +5630,6 @@ More stuff I'd like to do: :
         2. allow user to turn off and on talking and vibrations
         3. allow user to reset there average speeds for each pace (allow to reset individually) and this would also be the place that they can see there average speeds for each pace.
         4. F.A.Q. thing or maybe a way to contact me if issue occurs (maybe)
- 
- 
     
     Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does.
     
@@ -5645,6 +5643,14 @@ More stuff I'd like to do: :
     fix out and back route type random and just in general. 4/7/2026 NEED TO TEST TO MAKE SURE
  
  
+ reflection, including user feedback
+ 
+ Come up with list of tasks for users to try  record feedback
+ 
+ poster
+ 
+ 
  Way in the future additions:
+ 
  add apple watch compatability
  */
