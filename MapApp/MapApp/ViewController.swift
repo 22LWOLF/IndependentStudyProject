@@ -21,6 +21,10 @@ struct AppPalette {
     let sidePanelBackground: UIColor
 }
 
+private enum ThemeAppearance {
+    static var usesDarkVariant = false
+}
+
 enum AppTheme: String, CaseIterable {
     // MARK: Wildflower Trail
     case wildflowerTrail
@@ -64,7 +68,7 @@ enum AppTheme: String, CaseIterable {
         }
     }
 
-    var palette: AppPalette {
+    private var lightPalette: AppPalette {
         switch self {
         case .wildflowerTrail:
             return AppPalette(
@@ -122,6 +126,69 @@ enum AppTheme: String, CaseIterable {
             )
         }
     }
+
+    private var darkPalette: AppPalette {
+        switch self {
+        case .wildflowerTrail:
+            return AppPalette(
+                primary: UIColor(hex: "#92A573"),
+                secondary: UIColor(hex: "#B7849E"),
+                background: UIColor(hex: "#171116"),
+                floatingButtonBackground: UIColor(hex: "#231B20"),
+                floatingButtonForeground: UIColor(hex: "#F8F3F5"),
+                sidePanelBackground: UIColor(hex: "#221920")
+            )
+        case .coastalMorning:
+            return AppPalette(
+                primary: UIColor(hex: "#84A8CC"),
+                secondary: UIColor(hex: "#F0B79A"),
+                background: UIColor(hex: "#0F1821"),
+                floatingButtonBackground: UIColor(hex: "#18222E"),
+                floatingButtonForeground: UIColor(hex: "#F5FAFF"),
+                sidePanelBackground: UIColor(hex: "#17212C")
+            )
+        case .canyonPath:
+            return AppPalette(
+                primary: UIColor(hex: "#DB8F73"),
+                secondary: UIColor(hex: "#9DB694"),
+                background: UIColor(hex: "#181210"),
+                floatingButtonBackground: UIColor(hex: "#261D19"),
+                floatingButtonForeground: UIColor(hex: "#FFF5EF"),
+                sidePanelBackground: UIColor(hex: "#211915")
+            )
+        case .earlyFrost:
+            return AppPalette(
+                primary: UIColor(hex: "#9DCDC0"),
+                secondary: UIColor(hex: "#B7AAD0"),
+                background: UIColor(hex: "#121B1A"),
+                floatingButtonBackground: UIColor(hex: "#1A2624"),
+                floatingButtonForeground: UIColor(hex: "#F1F8F6"),
+                sidePanelBackground: UIColor(hex: "#182321")
+            )
+        case .urbanFog:
+            return AppPalette(
+                primary: UIColor(hex: "#99A3AA"),
+                secondary: UIColor(hex: "#E0C17B"),
+                background: UIColor(hex: "#121416"),
+                floatingButtonBackground: UIColor(hex: "#1B1E21"),
+                floatingButtonForeground: UIColor(hex: "#F7F8F9"),
+                sidePanelBackground: UIColor(hex: "#1B1E20")
+            )
+        case .eveningStroll:
+            return AppPalette(
+                primary: UIColor(hex: "#D9A0A0"),
+                secondary: UIColor(hex: "#E0B47A"),
+                background: UIColor(hex: "#180F13"),
+                floatingButtonBackground: UIColor(hex: "#26161A"),
+                floatingButtonForeground: UIColor(hex: "#FFF2F2"),
+                sidePanelBackground: UIColor(hex: "#221419")
+            )
+        }
+    }
+
+    var palette: AppPalette {
+        ThemeAppearance.usesDarkVariant ? darkPalette : lightPalette
+    }
 }
 
 extension UIColor {
@@ -129,6 +196,10 @@ extension UIColor {
     static var activeThemeIndex: Int {
         get { activeTheme.index }
         set { activeTheme = AppTheme(index: newValue) }
+    }
+    static var usesDarkThemeVariant: Bool {
+        get { ThemeAppearance.usesDarkVariant }
+        set { ThemeAppearance.usesDarkVariant = newValue }
     }
 
     static var appPrimary: UIColor { activeTheme.palette.primary }
@@ -719,6 +790,12 @@ final class SettingsViewController: UIViewController {
         super.viewDidLoad()
         title = "Settings"
         view.backgroundColor = .systemGroupedBackground
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Help",
+            style: .plain,
+            target: self,
+            action: #selector(helpTapped)
+        )
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done,
             target: self,
@@ -992,6 +1069,24 @@ final class SettingsViewController: UIViewController {
 
     @objc private func closeTapped() {
         dismiss(animated: true)
+    }
+
+    @objc private func helpTapped() {
+        let alert = UIAlertController(
+            title: "How To Use Waypulse",
+            message: """
+            Go To: search for a destination.
+            Generate: build a route from your current pins or random settings.
+            Clear/Cancel: remove the active route and stop navigation.
+            Center button: follow your location on the map.
+            Pace button: set walk, jog, and run segments.
+            Route settings button: open random generation and route options.
+            Settings: themes, voice, haptics, and pace stats.
+            """,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     @objc private func voiceChanged(_ sender: UISwitch) {
@@ -1434,10 +1529,12 @@ class ViewController: UIViewController {
     private var distanceOrTimeLabel: UILabel?
     private var speedLabel: UILabel = UILabel()
     private var selectedDirectionButton: UIButton?
+    private var randomGenerationToggle: UISwitch?
+    private var randomGenerationSectionViews: [UIView] = []
+    private var randomDirectionButtons: [UIButton] = []
     private var loopPointStepper: UIStepper?
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
-    private var voiceGuidanceToggle: UISwitch?
     private var progressView = UIProgressView(progressViewStyle: .default)
     private var saveRoutePillButton: UIButton!
     
@@ -1483,6 +1580,7 @@ class ViewController: UIViewController {
 
     // MARK: - User Preferences
     private var useScenicRouting = false
+    private var isRandomGenerationEnabled = true
     private var useTimeInput = false
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
@@ -1511,6 +1609,7 @@ class ViewController: UIViewController {
     private var speechSynthesizer = AVSpeechSynthesizer()
     private var navigationCues: [NavigationCue] = []
     private var nextNavigationCueIndex = 0
+    private var displayNavigationCueIndex = 0
     private var routeLiveActivity: Activity<MapAppRouteActivityAttributes>?
     private var lastLiveActivityUpdateDate: Date?
     private var lastLoggedPaceType: PaceType?
@@ -1521,9 +1620,9 @@ class ViewController: UIViewController {
     private var isUpdatingFollowCamera = false
     private var hasPlayedRouteSplash = false
     private var routeSplashView: RouteSplashView?
-    private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .soft)
-    private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .medium)
-    private let runPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
+    private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .heavy)
+    private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
+    private let runPaceFeedback = UIImpactFeedbackGenerator(style: .heavy)
 
     // MARK: - Speed Learning
     private var avgWalkingSpeed: Double = 1.4
@@ -1599,6 +1698,13 @@ class ViewController: UIViewController {
         playRouteSplashIfNeeded()
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
+        applyTheme()
+    }
+
 }
 
 // MARK: - Setup Methods
@@ -1621,7 +1727,6 @@ extension ViewController {
         settingsViewController.onVoiceGuidanceChanged = { [weak self] isEnabled in
             self?.isVoiceGuidanceEnabled = isEnabled
             UserDefaults.standard.set(isEnabled, forKey: "isVoiceGuidanceEnabled")
-            self?.voiceGuidanceToggle?.isOn = isEnabled
         }
         settingsViewController.onHapticsChanged = { [weak self] isEnabled in
             self?.isHapticsEnabled = isEnabled
@@ -1740,6 +1845,8 @@ extension ViewController {
         if let themeIndex {
             UIColor.activeThemeIndex = themeIndex
         }
+
+        UIColor.usesDarkThemeVariant = traitCollection.userInterfaceStyle == .dark
 
         view.backgroundColor = .darkColor
         headerBox.backgroundColor = .headerBG
@@ -2333,19 +2440,17 @@ extension ViewController {
         currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
 
         currentY = addSectionHeader(to: container, text: "RANDOM GENERATION", y: currentY, width: fieldWidth, padding: padding)
+        currentY = addRandomGenerationToggle(to: container, y: currentY, width: fieldWidth, padding: padding)
         currentY = addDistanceInput(to: container, y: currentY, width: fieldWidth, padding: padding)
         currentY = addTimeToggle(to: container, y: currentY, width: fieldWidth, padding: padding)
         currentY = addDirectionGrid(to: container, y: currentY, width: fieldWidth)
-        currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
-
-        currentY = addSectionHeader(to: container, text: "NAVIGATION", y: currentY, width: fieldWidth, padding: padding)
-        currentY = addVoiceGuidanceToggle(to: container, y: currentY, width: fieldWidth, padding: padding)
         currentY = addDivider(to: container, y: currentY, width: fieldWidth, padding: padding)
 
         currentY = addSectionHeader(to: container, text: "LOOP OPTIONS", y: currentY, width: fieldWidth, padding: padding)
         currentY = addLoopPointControls(to: container, y: currentY, width: fieldWidth, padding: padding)
 
         panelScrollView.contentSize = CGSize(width: slidePanel.frame.width, height: currentY + 20)
+        updateRandomGenerationControlsState()
     }
 
     private func addClearSettingsButton(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
@@ -2386,6 +2491,7 @@ extension ViewController {
         label.font = .systemFont(ofSize: 14)
         label.textColor = .panelBodyTextColor
         container.addSubview(label)
+        randomGenerationSectionViews.append(label)
         distanceOrTimeLabel = label
         currentY += 25
         let field = UITextField(frame: CGRect(x: padding, y: currentY, width: width, height: 36))
@@ -2400,6 +2506,7 @@ extension ViewController {
         toolbar.items = [flexSpace, doneButton]
         field.inputAccessoryView = toolbar
         container.addSubview(field)
+        randomGenerationSectionViews.append(field)
         distanceTextField = field
         return currentY + 45
     }
@@ -2410,26 +2517,13 @@ extension ViewController {
         label.font = .systemFont(ofSize: 13)
         label.textColor = .panelBodyTextColor
         container.addSubview(label)
+        randomGenerationSectionViews.append(label)
         let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
+        toggle.isOn = useTimeInput
         toggle.addTarget(self, action: #selector(timeToggleChanged(_:)), for: .valueChanged)
         container.addSubview(toggle)
+        randomGenerationSectionViews.append(toggle)
         timeToggle = toggle
-        return y + 40
-    }
-
-    private func addVoiceGuidanceToggle(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
-        let label = UILabel(frame: CGRect(x: padding, y: y, width: width - 60, height: 20))
-        label.text = "Voice Directions"
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .panelBodyTextColor
-        container.addSubview(label)
-
-        let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
-        toggle.isOn = isVoiceGuidanceEnabled
-        toggle.addTarget(self, action: #selector(voiceGuidanceToggleChanged(_:)), for: .valueChanged)
-        container.addSubview(toggle)
-        voiceGuidanceToggle = toggle
-
         return y + 40
     }
 
@@ -2441,6 +2535,7 @@ extension ViewController {
         label.textAlignment = .center
         label.textColor = .panelBodyTextColor
         container.addSubview(label)
+        randomGenerationSectionViews.append(label)
         currentY += 25
         let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
         let buttonSize: CGFloat = 44
@@ -2461,11 +2556,48 @@ extension ViewController {
                     button.isEnabled = false
                 } else {
                     button.addTarget(self, action: #selector(directionButtonTapped(_:)), for: .touchUpInside)
+                    randomDirectionButtons.append(button)
                 }
                 container.addSubview(button)
+                randomGenerationSectionViews.append(button)
             }
         }
         return currentY + 150
+    }
+
+    private func addRandomGenerationToggle(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
+        let label = UILabel(frame: CGRect(x: padding, y: y, width: width - 60, height: 20))
+        label.text = "Random Mode"
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .panelBodyTextColor
+        container.addSubview(label)
+
+        let toggle = UISwitch(frame: CGRect(x: width + padding - 51, y: y - 4, width: 51, height: 31))
+        toggle.isOn = isRandomGenerationEnabled
+        toggle.addTarget(self, action: #selector(randomGenerationToggleChanged(_:)), for: .valueChanged)
+        container.addSubview(toggle)
+        randomGenerationToggle = toggle
+
+        return y + 40
+    }
+
+    private func updateRandomGenerationControlsState() {
+        let alpha: CGFloat = isRandomGenerationEnabled ? 1.0 : 0.35
+
+        randomGenerationSectionViews.forEach { view in
+            view.alpha = alpha
+        }
+
+        distanceTextField?.isEnabled = isRandomGenerationEnabled
+        timeToggle?.isEnabled = isRandomGenerationEnabled
+
+        for button in randomDirectionButtons {
+            button.isEnabled = isRandomGenerationEnabled
+            if !isRandomGenerationEnabled {
+                button.backgroundColor = .panelNeutralButtonBackground
+                button.setTitleColor(.panelBodyTextColor, for: .normal)
+            }
+        }
     }
 
     private func addLoopPointControls(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
@@ -2808,7 +2940,9 @@ extension ViewController {
 extension ViewController {
     private func buildRouteConfig() -> RouteConfig {
         let type = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
-        return RouteConfig(type: type, isScenic: useScenicRouting, waypoints: selectedCoordinates, targetDistance: getUserInputMiles(), direction: selectedDirection)
+        let targetDistance = isRandomGenerationEnabled ? getUserInputMiles() : nil
+        let direction = isRandomGenerationEnabled ? selectedDirection : "random"
+        return RouteConfig(type: type, isScenic: useScenicRouting, waypoints: selectedCoordinates, targetDistance: targetDistance, direction: direction)
     }
 
     private func generateRandomRoute(config: RouteConfig, targetMiles: Double) {
@@ -3143,6 +3277,7 @@ extension ViewController {
             return $0.triggerDistance < $1.triggerDistance
         }
         nextNavigationCueIndex = 0
+        displayNavigationCueIndex = 0
     }
 }
 
@@ -3249,13 +3384,13 @@ extension ViewController {
     }
     
     private func nextNavigationInstructionText() -> String {
-        guard nextNavigationCueIndex < navigationCues.count else { return "" }
-        return navigationCues[nextNavigationCueIndex].instruction
+        guard displayNavigationCueIndex < navigationCues.count else { return "" }
+        return navigationCues[displayNavigationCueIndex].instruction
     }
     
     private func nextNavigationInstructionDistanceFeet() -> Int {
-        guard nextNavigationCueIndex < navigationCues.count else { return 0 }
-        let remainingDistance = max(0, navigationCues[nextNavigationCueIndex].triggerDistance - traveledDistance)
+        guard displayNavigationCueIndex < navigationCues.count else { return 0 }
+        let remainingDistance = max(0, navigationCues[displayNavigationCueIndex].triggerDistance - traveledDistance)
         return Int((remainingDistance * 3.28084).rounded())
     }
     
@@ -3668,6 +3803,7 @@ extension ViewController {
             DispatchQueue.main.async { self.progressView.setProgress(progress, animated: true) }
             logPaceTransitionIfNeeded()
             speakNextNavigationCueIfNeeded()
+            advanceDisplayedNavigationCueIfNeeded()
         }
         updateWalkedOverlay()
         updateLiveRouteInfo()
@@ -3681,6 +3817,24 @@ extension ViewController {
         let remainingDistance = max(0, cue.triggerDistance - traveledDistance)
         speakTurnInstruction(cue.instruction, remainingDistance: remainingDistance)
         nextNavigationCueIndex += 1
+        scheduleLiveActivityUpdateIfNeeded(force: true)
+    }
+
+    private func advanceDisplayedNavigationCueIfNeeded() {
+        guard displayNavigationCueIndex < navigationCues.count else { return }
+
+        let currentTriggerDistance = navigationCues[displayNavigationCueIndex].triggerDistance
+        let legCompletionThreshold: CLLocationDistance = 8
+        guard traveledDistance >= currentTriggerDistance - legCompletionThreshold else { return }
+
+        var nextIndex = displayNavigationCueIndex + 1
+        while nextIndex < navigationCues.count &&
+                abs(navigationCues[nextIndex].triggerDistance - currentTriggerDistance) < 1 {
+            nextIndex += 1
+        }
+
+        guard nextIndex != displayNavigationCueIndex else { return }
+        displayNavigationCueIndex = nextIndex
         scheduleLiveActivityUpdateIfNeeded(force: true)
     }
     
@@ -3758,21 +3912,29 @@ extension ViewController {
         switch paceType {
         case .walk:
             walkPaceFeedback.impactOccurred(intensity: 1.0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                self.walkPaceFeedback.impactOccurred(intensity: 1.0)
+                self.walkPaceFeedback.prepare()
+            }
         case .jog:
             jogPaceFeedback.impactOccurred(intensity: 1.0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                self.jogPaceFeedback.impactOccurred(intensity: 1.00)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+                self.jogPaceFeedback.impactOccurred(intensity: 1.0)
+                self.jogPaceFeedback.prepare()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                self.jogPaceFeedback.impactOccurred(intensity: 1.0)
                 self.jogPaceFeedback.prepare()
             }
         case .run:
             runPaceFeedback.impactOccurred(intensity: 1.0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                self.runPaceFeedback.impactOccurred(intensity: 1.00)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                self.runPaceFeedback.impactOccurred(intensity: 1.0)
                 self.runPaceFeedback.prepare()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01){
-                    self.runPaceFeedback.impactOccurred(intensity: 1.00)
-                    self.runPaceFeedback.prepare()
-                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                self.runPaceFeedback.impactOccurred(intensity: 1.0)
+                self.runPaceFeedback.prepare()
             }
         }
         preparePaceHaptics()
@@ -4271,11 +4433,6 @@ extension ViewController {
         distanceTextField?.text = ""
     }
 
-    @objc private func voiceGuidanceToggleChanged(_ sender: UISwitch) {
-        isVoiceGuidanceEnabled = sender.isOn
-        UserDefaults.standard.set(sender.isOn, forKey: "isVoiceGuidanceEnabled")
-    }
-
     @objc private func directionButtonTapped(_ sender: UIButton) {
         guard let direction = sender.title(for: .normal) else { return }
         selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
@@ -4289,6 +4446,27 @@ extension ViewController {
 
     @objc private func loopPointStepperChanged(_ sender: UIStepper) { selectedLoopPoints = Int(sender.value); loopPointLabel?.text = "Loop Points: \(selectedLoopPoints)" }
 
+    @objc private func randomGenerationToggleChanged(_ sender: UISwitch) {
+        isRandomGenerationEnabled = sender.isOn
+
+        guard !sender.isOn else {
+            updateRandomGenerationControlsState()
+            return
+        }
+
+        distanceTextField?.text = ""
+        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
+        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
+        selectedDirectionButton = nil
+        selectedDirection = "random"
+        useTimeInput = false
+        distanceOrTimeLabel?.text = "Distance (miles)"
+        distanceTextField?.placeholder = "e.g. 3.1"
+        timeToggle?.setOn(false, animated: true)
+
+        updateRandomGenerationControlsState()
+    }
+
     @objc private func clearRandomSettings() {
         distanceTextField?.text = ""
         selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
@@ -4299,6 +4477,7 @@ extension ViewController {
         distanceOrTimeLabel?.text = "Distance (miles)"
         distanceTextField?.placeholder = "e.g. 3.1"
         timeToggle?.setOn(false, animated: true)
+        updateRandomGenerationControlsState()
     }
 
     @objc private func dismissKeyboard() { view.endEditing(true); closePanel() }
@@ -4690,7 +4869,7 @@ extension ViewController {
         
         updatePaceConfiguration()
         
-        print("🎲 Randomized: Walk \(Int((walk / total) * 100))%, Jog \(Int((jog / total) * 100))%, Run \(Int((run / total) * 100))%")
+        print("Randomized: Walk \(Int((walk / total) * 100))%, Jog \(Int((jog / total) * 100))%, Run \(Int((run / total) * 100))%")
     }
     
     @objc private func shufflePaceOrder() {
@@ -4760,7 +4939,6 @@ extension ViewController {
         } else {
             isVoiceGuidanceEnabled = defaults.bool(forKey: "isVoiceGuidanceEnabled")
         }
-        voiceGuidanceToggle?.isOn = isVoiceGuidanceEnabled
     }
 
     private func loadHapticsPreference() {
@@ -5544,7 +5722,7 @@ extension ViewController {
         }
         
         let status = route.isFavorite ? "favorited" : "unfavorited"
-        print("❤️ Route \(status)")
+        print("Route \(status)")
     }
     
     private func clearAllRoutesFromDatabase() {
