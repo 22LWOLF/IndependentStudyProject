@@ -183,19 +183,23 @@
   4. [x] allow user to insert coordinates for a location and go to it
   5. [x] allow for dragging around of point
   6. [x] have time in corner 
-  7. [ ] app settings
+  7. [x] app settings
   8. [x] start route button
   9. [x] stop route boutton
-  10. [ ] Use current location
-  11. [ ] have the user insert a distance for route length
-  12. [ ] have user insert a target time for the route
-  13. [ ] updating the user speeds for the users walk, jog, run speed
-  14. [ ] Grid runs (if user is in a city or city like place make square routes instead of triangle).
-  15. [ ] updating the user speeds for the users walk, jog, run speed, would be in settings/account
-  16. [ ] way to check weather for your area in the app
-  17. [ ] way to look at recently and starred routes
-  18. [x] way to start a route
-  19. [ ] simple U.I.
+  10. [x] Use current location
+  11. [x] have the user insert a distance for route length
+  12. [x] have user insert a target time for the route
+  13. [x] updating the user speeds for the users walk, jog, run speed
+  14. [x] updating the user speeds for the users walk, jog, run speed, would be in settings/account
+  15. [x] way to look at recently and starred routes
+  16. [x] way to start a route
+  17. [x] simple U.I.
+
+### Future WANTS:
+ 1. [ ] Way to check wheather in your area
+ 2. [ ] Grid runs (if user is in a city or city like place make square routes instead of triangle).
+ 3. [ ] Apple watch compatibility in some fashion
+ 4. [ ] Setting up form or real way of contacting support/me for issues or questions.
 
 ### Unspecified:
   + Potentially register for the [Apple Developer Program](https://developer.apple.com/programs)
