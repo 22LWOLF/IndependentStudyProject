@@ -1091,7 +1091,7 @@ final class SettingsViewController: UIViewController {
 
     @objc private func helpTapped() {
         let alert = UIAlertController(
-            title: "How To Use Waypulse",
+            title: "How To Use StepOut",
             message: """
             Go To: search for a destination.
             Generate: build a route from your current pins or random settings.
@@ -1120,13 +1120,13 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func contactSupportTapped() {
-        let email = "mailto:mapapp.support@example.com?subject=MapApp%20Issue"
+        let email = "mailto:stepout.support@example.com?subject=StepOut%20Issue"
         if let url = URL(string: email), UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         } else {
             let alert = UIAlertController(
                 title: "Contact Support",
-                message: "Email mapapp.support@example.com with a description of the issue.",
+                message: "Email stepout.support@example.com with a description of the issue.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -1316,17 +1316,27 @@ final class SpotlightTutorialView: UIView {
 }
 
 final class RouteSplashView: UIView {
+    private struct StepMarker {
+        let center: CGPoint
+        let angle: CGFloat
+        let isLeft: Bool
+    }
+
     private let backdropLayer = CAGradientLayer()
-    private let glowLayer = CAGradientLayer()
-    private let gridLayer = CAShapeLayer()
-    private let routeTrackLayer = CAShapeLayer()
-    private let pulseWaveLayer = CAShapeLayer()
+    private let ambientGlowLayer = CAGradientLayer()
+    private let pathShadowLayer = CAShapeLayer()
+    private let pathLineLayer = CAShapeLayer()
+    private let destinationRingLayer = CAShapeLayer()
+    private let destinationArrowLayer = CAShapeLayer()
     private let travelPulseLayer = CAShapeLayer()
-    private let beaconCore = UIView()
-    private let beaconRing = UIView()
-    private let beaconHalo = UIView()
-    private var waypointLayers: [CAShapeLayer] = []
-    private var pulseRingLayers: [CAShapeLayer] = []
+
+    private let brandHaloView = UIView()
+    private let brandDiskView = UIView()
+    private let brandInnerDotView = UIView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+
+    private var stepLayers: [CAShapeLayer] = []
     private var hasBuiltLayers = false
 
     override init(frame: CGRect) {
@@ -1342,9 +1352,8 @@ final class RouteSplashView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         backdropLayer.frame = bounds
-        glowLayer.frame = bounds
-        gridLayer.frame = bounds
-        layoutBeaconViews()
+        ambientGlowLayer.frame = bounds
+        layoutBrandViews()
 
         if !hasBuiltLayers {
             buildArtwork()
@@ -1359,124 +1368,138 @@ final class RouteSplashView: UIView {
         alpha = 1
         transform = .identity
 
-        routeTrackLayer.strokeEnd = 0
-        routeTrackLayer.opacity = 0.22
-        pulseWaveLayer.strokeEnd = 0
-        pulseWaveLayer.opacity = 0
+        pathShadowLayer.strokeEnd = 0
+        pathShadowLayer.opacity = 0.22
+        pathLineLayer.strokeEnd = 0
+        pathLineLayer.opacity = 0.15
+        destinationRingLayer.opacity = 0
+        destinationArrowLayer.opacity = 0
         travelPulseLayer.opacity = 0
 
-        for waypoint in waypointLayers {
-            waypoint.opacity = 0
-            waypoint.transform = CATransform3DMakeScale(0.2, 0.2, 1)
+        for stepLayer in stepLayers {
+            stepLayer.opacity = 0.14
+            stepLayer.transform = CATransform3DMakeScale(0.72, 0.72, 1)
         }
 
-        for ring in pulseRingLayers {
-            ring.opacity = 0
-            ring.transform = CATransform3DIdentity
+        brandHaloView.alpha = 0
+        brandDiskView.alpha = 0
+        brandInnerDotView.alpha = 0
+        titleLabel.alpha = 0
+        subtitleLabel.alpha = 0
+        titleLabel.transform = CGAffineTransform(translationX: 0, y: 16)
+        subtitleLabel.transform = CGAffineTransform(translationX: 0, y: 14)
+
+        UIView.animate(withDuration: 0.46, delay: 0.05, options: [.curveEaseOut]) {
+            self.brandHaloView.alpha = 1
+            self.brandDiskView.alpha = 1
+            self.brandInnerDotView.alpha = 1
+            self.titleLabel.alpha = 1
+            self.subtitleLabel.alpha = 0.92
+            self.titleLabel.transform = .identity
+            self.subtitleLabel.transform = .identity
         }
 
-        beaconCore.transform = .identity
-        beaconRing.transform = .identity
-        beaconHalo.transform = .identity
-        beaconCore.alpha = 1
-        beaconRing.alpha = 0.9
-        beaconHalo.alpha = 0.38
-        glowLayer.opacity = 0.75
+        let shadowDraw = CABasicAnimation(keyPath: "strokeEnd")
+        shadowDraw.fromValue = 0
+        shadowDraw.toValue = 1
+        shadowDraw.duration = 1.05
+        shadowDraw.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        shadowDraw.fillMode = .forwards
+        shadowDraw.isRemovedOnCompletion = false
+        pathShadowLayer.add(shadowDraw, forKey: "drawShadowPath")
+        pathShadowLayer.strokeEnd = 1
 
-        let routeDraw = CABasicAnimation(keyPath: "strokeEnd")
-        routeDraw.fromValue = 0
-        routeDraw.toValue = 1
-        routeDraw.duration = 1.15
-        routeDraw.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        routeDraw.fillMode = .forwards
-        routeDraw.isRemovedOnCompletion = false
-        routeTrackLayer.add(routeDraw, forKey: "drawRouteTrack")
-        routeTrackLayer.strokeEnd = 1
+        let lineDraw = CABasicAnimation(keyPath: "strokeEnd")
+        lineDraw.fromValue = 0
+        lineDraw.toValue = 1
+        lineDraw.duration = 1.2
+        lineDraw.beginTime = CACurrentMediaTime() + 0.12
+        lineDraw.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        lineDraw.fillMode = .forwards
+        lineDraw.isRemovedOnCompletion = false
+        pathLineLayer.add(lineDraw, forKey: "drawMainPath")
+        pathLineLayer.strokeEnd = 1
 
-        let routeFade = CABasicAnimation(keyPath: "opacity")
-        routeFade.fromValue = 0.22
-        routeFade.toValue = 0.95
-        routeFade.duration = 0.45
-        routeFade.fillMode = .forwards
-        routeFade.isRemovedOnCompletion = false
-        routeTrackLayer.add(routeFade, forKey: "fadeRouteTrack")
-        routeTrackLayer.opacity = 0.95
+        let lineFade = CABasicAnimation(keyPath: "opacity")
+        lineFade.fromValue = 0.15
+        lineFade.toValue = 1
+        lineFade.duration = 0.5
+        lineFade.beginTime = CACurrentMediaTime() + 0.12
+        lineFade.fillMode = .forwards
+        lineFade.isRemovedOnCompletion = false
+        pathLineLayer.add(lineFade, forKey: "fadeMainPath")
+        pathLineLayer.opacity = 1
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            let waveDraw = CABasicAnimation(keyPath: "strokeEnd")
-            waveDraw.fromValue = 0
-            waveDraw.toValue = 1
-            waveDraw.duration = 1.0
-            waveDraw.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            waveDraw.fillMode = .forwards
-            waveDraw.isRemovedOnCompletion = false
-            self.pulseWaveLayer.add(waveDraw, forKey: "drawPulseWave")
-
-            let waveFade = CABasicAnimation(keyPath: "opacity")
-            waveFade.fromValue = 0
-            waveFade.toValue = 1
-            waveFade.duration = 0.32
-            waveFade.fillMode = .forwards
-            waveFade.isRemovedOnCompletion = false
-            self.pulseWaveLayer.add(waveFade, forKey: "fadePulseWave")
-
-            self.pulseWaveLayer.strokeEnd = 1
-            self.pulseWaveLayer.opacity = 1
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
             self.travelPulseLayer.opacity = 1
 
             let travel = CAKeyframeAnimation(keyPath: "position")
-            travel.path = self.routeTrackLayer.path
-            travel.duration = 1.15
+            travel.path = self.pathLineLayer.path
+            travel.duration = 1.35
             travel.calculationMode = .paced
+            travel.rotationMode = .rotateAuto
             travel.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             travel.fillMode = .forwards
             travel.isRemovedOnCompletion = false
             self.travelPulseLayer.add(travel, forKey: "travelPulse")
         }
 
-        for (index, ring) in pulseRingLayers.enumerated() {
-            let delay = 0.28 + (Double(index) * 0.20)
+        for (index, stepLayer) in stepLayers.enumerated() {
+            let delay = 0.22 + (Double(index) * 0.11)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                UIView.animate(withDuration: 0.92, delay: 0, options: [.curveEaseOut]) {
-                    ring.opacity = 0
-                    ring.transform = CATransform3DMakeScale(2.2, 2.2, 1)
+                UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut]) {
+                    stepLayer.opacity = index == self.stepLayers.count - 1 ? 1 : 0.92
+                    stepLayer.transform = CATransform3DIdentity
                 }
             }
         }
 
-        for (index, waypoint) in waypointLayers.enumerated() {
-            let delay = 0.62 + (Double(index) * 0.10)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseOut]) {
-                    waypoint.opacity = index == 1 ? 1 : 0.9
-                    waypoint.transform = CATransform3DIdentity
-                }
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.12) {
+            let ringAppear = CABasicAnimation(keyPath: "opacity")
+            ringAppear.fromValue = 0
+            ringAppear.toValue = 1
+            ringAppear.duration = 0.22
+            ringAppear.fillMode = .forwards
+            ringAppear.isRemovedOnCompletion = false
+            self.destinationRingLayer.add(ringAppear, forKey: "ringAppear")
+            self.destinationRingLayer.opacity = 1
+
+            let ringPulse = CABasicAnimation(keyPath: "transform.scale")
+            ringPulse.fromValue = 0.82
+            ringPulse.toValue = 1.16
+            ringPulse.duration = 0.55
+            ringPulse.autoreverses = true
+            ringPulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.destinationRingLayer.add(ringPulse, forKey: "ringPulse")
+
+            let arrowAppear = CABasicAnimation(keyPath: "opacity")
+            arrowAppear.fromValue = 0
+            arrowAppear.toValue = 1
+            arrowAppear.duration = 0.18
+            arrowAppear.fillMode = .forwards
+            arrowAppear.isRemovedOnCompletion = false
+            self.destinationArrowLayer.add(arrowAppear, forKey: "arrowAppear")
+            self.destinationArrowLayer.opacity = 1
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.34) {
             UIView.animate(withDuration: 0.36, delay: 0, options: [.curveEaseInOut]) {
-                self.beaconCore.transform = CGAffineTransform(scaleX: 1.14, y: 1.14)
-                self.beaconRing.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
-                self.beaconHalo.transform = CGAffineTransform(scaleX: 1.24, y: 1.24)
-                self.glowLayer.opacity = 1
+                self.brandHaloView.transform = CGAffineTransform(scaleX: 1.18, y: 1.18)
+                self.brandDiskView.transform = CGAffineTransform(scaleX: 1.06, y: 1.06)
+                self.brandInnerDotView.transform = CGAffineTransform(scaleX: 1.12, y: 1.12)
             } completion: { _ in
                 UIView.animate(withDuration: 0.42, delay: 0, options: [.curveEaseInOut]) {
-                    self.beaconCore.transform = .identity
-                    self.beaconRing.transform = .identity
-                    self.beaconHalo.transform = CGAffineTransform(scaleX: 1.38, y: 1.38)
-                    self.beaconHalo.alpha = 0.08
+                    self.brandHaloView.transform = .identity
+                    self.brandDiskView.transform = .identity
+                    self.brandInnerDotView.transform = .identity
                 }
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.15) {
-            UIView.animate(withDuration: 0.48, delay: 0, options: [.curveEaseInOut]) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.55) {
+            UIView.animate(withDuration: 0.46, delay: 0, options: [.curveEaseInOut]) {
                 self.alpha = 0
-                self.transform = CGAffineTransform(scaleX: 1.015, y: 1.015)
+                self.transform = CGAffineTransform(scaleX: 1.018, y: 1.018)
             } completion: { _ in
                 self.removeFromSuperview()
                 completion()
@@ -1486,202 +1509,257 @@ final class RouteSplashView: UIView {
 
     private func setupView() {
         isUserInteractionEnabled = false
-        backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.14, alpha: 1.0)
+        backgroundColor = UIColor(red: 0.04, green: 0.05, blue: 0.11, alpha: 1.0)
 
         backdropLayer.colors = [
-            UIColor(red: 0.06, green: 0.08, blue: 0.14, alpha: 1.0).cgColor,
-            UIColor(red: 0.10, green: 0.05, blue: 0.17, alpha: 1.0).cgColor
+            UIColor(red: 0.04, green: 0.05, blue: 0.11, alpha: 1.0).cgColor,
+            UIColor(red: 0.09, green: 0.11, blue: 0.23, alpha: 1.0).cgColor,
+            UIColor(red: 0.03, green: 0.07, blue: 0.14, alpha: 1.0).cgColor
         ]
-        backdropLayer.startPoint = CGPoint(x: 0.0, y: 0.0)
-        backdropLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        backdropLayer.locations = [0.0, 0.58, 1.0]
+        backdropLayer.startPoint = CGPoint(x: 0.08, y: 0.02)
+        backdropLayer.endPoint = CGPoint(x: 0.92, y: 1.0)
         layer.addSublayer(backdropLayer)
 
-        glowLayer.colors = [
-            UIColor(red: 0.31, green: 0.96, blue: 0.92, alpha: 0.36).cgColor,
-            UIColor(red: 1.00, green: 0.44, blue: 0.54, alpha: 0.18).cgColor,
+        ambientGlowLayer.colors = [
+            UIColor(red: 1.00, green: 0.77, blue: 0.28, alpha: 0.44).cgColor,
+            UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 0.18).cgColor,
             UIColor.clear.cgColor
         ]
-        glowLayer.type = .radial
-        glowLayer.locations = [0.0, 0.32, 0.86]
-        glowLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
-        glowLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
-        layer.addSublayer(glowLayer)
+        ambientGlowLayer.type = .radial
+        ambientGlowLayer.locations = [0.0, 0.34, 0.92]
+        ambientGlowLayer.startPoint = CGPoint(x: 0.28, y: 0.74)
+        ambientGlowLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        layer.addSublayer(ambientGlowLayer)
 
-        gridLayer.fillColor = UIColor.clear.cgColor
-        gridLayer.strokeColor = UIColor.white.withAlphaComponent(0.05).cgColor
-        gridLayer.lineWidth = 1
-        gridLayer.lineDashPattern = [2, 7]
-        layer.addSublayer(gridLayer)
+        pathShadowLayer.fillColor = UIColor.clear.cgColor
+        pathShadowLayer.strokeColor = UIColor.white.withAlphaComponent(0.18).cgColor
+        pathShadowLayer.lineWidth = 16
+        pathShadowLayer.lineCap = .round
+        pathShadowLayer.lineJoin = .round
+        layer.addSublayer(pathShadowLayer)
 
-        routeTrackLayer.fillColor = UIColor.clear.cgColor
-        routeTrackLayer.strokeColor = UIColor.white.withAlphaComponent(0.92).cgColor
-        routeTrackLayer.lineWidth = 7
-        routeTrackLayer.lineCap = .round
-        routeTrackLayer.lineJoin = .round
-        layer.addSublayer(routeTrackLayer)
+        pathLineLayer.fillColor = UIColor.clear.cgColor
+        pathLineLayer.strokeColor = UIColor(red: 0.83, green: 1.00, blue: 0.86, alpha: 1.0).cgColor
+        pathLineLayer.lineWidth = 6
+        pathLineLayer.lineCap = .round
+        pathLineLayer.lineJoin = .round
+        layer.addSublayer(pathLineLayer)
 
-        pulseWaveLayer.fillColor = UIColor.clear.cgColor
-        pulseWaveLayer.strokeColor = UIColor(red: 0.31, green: 0.96, blue: 0.92, alpha: 1.0).cgColor
-        pulseWaveLayer.lineWidth = 4
-        pulseWaveLayer.lineCap = .round
-        pulseWaveLayer.lineJoin = .round
-        layer.addSublayer(pulseWaveLayer)
+        destinationRingLayer.fillColor = UIColor.clear.cgColor
+        destinationRingLayer.strokeColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
+        destinationRingLayer.lineWidth = 3
+        destinationRingLayer.opacity = 0
+        layer.addSublayer(destinationRingLayer)
 
-        travelPulseLayer.fillColor = UIColor(red: 1.00, green: 0.54, blue: 0.48, alpha: 1.0).cgColor
-        travelPulseLayer.strokeColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        destinationArrowLayer.fillColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
+        destinationArrowLayer.strokeColor = UIColor.white.withAlphaComponent(0.72).cgColor
+        destinationArrowLayer.lineWidth = 1.5
+        destinationArrowLayer.opacity = 0
+        layer.addSublayer(destinationArrowLayer)
+
+        travelPulseLayer.fillColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 1.0).cgColor
+        travelPulseLayer.strokeColor = UIColor.white.withAlphaComponent(0.72).cgColor
         travelPulseLayer.lineWidth = 2
         layer.addSublayer(travelPulseLayer)
 
-        beaconHalo.backgroundColor = UIColor(red: 0.31, green: 0.96, blue: 0.92, alpha: 0.16)
-        addSubview(beaconHalo)
+        brandHaloView.backgroundColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 0.12)
+        addSubview(brandHaloView)
 
-        beaconRing.layer.borderWidth = 2
-        beaconRing.layer.borderColor = UIColor.white.withAlphaComponent(0.82).cgColor
-        beaconRing.backgroundColor = UIColor.clear
-        addSubview(beaconRing)
+        brandDiskView.backgroundColor = UIColor(red: 0.09, green: 0.12, blue: 0.22, alpha: 0.98)
+        brandDiskView.layer.borderWidth = 2
+        brandDiskView.layer.borderColor = UIColor.white.withAlphaComponent(0.34).cgColor
+        addSubview(brandDiskView)
 
-        beaconCore.backgroundColor = UIColor(red: 1.00, green: 0.44, blue: 0.54, alpha: 1.0)
-        beaconCore.layer.borderWidth = 2
-        beaconCore.layer.borderColor = UIColor.white.withAlphaComponent(0.92).cgColor
-        addSubview(beaconCore)
+        brandInnerDotView.backgroundColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 1.0)
+        brandInnerDotView.layer.borderWidth = 2
+        brandInnerDotView.layer.borderColor = UIColor.white.withAlphaComponent(0.84).cgColor
+        addSubview(brandInnerDotView)
+
+        titleLabel.text = "STEP OUT"
+        titleLabel.textAlignment = .center
+        titleLabel.textColor = UIColor.white.withAlphaComponent(0.96)
+        titleLabel.font = UIFont.systemFont(ofSize: 32, weight: .black)
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.75
+        addSubview(titleLabel)
+
+        subtitleLabel.text = "Choose a route and get moving."
+        subtitleLabel.textAlignment = .center
+        subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.74)
+        subtitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        addSubview(subtitleLabel)
     }
 
-    private func layoutBeaconViews() {
-        let center = beaconCenter()
-        let coreSize = min(bounds.width, bounds.height) * 0.052
-        let ringSize = coreSize * 2.7
-        let haloSize = ringSize * 1.75
+    private func layoutBrandViews() {
+        let badgeCenter = CGPoint(x: bounds.width * 0.50, y: bounds.height * 0.27)
+        let diskSize = min(bounds.width, bounds.height) * 0.16
+        let haloSize = diskSize * 1.78
+        let dotSize = diskSize * 0.28
 
-        beaconHalo.bounds = CGRect(x: 0, y: 0, width: haloSize, height: haloSize)
-        beaconHalo.center = center
-        beaconHalo.layer.cornerRadius = haloSize / 2
+        brandHaloView.bounds = CGRect(x: 0, y: 0, width: haloSize, height: haloSize)
+        brandHaloView.center = badgeCenter
+        brandHaloView.layer.cornerRadius = haloSize / 2
 
-        beaconRing.bounds = CGRect(x: 0, y: 0, width: ringSize, height: ringSize)
-        beaconRing.center = center
-        beaconRing.layer.cornerRadius = ringSize / 2
+        brandDiskView.bounds = CGRect(x: 0, y: 0, width: diskSize, height: diskSize)
+        brandDiskView.center = badgeCenter
+        brandDiskView.layer.cornerRadius = diskSize / 2
 
-        beaconCore.bounds = CGRect(x: 0, y: 0, width: coreSize, height: coreSize)
-        beaconCore.center = center
-        beaconCore.layer.cornerRadius = coreSize / 2
+        brandInnerDotView.bounds = CGRect(x: 0, y: 0, width: dotSize, height: dotSize)
+        brandInnerDotView.center = badgeCenter
+        brandInnerDotView.layer.cornerRadius = dotSize / 2
+
+        titleLabel.frame = CGRect(
+            x: 32,
+            y: brandDiskView.frame.maxY + 16,
+            width: bounds.width - 64,
+            height: 40
+        )
+        subtitleLabel.frame = CGRect(
+            x: 44,
+            y: titleLabel.frame.maxY + 4,
+            width: bounds.width - 88,
+            height: 22
+        )
     }
 
     private func buildArtwork() {
-        for _ in 0..<4 {
-            let waypoint = CAShapeLayer()
-            waypoint.fillColor = UIColor.white.withAlphaComponent(0.95).cgColor
-            waypoint.strokeColor = UIColor(red: 1.00, green: 0.55, blue: 0.50, alpha: 1.0).cgColor
-            waypoint.lineWidth = 2
-            waypoint.opacity = 0
-            layer.addSublayer(waypoint)
-            waypointLayers.append(waypoint)
-        }
-
-        for _ in 0..<3 {
-            let ring = CAShapeLayer()
-            ring.fillColor = UIColor.clear.cgColor
-            ring.strokeColor = UIColor(red: 0.31, green: 0.96, blue: 0.92, alpha: 0.55).cgColor
-            ring.lineWidth = 2
-            ring.opacity = 0
-            layer.addSublayer(ring)
-            pulseRingLayers.append(ring)
+        for _ in 0..<7 {
+            let stepLayer = CAShapeLayer()
+            stepLayer.fillColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
+            stepLayer.strokeColor = UIColor.white.withAlphaComponent(0.38).cgColor
+            stepLayer.lineWidth = 1.5
+            stepLayer.shadowColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 0.85).cgColor
+            stepLayer.shadowOpacity = 0.32
+            stepLayer.shadowRadius = 10
+            stepLayer.shadowOffset = .zero
+            layer.addSublayer(stepLayer)
+            stepLayers.append(stepLayer)
         }
 
         updateArtworkPaths()
     }
 
     private func updateArtworkPaths() {
-        let width = bounds.width
-        let height = bounds.height
-        let beacon = beaconCenter()
+        let travelPath = steppingPath()
+        pathShadowLayer.path = travelPath.cgPath
+        pathLineLayer.path = travelPath.cgPath
 
-        gridLayer.path = gridPath(in: bounds).cgPath
-
-        let routePath = UIBezierPath()
-        routePath.move(to: CGPoint(x: width * 0.16, y: height * 0.69))
-        routePath.addCurve(
-            to: beacon,
-            controlPoint1: CGPoint(x: width * 0.24, y: height * 0.70),
-            controlPoint2: CGPoint(x: width * 0.30, y: height * 0.60)
-        )
-        routePath.addCurve(
-            to: CGPoint(x: width * 0.78, y: height * 0.34),
-            controlPoint1: CGPoint(x: width * 0.48, y: height * 0.44),
-            controlPoint2: CGPoint(x: width * 0.63, y: height * 0.38)
-        )
-        routeTrackLayer.path = routePath.cgPath
-
-        let pulseWavePath = UIBezierPath()
-        pulseWavePath.move(to: CGPoint(x: width * 0.22, y: height * 0.60))
-        pulseWavePath.addCurve(
-            to: CGPoint(x: width * 0.33, y: height * 0.56),
-            controlPoint1: CGPoint(x: width * 0.25, y: height * 0.52),
-            controlPoint2: CGPoint(x: width * 0.28, y: height * 0.66)
-        )
-        pulseWavePath.addCurve(
-            to: CGPoint(x: width * 0.46, y: height * 0.49),
-            controlPoint1: CGPoint(x: width * 0.36, y: height * 0.46),
-            controlPoint2: CGPoint(x: width * 0.40, y: height * 0.58)
-        )
-        pulseWavePath.addCurve(
-            to: CGPoint(x: width * 0.58, y: height * 0.47),
-            controlPoint1: CGPoint(x: width * 0.49, y: height * 0.38),
-            controlPoint2: CGPoint(x: width * 0.53, y: height * 0.56)
-        )
-        pulseWavePath.addCurve(
-            to: CGPoint(x: width * 0.71, y: height * 0.41),
-            controlPoint1: CGPoint(x: width * 0.61, y: height * 0.38),
-            controlPoint2: CGPoint(x: width * 0.66, y: height * 0.49)
-        )
-        pulseWaveLayer.path = pulseWavePath.cgPath
-
-        let pulseDotSize = min(width, height) * 0.034
+        let pulseDotSize = min(bounds.width, bounds.height) * 0.034
         travelPulseLayer.path = UIBezierPath(
             ovalIn: CGRect(x: -pulseDotSize / 2, y: -pulseDotSize / 2, width: pulseDotSize, height: pulseDotSize)
         ).cgPath
 
-        let waypointCenters = [
-            CGPoint(x: width * 0.16, y: height * 0.69),
-            beacon,
-            CGPoint(x: width * 0.58, y: height * 0.46),
-            CGPoint(x: width * 0.78, y: height * 0.34)
-        ]
-
-        for (index, waypoint) in waypointLayers.enumerated() where index < waypointCenters.count {
-            let size: CGFloat = index == 1 ? 18 : 12
-            let rect = CGRect(
-                x: waypointCenters[index].x - (size / 2),
-                y: waypointCenters[index].y - (size / 2),
-                width: size,
-                height: size
-            )
-            waypoint.path = UIBezierPath(ovalIn: rect).cgPath
+        let markers = stepMarkers()
+        for (index, marker) in markers.enumerated() where index < stepLayers.count {
+            let size = stepSize(for: index)
+            stepLayers[index].path = footprintPath(center: marker.center, size: size, angle: marker.angle, isLeft: marker.isLeft).cgPath
         }
 
-        for (index, ring) in pulseRingLayers.enumerated() {
-            let radius = beaconRing.bounds.width * (0.60 + (CGFloat(index) * 0.18))
-            let rect = CGRect(
-                x: beacon.x - radius / 2,
-                y: beacon.y - radius / 2,
-                width: radius,
-                height: radius
+        let destinationCenter = destinationPoint()
+        let ringSize = min(bounds.width, bounds.height) * 0.084
+        destinationRingLayer.path = UIBezierPath(
+            ovalIn: CGRect(
+                x: destinationCenter.x - (ringSize / 2),
+                y: destinationCenter.y - (ringSize / 2),
+                width: ringSize,
+                height: ringSize
             )
-            ring.path = UIBezierPath(ovalIn: rect).cgPath
-        }
+        ).cgPath
+
+        let arrowSize = ringSize * 0.42
+        let arrowPath = UIBezierPath()
+        arrowPath.move(to: CGPoint(x: destinationCenter.x, y: destinationCenter.y - arrowSize * 0.72))
+        arrowPath.addLine(to: CGPoint(x: destinationCenter.x + arrowSize * 0.52, y: destinationCenter.y + arrowSize * 0.50))
+        arrowPath.addLine(to: CGPoint(x: destinationCenter.x, y: destinationCenter.y + arrowSize * 0.18))
+        arrowPath.addLine(to: CGPoint(x: destinationCenter.x - arrowSize * 0.52, y: destinationCenter.y + arrowSize * 0.50))
+        arrowPath.close()
+        destinationArrowLayer.path = arrowPath.cgPath
     }
 
-    private func beaconCenter() -> CGPoint {
-        CGPoint(x: bounds.width * 0.36, y: bounds.height * 0.55)
-    }
-
-    private func gridPath(in bounds: CGRect) -> UIBezierPath {
+    private func steppingPath() -> UIBezierPath {
         let path = UIBezierPath()
-        let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        let radii: [CGFloat] = [bounds.width * 0.20, bounds.width * 0.34, bounds.width * 0.48]
+        path.move(to: CGPoint(x: bounds.width * 0.24, y: bounds.height * 0.80))
+        path.addCurve(
+            to: CGPoint(x: bounds.width * 0.40, y: bounds.height * 0.66),
+            controlPoint1: CGPoint(x: bounds.width * 0.25, y: bounds.height * 0.76),
+            controlPoint2: CGPoint(x: bounds.width * 0.33, y: bounds.height * 0.69)
+        )
+        path.addCurve(
+            to: CGPoint(x: bounds.width * 0.58, y: bounds.height * 0.54),
+            controlPoint1: CGPoint(x: bounds.width * 0.47, y: bounds.height * 0.63),
+            controlPoint2: CGPoint(x: bounds.width * 0.53, y: bounds.height * 0.57)
+        )
+        path.addCurve(
+            to: CGPoint(x: bounds.width * 0.74, y: bounds.height * 0.38),
+            controlPoint1: CGPoint(x: bounds.width * 0.62, y: bounds.height * 0.49),
+            controlPoint2: CGPoint(x: bounds.width * 0.69, y: bounds.height * 0.42)
+        )
+        return path
+    }
 
-        for radius in radii {
-            path.addArc(withCenter: center, radius: radius, startAngle: .pi * 0.92, endAngle: .pi * 1.86, clockwise: true)
+    private func destinationPoint() -> CGPoint {
+        CGPoint(x: bounds.width * 0.74, y: bounds.height * 0.38)
+    }
+
+    private func stepMarkers() -> [StepMarker] {
+        [
+            StepMarker(center: CGPoint(x: bounds.width * 0.24, y: bounds.height * 0.80), angle: -0.46, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.31, y: bounds.height * 0.74), angle: -0.38, isLeft: false),
+            StepMarker(center: CGPoint(x: bounds.width * 0.39, y: bounds.height * 0.68), angle: -0.34, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.48, y: bounds.height * 0.61), angle: -0.28, isLeft: false),
+            StepMarker(center: CGPoint(x: bounds.width * 0.57, y: bounds.height * 0.54), angle: -0.24, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.66, y: bounds.height * 0.46), angle: -0.24, isLeft: false),
+            StepMarker(center: CGPoint(x: bounds.width * 0.73, y: bounds.height * 0.39), angle: -0.22, isLeft: true)
+        ]
+    }
+
+    private func stepSize(for index: Int) -> CGSize {
+        let baseWidth = bounds.width * 0.072
+        let baseHeight = baseWidth * 1.46
+        let scale = 1.0 - (CGFloat(index) * 0.03)
+        return CGSize(width: baseWidth * scale, height: baseHeight * scale)
+    }
+
+    private func footprintPath(center: CGPoint, size: CGSize, angle: CGFloat, isLeft: Bool) -> UIBezierPath {
+        let path = UIBezierPath()
+        let heelWidth = size.width
+        let heelHeight = size.height * 0.76
+        let heelRect = CGRect(
+            x: center.x - heelWidth / 2,
+            y: center.y - heelHeight / 2 + (size.height * 0.08),
+            width: heelWidth,
+            height: heelHeight
+        )
+        path.append(UIBezierPath(roundedRect: heelRect, cornerRadius: heelWidth * 0.48))
+
+        let toeCount = 4
+        let toeDirection: CGFloat = isLeft ? -1 : 1
+        let toeBaseX = center.x + (heelWidth * 0.26 * toeDirection)
+        let toeBaseY = center.y - (heelHeight * 0.46)
+        let toeRadii: [CGFloat] = [heelWidth * 0.18, heelWidth * 0.16, heelWidth * 0.14, heelWidth * 0.12]
+
+        for index in 0..<toeCount {
+            let progress = CGFloat(index)
+            let toeCenter = CGPoint(
+                x: toeBaseX + (progress * heelWidth * 0.10 * toeDirection),
+                y: toeBaseY - (progress * heelWidth * 0.08)
+            )
+            let radius = toeRadii[index]
+            path.append(UIBezierPath(
+                ovalIn: CGRect(
+                    x: toeCenter.x - radius,
+                    y: toeCenter.y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                )
+            ))
         }
 
+        let transform = CGAffineTransform(translationX: center.x, y: center.y)
+            .rotated(by: angle)
+            .translatedBy(x: -center.x, y: -center.y)
+        path.apply(transform)
         return path
     }
 }
@@ -1810,7 +1888,7 @@ class ViewController: UIViewController {
     private let walkPaceSoundID: SystemSoundID = 1110
     private let jogPaceSoundID: SystemSoundID = 1111
     private let runPaceSoundID: SystemSoundID = 1112
-    private let tutorialSeenDefaultsKey = "hasSeenWaypulseTutorial"
+    private let tutorialSeenDefaultsKey = "hasSeenStepOutTutorial"
     private var navigationCues: [NavigationCue] = []
     private var nextNavigationCueIndex = 0
     private var displayNavigationCueIndex = 0
