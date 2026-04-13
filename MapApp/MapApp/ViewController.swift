@@ -10,6 +10,7 @@ import MapKit
 import CoreLocation
 import ActivityKit
 import AVFAudio
+import AudioToolbox
 
 // MARK: - Color Scheme
 struct AppPalette {
@@ -391,6 +392,13 @@ extension UIColor {
 
 // MARK: - Custom Classes
 class RouteAnnotation: MKPointAnnotation { var index: Int = 0 }
+
+private struct TutorialStep {
+    let title: String
+    let message: String
+    let prepare: (ViewController) -> Void
+    let highlightRect: (ViewController) -> CGRect?
+}
 
 class StyledPolyline: MKPolyline {
     enum Kind { case forward, backward, walked, remaining }
@@ -780,6 +788,7 @@ final class SettingsViewController: UIViewController {
     var onVoiceGuidanceChanged: ((Bool) -> Void)?
     var onHapticsChanged: ((Bool) -> Void)?
     var onResetSpeed: ((Int) -> Void)?
+    var onReplayTutorial: (() -> Void)?
 
     private let scrollView = UIScrollView()
     private let contentView = UIStackView()
@@ -974,6 +983,15 @@ final class SettingsViewController: UIViewController {
         contactButton.addTarget(self, action: #selector(contactSupportTapped), for: .touchUpInside)
         section.addArrangedSubview(contactButton)
 
+        let tutorialButton = UIButton(type: .system)
+        tutorialButton.configuration = .filled()
+        tutorialButton.configuration?.title = "Replay Tutorial"
+        tutorialButton.configuration?.baseBackgroundColor = .systemTeal
+        tutorialButton.configuration?.baseForegroundColor = .white
+        tutorialButton.configuration?.cornerStyle = .capsule
+        tutorialButton.addTarget(self, action: #selector(replayTutorialTapped), for: .touchUpInside)
+        section.addArrangedSubview(tutorialButton)
+
         return section
     }
 
@@ -1114,6 +1132,186 @@ final class SettingsViewController: UIViewController {
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
         }
+    }
+
+    @objc private func replayTutorialTapped() {
+        dismiss(animated: true) {
+            self.onReplayTutorial?()
+        }
+    }
+}
+
+final class SpotlightTutorialView: UIView {
+    struct Content {
+        let title: String
+        let message: String
+        let stepText: String
+        let highlightRect: CGRect
+        let showsBack: Bool
+        let isLastStep: Bool
+    }
+
+    var onNext: (() -> Void)?
+    var onBack: (() -> Void)?
+    var onSkip: (() -> Void)?
+
+    private let dimLayer = CAShapeLayer()
+    private let highlightRingLayer = CAShapeLayer()
+    private let cardView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+    private let stepLabel = UILabel()
+    private let titleLabel = UILabel()
+    private let messageLabel = UILabel()
+    private let buttonStack = UIStackView()
+    private let backButton = UIButton(type: .system)
+    private let nextButton = UIButton(type: .system)
+    private let skipButton = UIButton(type: .system)
+    private var currentHighlightRect: CGRect = .zero
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+
+    func render(_ content: Content) {
+        currentHighlightRect = content.highlightRect
+        stepLabel.text = content.stepText
+        titleLabel.text = content.title
+        messageLabel.text = content.message
+        backButton.isHidden = !content.showsBack
+        nextButton.setTitle(content.isLastStep ? "Done" : "Next", for: .normal)
+        setNeedsLayout()
+        layoutIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        dimLayer.frame = bounds
+        highlightRingLayer.frame = bounds
+
+        let paddedRect = currentHighlightRect.insetBy(dx: -12, dy: -12)
+        let holePath = UIBezierPath(rect: bounds)
+        let roundedHighlight = UIBezierPath(roundedRect: paddedRect, cornerRadius: 18)
+        holePath.append(roundedHighlight)
+        dimLayer.path = holePath.cgPath
+
+        highlightRingLayer.path = UIBezierPath(roundedRect: paddedRect, cornerRadius: 18).cgPath
+
+        let horizontalInset: CGFloat = 20
+        let cardWidth = min(bounds.width - (horizontalInset * 2), 320)
+        let preferredSize = cardView.systemLayoutSizeFitting(
+            CGSize(width: cardWidth, height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        )
+
+        let spaceAbove = paddedRect.minY - safeAreaInsets.top
+        let spaceBelow = bounds.maxY - safeAreaInsets.bottom - paddedRect.maxY
+        let placeBelow = spaceBelow >= max(preferredSize.height + 24, 180) || spaceBelow >= spaceAbove
+        let cardY: CGFloat
+
+        if placeBelow {
+            cardY = min(bounds.height - safeAreaInsets.bottom - preferredSize.height - 16, paddedRect.maxY + 18)
+        } else {
+            cardY = max(safeAreaInsets.top + 16, paddedRect.minY - preferredSize.height - 18)
+        }
+
+        let cardX = min(
+            max(horizontalInset, paddedRect.midX - (cardWidth / 2)),
+            bounds.width - horizontalInset - cardWidth
+        )
+
+        cardView.frame = CGRect(x: cardX, y: cardY, width: cardWidth, height: preferredSize.height)
+    }
+
+    private func setupView() {
+        backgroundColor = .clear
+
+        dimLayer.fillRule = .evenOdd
+        dimLayer.fillColor = UIColor.black.withAlphaComponent(0.68).cgColor
+        layer.addSublayer(dimLayer)
+
+        highlightRingLayer.strokeColor = UIColor.white.withAlphaComponent(0.88).cgColor
+        highlightRingLayer.fillColor = UIColor.clear.cgColor
+        highlightRingLayer.lineWidth = 2
+        layer.addSublayer(highlightRingLayer)
+
+        cardView.layer.cornerRadius = 22
+        cardView.layer.masksToBounds = true
+        addSubview(cardView)
+
+        let contentStack = UIStackView()
+        contentStack.axis = .vertical
+        contentStack.spacing = 12
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        cardView.contentView.addSubview(contentStack)
+
+        stepLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        stepLabel.textColor = UIColor.white.withAlphaComponent(0.72)
+
+        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.numberOfLines = 0
+
+        messageLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        messageLabel.textColor = UIColor.white.withAlphaComponent(0.92)
+        messageLabel.numberOfLines = 0
+
+        buttonStack.axis = .horizontal
+        buttonStack.spacing = 10
+        buttonStack.distribution = .fillEqually
+
+        configureTutorialButton(backButton, title: "Back", backgroundColor: UIColor.white.withAlphaComponent(0.12))
+        configureTutorialButton(nextButton, title: "Next", backgroundColor: UIColor.systemPink.withAlphaComponent(0.92))
+        configureTutorialButton(skipButton, title: "Skip", backgroundColor: UIColor.white.withAlphaComponent(0.12))
+
+        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
+        skipButton.addTarget(self, action: #selector(skipTapped), for: .touchUpInside)
+
+        buttonStack.addArrangedSubview(backButton)
+        buttonStack.addArrangedSubview(nextButton)
+        buttonStack.addArrangedSubview(skipButton)
+
+        contentStack.addArrangedSubview(stepLabel)
+        contentStack.addArrangedSubview(titleLabel)
+        contentStack.addArrangedSubview(messageLabel)
+        contentStack.addArrangedSubview(buttonStack)
+
+        NSLayoutConstraint.activate([
+            contentStack.topAnchor.constraint(equalTo: cardView.contentView.topAnchor, constant: 18),
+            contentStack.leadingAnchor.constraint(equalTo: cardView.contentView.leadingAnchor, constant: 18),
+            contentStack.trailingAnchor.constraint(equalTo: cardView.contentView.trailingAnchor, constant: -18),
+            contentStack.bottomAnchor.constraint(equalTo: cardView.contentView.bottomAnchor, constant: -18),
+            backButton.heightAnchor.constraint(equalToConstant: 40),
+            nextButton.heightAnchor.constraint(equalToConstant: 40),
+            skipButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
+    }
+
+    private func configureTutorialButton(_ button: UIButton, title: String, backgroundColor: UIColor) {
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.backgroundColor = backgroundColor
+        button.layer.cornerRadius = 12
+    }
+
+    @objc private func nextTapped() {
+        onNext?()
+    }
+
+    @objc private func backTapped() {
+        onBack?()
+    }
+
+    @objc private func skipTapped() {
+        onSkip?()
     }
 }
 
@@ -1535,6 +1733,7 @@ class ViewController: UIViewController {
     private var loopPointStepper: UIStepper?
     private var loopPointLabel: UILabel?
     private var timeToggle: UISwitch?
+    private var routeVibeControl: UISegmentedControl?
     private var progressView = UIProgressView(progressViewStyle: .default)
     private var saveRoutePillButton: UIButton!
     
@@ -1580,7 +1779,7 @@ class ViewController: UIViewController {
 
     // MARK: - User Preferences
     private var useScenicRouting = false
-    private var isRandomGenerationEnabled = true
+    private var isRandomGenerationEnabled = false
     private var useTimeInput = false
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
@@ -1603,10 +1802,15 @@ class ViewController: UIViewController {
     private var routeSegments: [CLLocationCoordinate2D] = []
     private var cumulativeSegmentLengths: [CLLocationDistance] = []
     private var currentRouteType: RouteConfig.RouteType = .oneWay
-    private var currentRouteDisplayName = "Welcome to APPNAME"
+    private var currentRouteDisplayName = "Manual Mode On"
+    private var usesRouteModeDisplayName = true
     private var lastRouteTypeSelection = 0
     private var pendingRouteSave: PendingRouteSave?
     private var speechSynthesizer = AVSpeechSynthesizer()
+    private let walkPaceSoundID: SystemSoundID = 1110
+    private let jogPaceSoundID: SystemSoundID = 1111
+    private let runPaceSoundID: SystemSoundID = 1112
+    private let tutorialSeenDefaultsKey = "hasSeenWaypulseTutorial"
     private var navigationCues: [NavigationCue] = []
     private var nextNavigationCueIndex = 0
     private var displayNavigationCueIndex = 0
@@ -1619,6 +1823,11 @@ class ViewController: UIViewController {
     private var followCameraDistance: CLLocationDistance = 3000
     private var isUpdatingFollowCamera = false
     private var hasPlayedRouteSplash = false
+    private var hasEvaluatedFirstLaunchTutorial = false
+    private var tutorialOverlayView: SpotlightTutorialView?
+    private var tutorialSteps: [TutorialStep] = []
+    private var tutorialStepIndex = 0
+    private var hasShownRouteEditingHint = false
     private var routeSplashView: RouteSplashView?
     private let walkPaceFeedback = UIImpactFeedbackGenerator(style: .heavy)
     private let jogPaceFeedback = UIImpactFeedbackGenerator(style: .rigid)
@@ -1709,6 +1918,246 @@ class ViewController: UIViewController {
 
 // MARK: - Setup Methods
 extension ViewController {
+    private func startTutorialIfNeeded() {
+        guard !hasEvaluatedFirstLaunchTutorial else { return }
+        hasEvaluatedFirstLaunchTutorial = true
+
+        guard !UserDefaults.standard.bool(forKey: tutorialSeenDefaultsKey) else { return }
+        startTutorial(forceReplay: false)
+    }
+
+    private func startTutorial(forceReplay: Bool) {
+        if !forceReplay {
+            UserDefaults.standard.set(true, forKey: tutorialSeenDefaultsKey)
+        }
+
+        tutorialSteps = buildTutorialSteps()
+        tutorialStepIndex = 0
+
+        if tutorialOverlayView == nil {
+            let overlay = SpotlightTutorialView(frame: view.bounds)
+            overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            overlay.onNext = { [weak self] in self?.advanceTutorial() }
+            overlay.onBack = { [weak self] in self?.retreatTutorial() }
+            overlay.onSkip = { [weak self] in self?.finishTutorial() }
+            tutorialOverlayView = overlay
+        }
+
+        prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+
+        if let tutorialOverlayView, tutorialOverlayView.superview == nil {
+            view.addSubview(tutorialOverlayView)
+        }
+
+        if let routeSplashView {
+            view.bringSubviewToFront(routeSplashView)
+        }
+        if let tutorialOverlayView {
+            view.bringSubviewToFront(tutorialOverlayView)
+        }
+
+        showTutorialStep()
+    }
+
+    private func advanceTutorial() {
+        if tutorialStepIndex >= tutorialSteps.count - 1 {
+            finishTutorial()
+            return
+        }
+
+        tutorialStepIndex += 1
+        showTutorialStep()
+    }
+
+    private func retreatTutorial() {
+        guard tutorialStepIndex > 0 else { return }
+        tutorialStepIndex -= 1
+        showTutorialStep()
+    }
+
+    private func finishTutorial() {
+        tutorialOverlayView?.removeFromSuperview()
+        prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+    }
+
+    private func showTutorialStep() {
+        guard tutorialSteps.indices.contains(tutorialStepIndex),
+              tutorialOverlayView != nil else { return }
+
+        let step = tutorialSteps[tutorialStepIndex]
+        step.prepare(self)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self,
+                  let tutorialOverlayView = self.tutorialOverlayView,
+                  self.tutorialSteps.indices.contains(self.tutorialStepIndex) else { return }
+
+            let activeStep = self.tutorialSteps[self.tutorialStepIndex]
+            let rect = activeStep.highlightRect(self) ?? CGRect(x: self.view.bounds.midX - 70, y: self.view.bounds.midY - 35, width: 140, height: 70)
+            tutorialOverlayView.render(
+                .init(
+                    title: activeStep.title,
+                    message: activeStep.message,
+                    stepText: "Step \(self.tutorialStepIndex + 1) of \(self.tutorialSteps.count)",
+                    highlightRect: rect,
+                    showsBack: self.tutorialStepIndex > 0,
+                    isLastStep: self.tutorialStepIndex == self.tutorialSteps.count - 1
+                )
+            )
+            self.view.bringSubviewToFront(tutorialOverlayView)
+        }
+    }
+
+    private func buildTutorialSteps() -> [TutorialStep] {
+        [
+            TutorialStep(
+                title: "Settings",
+                message: "Use Settings to change themes, turn voice or vibrations on and off, review pace stats, reset learned speeds, and replay this tutorial later.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.settingsButton)
+                }
+            ),
+            TutorialStep(
+                title: "Go To Search",
+                message: "Go To is the quick search tool for finding a place or address and dropping a point there before you build a route.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.goToButton)
+                }
+            ),
+            TutorialStep(
+                title: "Route Settings",
+                message: "This button opens route settings. That panel lets you turn random route generation on or off and adjust how the next route is built.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.routeSettingsButton)
+                }
+            ),
+            TutorialStep(
+                title: "Random And Direction Options",
+                message: "Inside route settings, use the Random Route Generation switch to choose manual versus random building. The compass-style direction buttons bias the route toward a general heading when random generation is on.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: true, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.slidePanel)
+                }
+            ),
+            TutorialStep(
+                title: "Route Style",
+                message: "Use the route style controls to choose how the path is built. Fastest behaves like a normal direct route, while Scenic tries to take a longer or more interesting path between the same points.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: true, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.routeVibeControl)
+                }
+            ),
+            TutorialStep(
+                title: "Pace Panel",
+                message: "This button opens the pace panel. It is where you decide how the route should be divided between walking, jogging, and running.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.pacePatternButton)
+                }
+            ),
+            TutorialStep(
+                title: "How Pace Pattern Works",
+                message: "The sliders set how much of the full route belongs to each pace type. For example, a route could be mostly walking with a smaller jogging or running section mixed in.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: true, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.pacePanel)
+                }
+            ),
+            TutorialStep(
+                title: "Order And Pulse",
+                message: "Drag the pace cards to alter the order the route uses them. Pulse mode repeats the pace pattern in cycles instead of applying each pace in one long block.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: true, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.pacePanel)
+                }
+            ),
+            TutorialStep(
+                title: "Center And Follow",
+                message: "The center button recenters on you. If it is on before you place a route, your exact current location becomes the starting point.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.recenterButton)
+                }
+            ),
+            TutorialStep(
+                title: "Route History",
+                message: "Swipe this bottom tab up to open route history. From there you can reload routes, search, filter, and review what you have saved.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: false)
+                },
+                highlightRect: { controller in
+                    controller.highlightRect(for: controller.routeHistorySheet)
+                }
+            ),
+            TutorialStep(
+                title: "Saved Route Actions",
+                message: "When the history sheet is open, tap the ellipsis button on a saved route to reveal edit and delete actions.",
+                prepare: { controller in
+                    controller.prepareTutorialInterface(routeSettingsOpen: false, paceOpen: false, historyExpanded: true)
+                },
+                highlightRect: { controller in
+                    controller.firstRouteHistoryActionRect() ?? controller.highlightRect(for: controller.routeHistorySheet)
+                }
+            )
+        ]
+    }
+
+    private func prepareTutorialInterface(routeSettingsOpen: Bool, paceOpen: Bool, historyExpanded: Bool) {
+        if routeSettingsOpen {
+            if !isPanelOpen { openPanel() }
+        } else if isPanelOpen {
+            closePanel()
+        }
+
+        if paceOpen {
+            if !isPacePanelOpen { openPacePanel() }
+        } else if isPacePanelOpen {
+            closePacePanel()
+        }
+
+        if historyExpanded {
+            expandRouteSheet()
+        } else {
+            collapseRouteSheet()
+        }
+    }
+
+    private func highlightRect(for view: UIView?, inset: CGFloat = -10) -> CGRect? {
+        guard let view else { return nil }
+        let rect = view.convert(view.bounds, to: self.view)
+        return rect.insetBy(dx: inset, dy: inset)
+    }
+
+    private func firstRouteHistoryActionRect() -> CGRect? {
+        guard !filteredRoutes.isEmpty else { return nil }
+        let indexPath = IndexPath(row: 0, section: 0)
+        routesTableView.layoutIfNeeded()
+        guard let cell = routesTableView.cellForRow(at: indexPath) as? RouteTableViewCell else { return nil }
+        let rect = cell.moreButton.convert(cell.moreButton.bounds, to: view)
+        return rect.insetBy(dx: -10, dy: -10)
+    }
+
     private func presentSettingsScreen() {
         let settingsViewController = SettingsViewController()
         settingsViewController.selectedThemeIndex = UIColor.activeThemeIndex
@@ -1741,6 +2190,11 @@ extension ViewController {
             ]
             settingsViewController?.renderSections()
         }
+        settingsViewController.onReplayTutorial = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self?.startTutorial(forceReplay: true)
+            }
+        }
 
         let navigationController = UINavigationController(rootViewController: settingsViewController)
         navigationController.modalPresentationStyle = .fullScreen
@@ -1757,6 +2211,7 @@ extension ViewController {
         routeSplashView.playAnimation { [weak self] in
             self?.setStartupInterfaceHidden(false)
             self?.routeSplashView = nil
+            self?.startTutorialIfNeeded()
         }
     }
 
@@ -2481,6 +2936,7 @@ extension ViewController {
         control.addTarget(self, action: #selector(routeVibeSelector(_:)), for: .valueChanged)
         control.frame = CGRect(x: padding, y: y, width: width, height: 32)
         container.addSubview(control)
+        routeVibeControl = control
         return y + 45
     }
 
@@ -2694,6 +3150,14 @@ extension ViewController {
         
         // === SECTION 2: PACE ORDER CHIPS ===
         currentY = addPaceSectionHeader(to: pacePanel, text: "PACE ORDER", y: currentY, padding: padding)
+
+        let paceOrderHint = UILabel(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 16))
+        paceOrderHint.text = "Drag to alter order"
+        paceOrderHint.font = .systemFont(ofSize: 11, weight: .medium)
+        paceOrderHint.textAlignment = .center
+        paceOrderHint.textColor = .secondaryTextColor
+        pacePanel.addSubview(paceOrderHint)
+        currentY += 20
         
         // Horizontal stack for chips
         paceChipsContainer = UIStackView(frame: CGRect(x: padding, y: currentY, width: pacePanel.frame.width - (padding * 2), height: 65))
@@ -2714,7 +3178,7 @@ extension ViewController {
         )
         pacePanel.addSubview(randomizePercentButton)
         
-        currentY += 44
+        currentY += 31
         
         // Shuffle order button
         let shuffleOrderButton = createPaceButton(
@@ -2725,7 +3189,7 @@ extension ViewController {
         )
         pacePanel.addSubview(shuffleOrderButton)
         
-        currentY += 44
+        currentY += 31
         
         let pulseButton = createPaceButton(
             title: "Pulse: Off",
@@ -2733,7 +3197,7 @@ extension ViewController {
             y: currentY,
             action: #selector(showPulsePicker)
         )
-        pulseButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        pulseButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         pacePanel.addSubview(pulseButton)
         pulseModeButton = pulseButton
         
@@ -2819,14 +3283,14 @@ extension ViewController {
     
     private func createPaceButton(title: String? = nil, symbolName: String? = nil, color: UIColor, y: CGFloat, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.frame = CGRect(x: 12, y: y, width: pacePanel.frame.width - 24, height: 36)
+        button.frame = CGRect(x: 12, y: y, width: pacePanel.frame.width - 24, height: 27)
         if let title {
             button.setTitle(title, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 20)
+            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         }
         if let symbolName {
             button.setImage(UIImage(systemName: symbolName), for: .normal)
-            button.setPreferredSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold), forImageIn: .normal)
+            button.setPreferredSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold), forImageIn: .normal)
             button.tintColor = color
         }
         button.backgroundColor = color.withAlphaComponent(0.1)
@@ -2895,7 +3359,7 @@ extension ViewController {
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
         let config = buildRouteConfig()
-        setRouteDisplayName("Current Route")
+        setRouteDisplayName(nil)
         if let targetMiles = config.targetDistance {
             generateRandomRoute(config: config, targetMiles: targetMiles)
         } else {
@@ -3203,7 +3667,8 @@ extension ViewController {
             pendingRouteSave = nil
             setSaveRoutePillVisible(false)
         }
-        
+
+        showRouteEditingHintIfNeeded()
         startLiveActivityForCurrentRoute()
     }
 
@@ -3518,7 +3983,18 @@ extension ViewController {
     
     private func setRouteDisplayName(_ name: String?) {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        currentRouteDisplayName = (trimmedName?.isEmpty == false) ? trimmedName! : "Welcome to APPNAME"
+        usesRouteModeDisplayName = trimmedName?.isEmpty != false
+        currentRouteDisplayName = (trimmedName?.isEmpty == false) ? trimmedName! : defaultRouteDisplayName()
+        routeNameLabel?.text = currentRouteDisplayName
+    }
+
+    private func defaultRouteDisplayName() -> String {
+        isRandomGenerationEnabled ? "Random Mode On" : "Manual Mode On"
+    }
+
+    private func refreshRouteDisplayNameIfNeeded() {
+        guard usesRouteModeDisplayName else { return }
+        currentRouteDisplayName = defaultRouteDisplayName()
         routeNameLabel?.text = currentRouteDisplayName
     }
     
@@ -3869,6 +4345,7 @@ extension ViewController {
         
         lastLoggedPaceType = currentPace
         playPaceTransitionHaptic(for: currentPace)
+        playPaceTransitionSound(for: currentPace)
         speakPaceTransition(currentPace)
         let currentAverage: Double
         switch currentPace {
@@ -3938,6 +4415,23 @@ extension ViewController {
             }
         }
         preparePaceHaptics()
+    }
+
+    private func playPaceTransitionSound(for paceType: PaceType) {
+        let soundID: SystemSoundID
+        switch paceType {
+        case .walk:
+            soundID = walkPaceSoundID
+        case .jog:
+            soundID = jogPaceSoundID
+        case .run:
+            soundID = runPaceSoundID
+        }
+
+        activateSpokenGuidanceAudioSession()
+        AudioServicesPlaySystemSoundWithCompletion(soundID) { [weak self] in
+            self?.deactivateSpokenGuidanceAudioSessionIfIdle()
+        }
     }
     
     private func speakGuidance(_ message: String, interruptCurrent: Bool) {
@@ -4213,6 +4707,8 @@ extension ViewController {
 // MARK: - Map Helpers
 extension ViewController {
     private func clearAllRoutes() {
+        if isPanelOpen { closePanel() }
+        if isPacePanelOpen { closePacePanel() }
         selectedCoordinates.removeAll()
         isGeneratingRoute = false
         isActivelyWalkingRoute = false
@@ -4251,6 +4747,7 @@ extension ViewController {
         let annotation = RouteAnnotation()
         annotation.coordinate = coordinate
         annotation.title = title
+        annotation.subtitle = "Press and drag to adjust this route pin"
         annotation.index = index
         mapView.addAnnotation(annotation)
     }
@@ -4417,7 +4914,13 @@ extension ViewController {
         let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
         let routeType = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
         if isFollowingUser && selectedCoordinates.isEmpty, let userLoc = userLocation { selectedCoordinates.append(userLoc); addAnnotation(at: userLoc, title: "Start", index: 0) }
-        if routeType != .loop && selectedCoordinates.count >= 2 { showInfoAlert(message: "You already have 2 pins. Tap Clear to reset."); return }
+        if routeType != .loop && selectedCoordinates.count >= 2 {
+            showInfoAlert(
+                title: "Adjust Existing Route",
+                message: "This route already has its pins placed. Press and hold a pin, then drag it to change the route, or tap Clear to start over."
+            )
+            return
+        }
         selectedCoordinates.append(coordinate)
         let label: String
         if selectedCoordinates.count == 1 { label = "Start" }
@@ -4450,6 +4953,7 @@ extension ViewController {
         isRandomGenerationEnabled = sender.isOn
 
         guard !sender.isOn else {
+            refreshRouteDisplayNameIfNeeded()
             updateRandomGenerationControlsState()
             return
         }
@@ -4464,6 +4968,7 @@ extension ViewController {
         distanceTextField?.placeholder = "e.g. 3.1"
         timeToggle?.setOn(false, animated: true)
 
+        refreshRouteDisplayNameIfNeeded()
         updateRandomGenerationControlsState()
     }
 
@@ -4610,7 +5115,7 @@ extension ViewController {
         jogPercentLabel.text = "\(Int(jog * 100))%"
         runPercentLabel.text = "\(Int(run * 100))%"
         
-        // 🆕 UPDATE: Calculate distances if we have an active route
+        //  UPDATE: Calculate distances if we have an active route
         let routeDistance = totalRouteDistance / 1609.34  // Convert meters to miles
         
         // Update pace order array
@@ -4742,9 +5247,13 @@ extension ViewController {
     private func createPaceChip(pace: PaceSegmentConfig, index: Int) -> UIView {
         let chip = UIView()
         chip.backgroundColor = pace.color.withAlphaComponent(0.2)
-        chip.layer.cornerRadius = 8
+        chip.layer.cornerRadius = 10
         chip.layer.borderWidth = 2
         chip.layer.borderColor = pace.color.cgColor
+        chip.layer.shadowColor = UIColor.black.cgColor
+        chip.layer.shadowOpacity = 0.16
+        chip.layer.shadowOffset = CGSize(width: 0, height: 3)
+        chip.layer.shadowRadius = 6
         
         let iconImageView = UIImageView()
         iconImageView.image = UIImage(systemName: pace.symbolName)
@@ -4761,15 +5270,28 @@ extension ViewController {
         percentLabel.textColor = pace.color
         percentLabel.translatesAutoresizingMaskIntoConstraints = false
         chip.addSubview(percentLabel)
+
+        let dragHandle = UIImageView()
+        dragHandle.image = UIImage(systemName: "line.3.horizontal")
+        dragHandle.tintColor = pace.color.withAlphaComponent(0.9)
+        dragHandle.contentMode = .scaleAspectFit
+        dragHandle.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
+        dragHandle.translatesAutoresizingMaskIntoConstraints = false
+        chip.addSubview(dragHandle)
         
         NSLayoutConstraint.activate([
             iconImageView.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
-            iconImageView.topAnchor.constraint(equalTo: chip.topAnchor, constant: 10),
+            iconImageView.topAnchor.constraint(equalTo: chip.topAnchor, constant: 8),
             iconImageView.widthAnchor.constraint(equalToConstant: 26),
             iconImageView.heightAnchor.constraint(equalToConstant: 26),
             
             percentLabel.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
-            percentLabel.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2)
+            percentLabel.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 2),
+
+            dragHandle.centerXAnchor.constraint(equalTo: chip.centerXAnchor),
+            dragHandle.topAnchor.constraint(equalTo: percentLabel.bottomAnchor, constant: 2),
+            dragHandle.widthAnchor.constraint(equalToConstant: 18),
+            dragHandle.heightAnchor.constraint(equalToConstant: 10)
         ])
         
         // Add tap gesture to swap positions
@@ -4793,8 +5315,6 @@ extension ViewController {
         
         updatePaceChips()
         redrawCurrentPacedRouteIfNeeded()
-        
-        print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
     
     @objc private func handleChipDrag(_ gesture: UIPanGestureRecognizer) {
@@ -4845,7 +5365,7 @@ extension ViewController {
                 self.paceChipsContainer.layoutIfNeeded()
             }
             
-            print("🔄 New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
+            print("New pace order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
             
             // Redraw route with new pace order
             if !self.currentRouteCoordinates.isEmpty && self.totalRouteDistance > 0 {
@@ -4876,7 +5396,7 @@ extension ViewController {
         paceOrder.shuffle()
         updatePaceChips()
         redrawCurrentPacedRouteIfNeeded()
-        print("🔀 Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
+        print("Shuffled order: \(paceOrder.map { $0.paceType.rawValue }.joined(separator: " → "))")
     }
 }
 
@@ -5065,6 +5585,17 @@ extension ViewController {
             self.present(alert, animated: true)
         }
     }
+
+    private func showRouteEditingHintIfNeeded(force: Bool = false) {
+        guard selectedCoordinates.count > 1 else { return }
+        guard force || !hasShownRouteEditingHint else { return }
+
+        hasShownRouteEditingHint = true
+        showInfoAlert(
+            title: "Adjust Route",
+            message: "Press and hold any route pin, then drag it to reshape the route without starting over."
+        )
+    }
 }
 
 // MARK: - MKMapViewDelegate
@@ -5130,6 +5661,20 @@ extension ViewController: MKMapViewDelegate {
             view?.isDraggable = true
             view?.canShowCallout = true
         } else { view?.annotation = annotation }
+
+        if let markerView = view, annotation is RouteAnnotation {
+            markerView.markerTintColor = .appPrimary
+            markerView.glyphImage = UIImage(systemName: "hand.draw.fill")
+
+            let hintLabel = UILabel()
+            hintLabel.text = "Hold and drag to reshape"
+            hintLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            hintLabel.textColor = .secondaryLabel
+            hintLabel.numberOfLines = 1
+            hintLabel.sizeToFit()
+            markerView.detailCalloutAccessoryView = hintLabel
+        }
+
         return view
     }
 
@@ -5380,7 +5925,7 @@ extension ViewController {
         routeTypeSelector.selectedSegmentIndex = Int(route.routeType)
         lastRouteTypeSelection = Int(route.routeType)
         useScenicRouting = route.isScenicMode
-        setRouteDisplayName(route.name ?? "Route #\(route.routeNumber)")
+        setRouteDisplayName(route.name)
         
         // store waypoints
         selectedCoordinates = waypoints
