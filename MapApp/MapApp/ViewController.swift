@@ -3471,15 +3471,26 @@ extension ViewController {
 
 // MARK: - IBActions
 extension ViewController {
-    @IBAction func showCoordinateEntry(_ sender: Any) { goToButtonTapped() }
+    @IBAction func showCoordinateEntry(_ sender: Any) {
+        if let button = sender as? UIButton {
+            animateActionButtonTap(button)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            self.goToButtonTapped()
+        }
+    }
     
     
 
     @IBAction func settingsBTN(_ sender: UIButton) {
-        presentSettingsScreen()
+        animateActionButtonTap(sender)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            self.presentSettingsScreen()
+        }
     }
 
     @IBAction func generateRouteBTN(_ sender: UIButton) {
+        animateActionButtonTap(sender, scale: 0.92, overshoot: 1.04)
         let config = buildRouteConfig()
         setRouteDisplayName(nil)
         if let targetMiles = config.targetDistance {
@@ -3489,6 +3500,7 @@ extension ViewController {
         }
     }
     @IBAction func clearRouteBTN(_ sender: UIButton) {
+        animateActionButtonTap(sender, scale: 0.9, overshoot: 1.02)
         clearAllRoutes()
         routeInfoLabel.text = nil
     }
@@ -3510,7 +3522,10 @@ extension ViewController {
         regenerateCurrentRoute()
     }
 
-    @IBAction func recenterBTN(_ sender: UIButton) { toggleFollowUser(button: sender) }
+    @IBAction func recenterBTN(_ sender: UIButton) {
+        animateActionButtonTap(sender)
+        toggleFollowUser(button: sender)
+    }
 
     @IBAction func routeSettingsBTNTapped(_ sender: UIButton) {
         animateSettingsCog(sender)
@@ -5063,6 +5078,40 @@ extension ViewController {
         }
     }
 
+    private func animateActionButtonTap(_ button: UIButton, scale: CGFloat = 0.94, overshoot: CGFloat = 1.0) {
+        button.layer.removeAnimation(forKey: "actionButtonPress")
+        button.transform = .identity
+        button.alpha = 1
+
+        UIView.animate(
+            withDuration: 0.08,
+            delay: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
+        ) {
+            button.transform = CGAffineTransform(scaleX: scale, y: scale)
+            button.alpha = 0.9
+        } completion: { _ in
+            UIView.animate(
+                withDuration: 0.28,
+                delay: 0,
+                usingSpringWithDamping: 0.72,
+                initialSpringVelocity: 0.55,
+                options: [.beginFromCurrentState, .allowUserInteraction]
+            ) {
+                button.transform = CGAffineTransform(scaleX: overshoot, y: overshoot)
+                button.alpha = 1
+            } completion: { _ in
+                UIView.animate(
+                    withDuration: 0.12,
+                    delay: 0,
+                    options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]
+                ) {
+                    button.transform = .identity
+                }
+            }
+        }
+    }
+
     private func animatePaceHare(_ button: UIButton) {
         guard let imageView = button.imageView else { return }
 
@@ -6586,7 +6635,7 @@ More stuff I'd like to do: :
  
  reflection, including user feedback
  
- Come up with list of tasks for users to try  record feedback
+ Come up with list of tasks for users to try  record feedback. Done
  
  poster
  
