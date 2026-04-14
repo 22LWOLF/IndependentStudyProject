@@ -132,15 +132,27 @@
     * Test background functionality on a physical device (notifications will not appear in the simulator when the app is backgrounded).
 
 ### Week 12:
-  + Goal: Implement a tool that allows the user to place resting points along the generated route.
-  + Tools: [MKMapView](https://developer.apple.com/documentation/mapkit/mkmapview), [MKPointAnnotation](https://developer.apple.com/documentation/mapkit/mkpointannotation), and local data storage using [UserDefaults](https://developer.apple.com/documentation/foundation/userdefaults).
-    * Allow the user to tap a point on the generated route and insert a "pin".
-    * Allow multiple break points to be added.
-    * Each resting point will be stored with its coordinates and an optional label.
-    * Resting points will have custom markers or points on the map for clarity.
-    * Ensure that the points are saved along with the route data so they can persist across uses.
-    * Allow for the removal of break points.
-      - In the future this system could be altered for creating POI pins as well.
+  + Goal: Write reflection paper, have users test the application and record there insights and thoughts, and design poster.
+  + Tools: N/A
+    * Come up with a set of tasks and questions associated with those tasks.
+    * Record how long it takes a user to complete a task.
+    * For reflection paper talk about things learned, things that were eaiser than expected, harder than expected and responses to feedback.
+    * Start creating poster to display my project.
+    * Dr. Hoot will provide a template for me to use for the display but things that should be on the poster is:
+      - Images of the app working
+      - Make using PDF 3x4 foot
+      - Names
+      - Goals
+      - Visualiztoin- tell what app does maybe use flow to show things that require actions to pop up.
+      - Current features
+      - Future plans
+      - anlaysis = process itteraitve design order of implementation
+      - Use repo to look at older version to compare
+      - challenges and solutions
+      - Mention some issues
+      - I do not need graphs or anything, screenshots will work.
+      - etc.
+      - He provided me with the rubric
 
 ### Week 13:
   + Goal: Having the app work in the background and other clean up.
