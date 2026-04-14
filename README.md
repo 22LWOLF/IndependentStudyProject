@@ -220,6 +220,9 @@
       - Only allowed to have on device for 7 days.
       - Can't use TestFlight (send to other users to test) or distribute.
       - Has some limitations for certain background modes like GPS and push notifications.
+  + Put in paper and poster here
+     
+
 
 
 
