@@ -6621,21 +6621,21 @@ More stuff I'd like to do: :
         3. allow user to reset there average speeds for each pace (allow to reset individually) and this would also be the place that they can see there average speeds for each pace.
         4. F.A.Q. thing or maybe a way to contact me if issue occurs (maybe)
     
-    Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does.
+    Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does. 4/14/2026 done
     
     when the user is on a route have it to where if center on user button on whatever direction the user is walking is north (that way left and rights don't get confusing)
             4/6/2026 DONE
     
-    Add animaitons to just about everthing to make it feel more professional.
+    Add animaitons to just about everthing to make it feel more professional. 4/14/2026 done
  
-    add a loading screen on launch. 4/6/2026 Paritally implemented needs refinement
+    add a loading screen on launch. 4/6/2026 Paritally implemented needs refinement. 4/14/2026 Final version done.
  
     fix out and back route type random and just in general. 4/7/2026 NEED TO TEST TO MAKE SURE
  
  
  reflection, including user feedback
  
- Come up with list of tasks for users to try  record feedback. Done
+ Come up with list of tasks for users to try  record feedback. 4/14/2026 done
  
  poster
  
