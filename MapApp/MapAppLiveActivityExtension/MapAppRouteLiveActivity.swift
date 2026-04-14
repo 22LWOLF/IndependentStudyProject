@@ -91,7 +91,7 @@ struct MapAppRouteLiveActivity: Widget {
                         Text("Stale")
                             .font(.caption2.weight(.black))
                     } else {
-                        Image(systemName: directionSymbol(for: context.state.nextInstruction))
+                        Image(systemName: directionSymbol(for: context.state.nextInstructionSymbolName, instruction: context.state.nextInstruction))
                             .font(.caption2.weight(.bold))
                         Text(compactDistanceText(feet: context.state.nextInstructionDistanceFeet))
                             .font(.caption2.weight(.black))
@@ -148,7 +148,11 @@ struct MapAppRouteLiveActivity: Widget {
         }
     }
     
-    private func directionSymbol(for instruction: String) -> String {
+    private func directionSymbol(for symbolName: String, instruction: String) -> String {
+        if !symbolName.isEmpty {
+            return symbolName
+        }
+
         let lowered = instruction.lowercased()
         if lowered.contains("turn around") || lowered.contains("u-turn") {
             return "arrow.uturn.backward"

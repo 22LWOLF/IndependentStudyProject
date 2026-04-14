@@ -8,6 +8,7 @@ struct MapAppRouteActivityAttributes: ActivityAttributes {
         var remainingMinutes: Int
         var nextInstruction: String
         var nextInstructionDistanceFeet: Int
+        var nextInstructionSymbolName: String
         var currentPaceType: String
     }
     

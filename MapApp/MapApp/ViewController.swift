@@ -45,6 +45,9 @@ enum AppTheme: String, CaseIterable {
     // MARK: Evening Stroll
     case eveningStroll
 
+    // MARK: Sunrise Route
+    case sunriseRoute
+
     init(index: Int) {
         let themes = AppTheme.allCases
         if themes.indices.contains(index) {
@@ -66,6 +69,7 @@ enum AppTheme: String, CaseIterable {
         case .earlyFrost: return "Early Frost"
         case .urbanFog: return "Urban Fog"
         case .eveningStroll: return "Evening Stroll"
+        case .sunriseRoute: return "Sunrise Route"
         }
     }
 
@@ -124,6 +128,15 @@ enum AppTheme: String, CaseIterable {
                 floatingButtonBackground: UIColor(hex: "#FAEEEE"),
                 floatingButtonForeground: UIColor(hex: "#301B20"),
                 sidePanelBackground: UIColor(hex: "#F5E6E6")
+            )
+        case .sunriseRoute:
+            return AppPalette(
+                primary: UIColor(hex: "#7FB8D6"),
+                secondary: UIColor(hex: "#F5C84B"),
+                background: UIColor(hex: "#071426"),
+                floatingButtonBackground: UIColor(hex: "#F5C84B"),
+                floatingButtonForeground: UIColor(hex: "#071426"),
+                sidePanelBackground: UIColor(hex: "#EAF4F8")
             )
         }
     }
@@ -184,6 +197,15 @@ enum AppTheme: String, CaseIterable {
                 floatingButtonForeground: UIColor(hex: "#FFF2F2"),
                 sidePanelBackground: UIColor(hex: "#221419")
             )
+        case .sunriseRoute:
+            return AppPalette(
+                primary: UIColor(hex: "#87C8EA"),
+                secondary: UIColor(hex: "#FFD15A"),
+                background: UIColor(hex: "#04101E"),
+                floatingButtonBackground: UIColor(hex: "#102B45"),
+                floatingButtonForeground: UIColor(hex: "#F8D76A"),
+                sidePanelBackground: UIColor(hex: "#0C2237")
+            )
         }
     }
 
@@ -193,7 +215,7 @@ enum AppTheme: String, CaseIterable {
 }
 
 extension UIColor {
-    static var activeTheme: AppTheme = .urbanFog
+    static var activeTheme: AppTheme = .sunriseRoute
     static var activeThemeIndex: Int {
         get { activeTheme.index }
         set { activeTheme = AppTheme(index: newValue) }
@@ -241,6 +263,11 @@ extension UIColor {
                 .blended(withFraction: 0.36, of: compColor)
                 .blended(withFraction: 0.14, of: appPrimary)
                 .withAlphaComponent(0.58)
+        case .sunriseRoute:
+            return darkColor
+                .blended(withFraction: 0.32, of: appPrimary)
+                .blended(withFraction: 0.12, of: compColor)
+                .withAlphaComponent(0.60)
         }
     }
     static var bottomBG: UIColor {
@@ -275,6 +302,11 @@ extension UIColor {
                 .blended(withFraction: 0.36, of: compColor)
                 .blended(withFraction: 0.14, of: appPrimary)
                 .withAlphaComponent(0.58)
+        case .sunriseRoute:
+            return darkColor
+                .blended(withFraction: 0.32, of: appPrimary)
+                .blended(withFraction: 0.12, of: compColor)
+                .withAlphaComponent(0.60)
         }
     }
     static var primaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground }
@@ -303,6 +335,8 @@ extension UIColor {
             return sidePanelBackground.blended(withFraction: 0.10, of: darkColor)
         case .eveningStroll:
             return sidePanelBackground.blended(withFraction: 0.18, of: compColor)
+        case .sunriseRoute:
+            return sidePanelBackground.blended(withFraction: 0.18, of: appPrimary)
         }
     }
     static var searchFieldSurface: UIColor {
@@ -319,6 +353,8 @@ extension UIColor {
             return sidePanelBackground.blended(withFraction: 0.12, of: compColor)
         case .eveningStroll:
             return sidePanelBackground.blended(withFraction: 0.18, of: appPrimary)
+        case .sunriseRoute:
+            return sidePanelBackground.blended(withFraction: 0.16, of: compColor)
         }
     }
     static var selectorSurface: UIColor {
@@ -335,11 +371,16 @@ extension UIColor {
             return sidePanelBackground.blended(withFraction: 0.16, of: darkColor)
         case .eveningStroll:
             return sidePanelBackground.blended(withFraction: 0.24, of: compColor)
+        case .sunriseRoute:
+            return sidePanelBackground.blended(withFraction: 0.22, of: appPrimary)
         }
     }
     static var dividerColor: UIColor { compColor.withAlphaComponent(0.32) }
     static var panelNeutralButtonBackground: UIColor { sidePanelBackground.blended(withFraction: 0.18, of: darkColor) }
     static var panelNeutralButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
+    static var activeCenterButtonTint: UIColor {
+        activeTheme == .sunriseRoute ? UIColor(hex: "#071426") : compColor
+    }
     static var semanticGenerateColor: UIColor { UIColor(hex: "#8AAF5C").blended(withFraction: 0.22, of: appPrimary) }
     static var semanticClearColor: UIColor { UIColor(hex: "#D46A74").blended(withFraction: 0.22, of: compColor) }
 
@@ -1322,17 +1363,21 @@ final class RouteSplashView: UIView {
         let isLeft: Bool
     }
 
+    private enum SplashColors {
+        static let routeYellow = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0)
+    }
+
     private let backdropLayer = CAGradientLayer()
     private let ambientGlowLayer = CAGradientLayer()
     private let pathShadowLayer = CAShapeLayer()
     private let pathLineLayer = CAShapeLayer()
     private let destinationRingLayer = CAShapeLayer()
-    private let destinationArrowLayer = CAShapeLayer()
     private let travelPulseLayer = CAShapeLayer()
 
     private let brandHaloView = UIView()
+    private let sunClipView = UIView()
     private let brandDiskView = UIView()
-    private let brandInnerDotView = UIView()
+    private let horizonLineView = UIView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
 
@@ -1373,17 +1418,18 @@ final class RouteSplashView: UIView {
         pathLineLayer.strokeEnd = 0
         pathLineLayer.opacity = 0.15
         destinationRingLayer.opacity = 0
-        destinationArrowLayer.opacity = 0
         travelPulseLayer.opacity = 0
 
         for stepLayer in stepLayers {
-            stepLayer.opacity = 0.14
+            stepLayer.opacity = 0
             stepLayer.transform = CATransform3DMakeScale(0.72, 0.72, 1)
         }
 
         brandHaloView.alpha = 0
+        sunClipView.alpha = 0
         brandDiskView.alpha = 0
-        brandInnerDotView.alpha = 0
+        horizonLineView.alpha = 0
+        brandDiskView.transform = CGAffineTransform(translationX: 0, y: max(1, brandDiskView.bounds.height / 2))
         titleLabel.alpha = 0
         subtitleLabel.alpha = 0
         titleLabel.transform = CGAffineTransform(translationX: 0, y: 16)
@@ -1391,12 +1437,17 @@ final class RouteSplashView: UIView {
 
         UIView.animate(withDuration: 0.46, delay: 0.05, options: [.curveEaseOut]) {
             self.brandHaloView.alpha = 1
+            self.sunClipView.alpha = 1
             self.brandDiskView.alpha = 1
-            self.brandInnerDotView.alpha = 1
+            self.horizonLineView.alpha = 1
             self.titleLabel.alpha = 1
             self.subtitleLabel.alpha = 0.92
             self.titleLabel.transform = .identity
             self.subtitleLabel.transform = .identity
+        }
+
+        UIView.animate(withDuration: 1.1, delay: 0.18, options: [.curveEaseInOut]) {
+            self.brandDiskView.transform = .identity
         }
 
         let shadowDraw = CABasicAnimation(keyPath: "strokeEnd")
@@ -1445,10 +1496,10 @@ final class RouteSplashView: UIView {
         }
 
         for (index, stepLayer) in stepLayers.enumerated() {
-            let delay = 0.22 + (Double(index) * 0.11)
+            let delay = 0.42 + (Double(index) * 0.13)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut]) {
-                    stepLayer.opacity = index == self.stepLayers.count - 1 ? 1 : 0.92
+                    stepLayer.opacity = index == self.stepLayers.count - 1 ? 0.9 : 0.72
                     stepLayer.transform = CATransform3DIdentity
                 }
             }
@@ -1464,34 +1515,29 @@ final class RouteSplashView: UIView {
             self.destinationRingLayer.add(ringAppear, forKey: "ringAppear")
             self.destinationRingLayer.opacity = 1
 
-            let ringPulse = CABasicAnimation(keyPath: "transform.scale")
-            ringPulse.fromValue = 0.82
-            ringPulse.toValue = 1.16
-            ringPulse.duration = 0.55
-            ringPulse.autoreverses = true
-            ringPulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            let ringPulse = CAKeyframeAnimation(keyPath: "transform.scale")
+            ringPulse.values = [0.92, 1.10, 1.04, 1.0]
+            ringPulse.keyTimes = [0.0, 0.48, 0.78, 1.0]
+            ringPulse.duration = 0.82
+            ringPulse.timingFunctions = [
+                CAMediaTimingFunction(name: .easeOut),
+                CAMediaTimingFunction(name: .easeInEaseOut),
+                CAMediaTimingFunction(name: .easeInEaseOut)
+            ]
             self.destinationRingLayer.add(ringPulse, forKey: "ringPulse")
 
-            let arrowAppear = CABasicAnimation(keyPath: "opacity")
-            arrowAppear.fromValue = 0
-            arrowAppear.toValue = 1
-            arrowAppear.duration = 0.18
-            arrowAppear.fillMode = .forwards
-            arrowAppear.isRemovedOnCompletion = false
-            self.destinationArrowLayer.add(arrowAppear, forKey: "arrowAppear")
-            self.destinationArrowLayer.opacity = 1
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.34) {
             UIView.animate(withDuration: 0.36, delay: 0, options: [.curveEaseInOut]) {
                 self.brandHaloView.transform = CGAffineTransform(scaleX: 1.18, y: 1.18)
                 self.brandDiskView.transform = CGAffineTransform(scaleX: 1.06, y: 1.06)
-                self.brandInnerDotView.transform = CGAffineTransform(scaleX: 1.12, y: 1.12)
+                self.horizonLineView.transform = CGAffineTransform(scaleX: 1.08, y: 1.0)
             } completion: { _ in
                 UIView.animate(withDuration: 0.42, delay: 0, options: [.curveEaseInOut]) {
                     self.brandHaloView.transform = .identity
                     self.brandDiskView.transform = .identity
-                    self.brandInnerDotView.transform = .identity
+                    self.horizonLineView.transform = .identity
                 }
             }
         }
@@ -1547,18 +1593,12 @@ final class RouteSplashView: UIView {
         layer.addSublayer(pathLineLayer)
 
         destinationRingLayer.fillColor = UIColor.clear.cgColor
-        destinationRingLayer.strokeColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
+        destinationRingLayer.strokeColor = SplashColors.routeYellow.cgColor
         destinationRingLayer.lineWidth = 3
         destinationRingLayer.opacity = 0
         layer.addSublayer(destinationRingLayer)
 
-        destinationArrowLayer.fillColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
-        destinationArrowLayer.strokeColor = UIColor.white.withAlphaComponent(0.72).cgColor
-        destinationArrowLayer.lineWidth = 1.5
-        destinationArrowLayer.opacity = 0
-        layer.addSublayer(destinationArrowLayer)
-
-        travelPulseLayer.fillColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 1.0).cgColor
+        travelPulseLayer.fillColor = SplashColors.routeYellow.cgColor
         travelPulseLayer.strokeColor = UIColor.white.withAlphaComponent(0.72).cgColor
         travelPulseLayer.lineWidth = 2
         layer.addSublayer(travelPulseLayer)
@@ -1566,15 +1606,21 @@ final class RouteSplashView: UIView {
         brandHaloView.backgroundColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 0.12)
         addSubview(brandHaloView)
 
-        brandDiskView.backgroundColor = UIColor(red: 0.09, green: 0.12, blue: 0.22, alpha: 0.98)
-        brandDiskView.layer.borderWidth = 2
-        brandDiskView.layer.borderColor = UIColor.white.withAlphaComponent(0.34).cgColor
-        addSubview(brandDiskView)
+        sunClipView.clipsToBounds = true
+        sunClipView.backgroundColor = .clear
+        addSubview(sunClipView)
 
-        brandInnerDotView.backgroundColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 1.0)
-        brandInnerDotView.layer.borderWidth = 2
-        brandInnerDotView.layer.borderColor = UIColor.white.withAlphaComponent(0.84).cgColor
-        addSubview(brandInnerDotView)
+        brandDiskView.backgroundColor = SplashColors.routeYellow
+        brandDiskView.layer.borderWidth = 2
+        brandDiskView.layer.borderColor = UIColor.white.withAlphaComponent(0.42).cgColor
+        sunClipView.addSubview(brandDiskView)
+
+        horizonLineView.backgroundColor = UIColor.white.withAlphaComponent(0.78)
+        horizonLineView.layer.shadowColor = SplashColors.routeYellow.cgColor
+        horizonLineView.layer.shadowOpacity = 0.32
+        horizonLineView.layer.shadowRadius = 8
+        horizonLineView.layer.shadowOffset = .zero
+        addSubview(horizonLineView)
 
         titleLabel.text = "STEP OUT"
         titleLabel.textAlignment = .center
@@ -1584,7 +1630,7 @@ final class RouteSplashView: UIView {
         titleLabel.minimumScaleFactor = 0.75
         addSubview(titleLabel)
 
-        subtitleLabel.text = "Choose a route and get moving."
+        subtitleLabel.text = "Comfort zones. Bedrooms. Offices. and more..."
         subtitleLabel.textAlignment = .center
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.74)
         subtitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
@@ -1595,43 +1641,56 @@ final class RouteSplashView: UIView {
         let badgeCenter = CGPoint(x: bounds.width * 0.50, y: bounds.height * 0.27)
         let diskSize = min(bounds.width, bounds.height) * 0.16
         let haloSize = diskSize * 1.78
-        let dotSize = diskSize * 0.28
+        let horizonY = badgeCenter.y + (diskSize / 2)
+        let sunClipWidth = diskSize * 1.32
+        let sunClipHeight = diskSize * 1.18
 
         brandHaloView.bounds = CGRect(x: 0, y: 0, width: haloSize, height: haloSize)
         brandHaloView.center = badgeCenter
         brandHaloView.layer.cornerRadius = haloSize / 2
 
+        sunClipView.frame = CGRect(
+            x: badgeCenter.x - (sunClipWidth / 2),
+            y: horizonY - sunClipHeight,
+            width: sunClipWidth,
+            height: sunClipHeight
+        )
+
         brandDiskView.bounds = CGRect(x: 0, y: 0, width: diskSize, height: diskSize)
-        brandDiskView.center = badgeCenter
+        brandDiskView.center = CGPoint(x: sunClipView.bounds.midX, y: sunClipView.bounds.maxY - (diskSize / 2))
         brandDiskView.layer.cornerRadius = diskSize / 2
 
-        brandInnerDotView.bounds = CGRect(x: 0, y: 0, width: dotSize, height: dotSize)
-        brandInnerDotView.center = badgeCenter
-        brandInnerDotView.layer.cornerRadius = dotSize / 2
+        horizonLineView.frame = CGRect(
+            x: badgeCenter.x - (diskSize * 0.78),
+            y: horizonY - 1.5,
+            width: diskSize * 1.56,
+            height: 3
+        )
+        horizonLineView.layer.cornerRadius = horizonLineView.bounds.height / 2
 
         titleLabel.frame = CGRect(
             x: 32,
-            y: brandDiskView.frame.maxY + 16,
+            y: horizonLineView.frame.maxY + 18,
             width: bounds.width - 64,
             height: 40
         )
         subtitleLabel.frame = CGRect(
-            x: 44,
+            x: 24,
             y: titleLabel.frame.maxY + 4,
-            width: bounds.width - 88,
+            width: bounds.width - 48,
             height: 22
         )
     }
 
     private func buildArtwork() {
-        for _ in 0..<7 {
+        for _ in 0..<6 {
             let stepLayer = CAShapeLayer()
-            stepLayer.fillColor = UIColor(red: 1.00, green: 0.80, blue: 0.28, alpha: 1.0).cgColor
-            stepLayer.strokeColor = UIColor.white.withAlphaComponent(0.38).cgColor
-            stepLayer.lineWidth = 1.5
-            stepLayer.shadowColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 0.85).cgColor
-            stepLayer.shadowOpacity = 0.32
-            stepLayer.shadowRadius = 10
+            stepLayer.fillColor = SplashColors.routeYellow.cgColor
+            stepLayer.strokeColor = UIColor.white.withAlphaComponent(0.22).cgColor
+            stepLayer.lineWidth = 1
+            stepLayer.shadowColor = UIColor(red: 0.39, green: 1.00, blue: 0.78, alpha: 0.65).cgColor
+            stepLayer.shadowOpacity = 0.22
+            stepLayer.shadowRadius = 7
             stepLayer.shadowOffset = .zero
             layer.addSublayer(stepLayer)
             stepLayers.append(stepLayer)
@@ -1653,7 +1712,7 @@ final class RouteSplashView: UIView {
         let markers = stepMarkers()
         for (index, marker) in markers.enumerated() where index < stepLayers.count {
             let size = stepSize(for: index)
-            stepLayers[index].path = footprintPath(center: marker.center, size: size, angle: marker.angle, isLeft: marker.isLeft).cgPath
+            stepLayers[index].path = footprintClusterPath(center: marker.center, size: size, angle: marker.angle, isLeft: marker.isLeft).cgPath
         }
 
         let destinationCenter = destinationPoint()
@@ -1667,50 +1726,42 @@ final class RouteSplashView: UIView {
             )
         ).cgPath
 
-        let arrowSize = ringSize * 0.42
-        let arrowPath = UIBezierPath()
-        arrowPath.move(to: CGPoint(x: destinationCenter.x, y: destinationCenter.y - arrowSize * 0.72))
-        arrowPath.addLine(to: CGPoint(x: destinationCenter.x + arrowSize * 0.52, y: destinationCenter.y + arrowSize * 0.50))
-        arrowPath.addLine(to: CGPoint(x: destinationCenter.x, y: destinationCenter.y + arrowSize * 0.18))
-        arrowPath.addLine(to: CGPoint(x: destinationCenter.x - arrowSize * 0.52, y: destinationCenter.y + arrowSize * 0.50))
-        arrowPath.close()
-        destinationArrowLayer.path = arrowPath.cgPath
     }
 
     private func steppingPath() -> UIBezierPath {
         let path = UIBezierPath()
-        path.move(to: CGPoint(x: bounds.width * 0.24, y: bounds.height * 0.80))
+        path.move(to: CGPoint(x: bounds.width * 0.32, y: bounds.height * 0.84))
         path.addCurve(
-            to: CGPoint(x: bounds.width * 0.40, y: bounds.height * 0.66),
-            controlPoint1: CGPoint(x: bounds.width * 0.25, y: bounds.height * 0.76),
-            controlPoint2: CGPoint(x: bounds.width * 0.33, y: bounds.height * 0.69)
+            to: CGPoint(x: bounds.width * 0.45, y: bounds.height * 0.74),
+            controlPoint1: CGPoint(x: bounds.width * 0.33, y: bounds.height * 0.81),
+            controlPoint2: CGPoint(x: bounds.width * 0.39, y: bounds.height * 0.77)
         )
         path.addCurve(
-            to: CGPoint(x: bounds.width * 0.58, y: bounds.height * 0.54),
-            controlPoint1: CGPoint(x: bounds.width * 0.47, y: bounds.height * 0.63),
-            controlPoint2: CGPoint(x: bounds.width * 0.53, y: bounds.height * 0.57)
+            to: CGPoint(x: bounds.width * 0.60, y: bounds.height * 0.64),
+            controlPoint1: CGPoint(x: bounds.width * 0.50, y: bounds.height * 0.71),
+            controlPoint2: CGPoint(x: bounds.width * 0.56, y: bounds.height * 0.67)
         )
         path.addCurve(
-            to: CGPoint(x: bounds.width * 0.74, y: bounds.height * 0.38),
-            controlPoint1: CGPoint(x: bounds.width * 0.62, y: bounds.height * 0.49),
-            controlPoint2: CGPoint(x: bounds.width * 0.69, y: bounds.height * 0.42)
+            to: CGPoint(x: bounds.width * 0.76, y: bounds.height * 0.50),
+            controlPoint1: CGPoint(x: bounds.width * 0.64, y: bounds.height * 0.59),
+            controlPoint2: CGPoint(x: bounds.width * 0.71, y: bounds.height * 0.53)
         )
         return path
     }
 
     private func destinationPoint() -> CGPoint {
-        CGPoint(x: bounds.width * 0.74, y: bounds.height * 0.38)
+        CGPoint(x: bounds.width * 0.76, y: bounds.height * 0.50)
     }
 
     private func stepMarkers() -> [StepMarker] {
-        [
-            StepMarker(center: CGPoint(x: bounds.width * 0.24, y: bounds.height * 0.80), angle: -0.46, isLeft: true),
-            StepMarker(center: CGPoint(x: bounds.width * 0.31, y: bounds.height * 0.74), angle: -0.38, isLeft: false),
-            StepMarker(center: CGPoint(x: bounds.width * 0.39, y: bounds.height * 0.68), angle: -0.34, isLeft: true),
-            StepMarker(center: CGPoint(x: bounds.width * 0.48, y: bounds.height * 0.61), angle: -0.28, isLeft: false),
-            StepMarker(center: CGPoint(x: bounds.width * 0.57, y: bounds.height * 0.54), angle: -0.24, isLeft: true),
-            StepMarker(center: CGPoint(x: bounds.width * 0.66, y: bounds.height * 0.46), angle: -0.24, isLeft: false),
-            StepMarker(center: CGPoint(x: bounds.width * 0.73, y: bounds.height * 0.39), angle: -0.22, isLeft: true)
+        let routeFlowAngle: CGFloat = 0
+        return [
+            StepMarker(center: CGPoint(x: bounds.width * 0.32, y: bounds.height * 0.84), angle: routeFlowAngle, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.38, y: bounds.height * 0.79), angle: routeFlowAngle, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.45, y: bounds.height * 0.74), angle: routeFlowAngle, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.53, y: bounds.height * 0.69), angle: routeFlowAngle, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.61, y: bounds.height * 0.63), angle: routeFlowAngle, isLeft: true),
+            StepMarker(center: CGPoint(x: bounds.width * 0.69, y: bounds.height * 0.56), angle: routeFlowAngle, isLeft: true)
         ]
     }
 
@@ -1721,39 +1772,31 @@ final class RouteSplashView: UIView {
         return CGSize(width: baseWidth * scale, height: baseHeight * scale)
     }
 
-    private func footprintPath(center: CGPoint, size: CGSize, angle: CGFloat, isLeft: Bool) -> UIBezierPath {
+    private func footprintClusterPath(center: CGPoint, size: CGSize, angle: CGFloat, isLeft: Bool) -> UIBezierPath {
         let path = UIBezierPath()
-        let heelWidth = size.width
-        let heelHeight = size.height * 0.76
-        let heelRect = CGRect(
-            x: center.x - heelWidth / 2,
-            y: center.y - heelHeight / 2 + (size.height * 0.08),
-            width: heelWidth,
-            height: heelHeight
-        )
-        path.append(UIBezierPath(roundedRect: heelRect, cornerRadius: heelWidth * 0.48))
+        let direction: CGFloat = isLeft ? -1 : 1
+        let radiusBase = size.width * 0.18
+        let circles: [(offset: CGPoint, radius: CGFloat)] = [
+            (CGPoint(x: -size.width * 0.22 * direction, y: -size.height * 0.30), radiusBase * 0.72),
+            (CGPoint(x: 0, y: -size.height * 0.06), radiusBase * 0.92),
+            (CGPoint(x: size.width * 0.20 * direction, y: size.height * 0.22), radiusBase * 1.18)
+        ]
 
-        let toeCount = 4
-        let toeDirection: CGFloat = isLeft ? -1 : 1
-        let toeBaseX = center.x + (heelWidth * 0.26 * toeDirection)
-        let toeBaseY = center.y - (heelHeight * 0.46)
-        let toeRadii: [CGFloat] = [heelWidth * 0.18, heelWidth * 0.16, heelWidth * 0.14, heelWidth * 0.12]
-
-        for index in 0..<toeCount {
-            let progress = CGFloat(index)
-            let toeCenter = CGPoint(
-                x: toeBaseX + (progress * heelWidth * 0.10 * toeDirection),
-                y: toeBaseY - (progress * heelWidth * 0.08)
+        for circle in circles {
+            let circleCenter = CGPoint(
+                x: center.x + circle.offset.x,
+                y: center.y + circle.offset.y
             )
-            let radius = toeRadii[index]
-            path.append(UIBezierPath(
-                ovalIn: CGRect(
-                    x: toeCenter.x - radius,
-                    y: toeCenter.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
+            path.append(
+                UIBezierPath(
+                    ovalIn: CGRect(
+                        x: circleCenter.x - circle.radius,
+                        y: circleCenter.y - circle.radius,
+                        width: circle.radius * 2,
+                        height: circle.radius * 2
+                    )
                 )
-            ))
+            )
         }
 
         let transform = CGAffineTransform(translationX: center.x, y: center.y)
@@ -1777,6 +1820,7 @@ class ViewController: UIViewController {
         let triggerDistance: CLLocationDistance
         let instruction: String
         let announcementLeadDistance: CLLocationDistance
+        let symbolName: String
     }
     
     // MARK: - Outlets
@@ -3473,7 +3517,7 @@ extension ViewController {
         isPanelOpen ? closePanel() : openPanel()}
         
     @IBAction func paceSettingsButtonTapped(_ sender: UIButton) {
-        animateSettingsCog(sender, clockwise: false)
+        animatePaceHare(sender)
         isPacePanelOpen ? closePacePanel() : openPacePanel()
         }
     }
@@ -3588,7 +3632,8 @@ extension ViewController {
                     NavigationCue(
                         triggerDistance: route.distance,
                         instruction: "Turn around to return to your starting point.",
-                        announcementLeadDistance: 20
+                        announcementLeadDistance: 20,
+                        symbolName: "arrow.uturn.backward"
                     )
                 )
             }
@@ -3625,12 +3670,19 @@ extension ViewController {
                 }
                 
                 //CHECK IF WE NEED TO RETRY
-                if let targetMiles = targetMiles, retryCount < 3 {
-                    let actualMiles = totalDistance / 1609.34
-                    let ratio = actualMiles / targetMiles
+                if retryCount < 3 {
+                    let ratio: Double?
+                    if self.useTimeInput, let targetSeconds = self.getUserInputMinutes().map({ $0 * 60.0 }), targetSeconds > 0 {
+                        ratio = totalTime / targetSeconds
+                    } else if let targetMiles = targetMiles {
+                        let actualMiles = totalDistance / 1609.34
+                        ratio = actualMiles / targetMiles
+                    } else {
+                        ratio = nil
+                    }
                     
-                    if abs(ratio - 1.0) > 0.25 {  // More than 25% off
-                        print("Loop retry \(retryCount + 1): Got \(String(format: "%.2f", actualMiles))mi, wanted \(String(format: "%.2f", targetMiles))mi")
+                    if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > 0.25 {  // More than 25% off
+                        print("Loop retry \(retryCount + 1): ratio \(String(format: "%.2f", ratio))")
                         
                         // Clear current overlays
                         self.mapView.removeOverlays(self.mapView.overlays)
@@ -3769,44 +3821,58 @@ extension ViewController {
         var accumulatedDistance = distanceOffset
         let longStretchThreshold: CLLocationDistance = 304.8
         let nearTurnLeadDistance: CLLocationDistance = 30.48
+        var previousStepDistance: CLLocationDistance = 0
         
         for step in steps {
-            accumulatedDistance += step.distance
             let instruction = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !instruction.isEmpty else { continue }
+            guard !instruction.isEmpty else {
+                accumulatedDistance += step.distance
+                previousStepDistance = step.distance
+                continue
+            }
 
-            if step.distance >= longStretchThreshold {
+            let cueDistance = accumulatedDistance
+            let symbolName = directionSymbolName(for: instruction)
+
+            if previousStepDistance >= longStretchThreshold {
                 cues.append(
                     NavigationCue(
-                        triggerDistance: accumulatedDistance,
+                        triggerDistance: cueDistance,
                         instruction: instruction,
-                        announcementLeadDistance: step.distance / 2
+                        announcementLeadDistance: previousStepDistance / 2,
+                        symbolName: symbolName
                     )
                 )
                 cues.append(
                     NavigationCue(
-                        triggerDistance: accumulatedDistance,
+                        triggerDistance: cueDistance,
                         instruction: instruction,
-                        announcementLeadDistance: nearTurnLeadDistance
+                        announcementLeadDistance: nearTurnLeadDistance,
+                        symbolName: symbolName
                     )
                 )
+                accumulatedDistance += step.distance
+                previousStepDistance = step.distance
                 continue
             }
 
             let leadDistance: CLLocationDistance
-            switch step.distance {
+            switch previousStepDistance {
             case 120...:
                 leadDistance = 120
             default:
-                leadDistance = 45
+                leadDistance = cueDistance <= distanceOffset ? 0 : 45
             }
             cues.append(
                 NavigationCue(
-                    triggerDistance: accumulatedDistance,
+                    triggerDistance: cueDistance,
                     instruction: instruction,
-                    announcementLeadDistance: leadDistance
+                    announcementLeadDistance: leadDistance,
+                    symbolName: symbolName
                 )
             )
+            accumulatedDistance += step.distance
+            previousStepDistance = step.distance
         }
         
         return cues
@@ -3844,9 +3910,38 @@ extension ViewController {
         return (0..<polyline.pointCount).map { points[$0].coordinate }
     }
 
+    private func directionSymbolName(for instruction: String) -> String {
+        let lowered = instruction.lowercased()
+        if lowered.contains("turn around") || lowered.contains("u-turn") {
+            return "arrow.uturn.backward"
+        }
+        if lowered.contains("slight left") {
+            return "arrow.up.left"
+        }
+        if lowered.contains("slight right") {
+            return "arrow.up.right"
+        }
+        if lowered.contains("sharp left") {
+            return "arrowshape.turn.up.left"
+        }
+        if lowered.contains("sharp right") {
+            return "arrowshape.turn.up.right"
+        }
+        if lowered.contains("left") {
+            return "arrowshape.turn.up.left"
+        }
+        if lowered.contains("right") {
+            return "arrowshape.turn.up.right"
+        }
+        if lowered.contains("straight") || lowered.contains("continue") || lowered.contains("head") {
+            return "arrow.up"
+        }
+        return "location.fill"
+    }
+
     private func updateRouteInfoLabel(distance: CLLocationDistance, time: TimeInterval) {
         let miles = distance / 1609.34
-        let minutes = paceOrder.isEmpty ? (time / 60.0) : estimatedRouteMinutes(totalDistance: distance)
+        let minutes = estimatedRouteMinutes(totalDistance: distance)
         routeInfoLabel.text = String(format: "%.2f miles • ~%.0f min", miles, minutes)
     }
     
@@ -3936,6 +4031,11 @@ extension ViewController {
         let remainingDistance = max(0, navigationCues[displayNavigationCueIndex].triggerDistance - traveledDistance)
         return Int((remainingDistance * 3.28084).rounded())
     }
+
+    private func nextNavigationInstructionSymbolName() -> String {
+        guard displayNavigationCueIndex < navigationCues.count else { return "" }
+        return navigationCues[displayNavigationCueIndex].symbolName
+    }
     
     private func currentPaceTypeForRouteState() -> PaceType {
         if let livePace = paceType(at: traveledDistance) {
@@ -3951,6 +4051,7 @@ extension ViewController {
             remainingMinutes: Int(estimatedRouteMinutes(totalDistance: totalRouteDistance, traveledDistance: traveledDistance).rounded()),
             nextInstruction: nextNavigationInstructionText(),
             nextInstructionDistanceFeet: nextNavigationInstructionDistanceFeet(),
+            nextInstructionSymbolName: nextNavigationInstructionSymbolName(),
             currentPaceType: currentPaceTypeForRouteState().rawValue
         )
     }
@@ -4006,6 +4107,7 @@ extension ViewController {
                 remainingMinutes: 18,
                 nextInstruction: "Head north to verify the Dynamic Island preview.",
                 nextInstructionDistanceFeet: 500,
+                nextInstructionSymbolName: "arrow.up",
                 currentPaceType: PaceType.walk.rawValue
             ),
             staleDate: Date().addingTimeInterval(liveActivityStaleInterval),
@@ -4365,12 +4467,19 @@ extension ViewController {
     
     private func speakNextNavigationCueIfNeeded() {
         guard nextNavigationCueIndex < navigationCues.count else { return }
-        let cue = navigationCues[nextNavigationCueIndex]
-        guard traveledDistance + cue.announcementLeadDistance >= cue.triggerDistance else { return }
+        var cueToSpeak: NavigationCue?
+
+        while nextNavigationCueIndex < navigationCues.count {
+            let cue = navigationCues[nextNavigationCueIndex]
+            guard traveledDistance + cue.announcementLeadDistance >= cue.triggerDistance else { break }
+            cueToSpeak = cue
+            nextNavigationCueIndex += 1
+        }
+        
+        guard let cue = cueToSpeak else { return }
         
         let remainingDistance = max(0, cue.triggerDistance - traveledDistance)
         speakTurnInstruction(cue.instruction, remainingDistance: remainingDistance)
-        nextNavigationCueIndex += 1
         scheduleLiveActivityUpdateIfNeeded(force: true)
     }
 
@@ -4933,7 +5042,7 @@ extension ViewController {
         updateLocationManagerForRouteTracking()
         if isFollowingUser {
             button.setImage(UIImage(systemName: "location.fill"), for: .normal)
-            button.tintColor = .compColor
+            button.tintColor = .activeCenterButtonTint
             followCameraDistance = max(300, mapView.camera.centerCoordinateDistance)
             if let userLocation {
                 let location = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
@@ -4951,6 +5060,37 @@ extension ViewController {
             button.transform = CGAffineTransform(rotationAngle: rotation)
         } completion: { _ in
             button.transform = .identity
+        }
+    }
+
+    private func animatePaceHare(_ button: UIButton) {
+        guard let imageView = button.imageView else { return }
+
+        imageView.layer.removeAllAnimations()
+        imageView.transform = .identity
+
+        UIView.animateKeyframes(
+            withDuration: 0.42,
+            delay: 0,
+            options: [.calculationModeCubic, .allowUserInteraction]
+        ) {
+            UIView.addKeyframe(withRelativeStartTime: 0.00, relativeDuration: 0.22) {
+                imageView.transform = CGAffineTransform(translationX: 5, y: -2)
+                    .scaledBy(x: 1.16, y: 0.88)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.22, relativeDuration: 0.24) {
+                imageView.transform = CGAffineTransform(translationX: -2, y: 2)
+                    .scaledBy(x: 0.92, y: 1.08)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.46, relativeDuration: 0.24) {
+                imageView.transform = CGAffineTransform(translationX: 6, y: -1)
+                    .scaledBy(x: 1.10, y: 0.94)
+            }
+            UIView.addKeyframe(withRelativeStartTime: 0.70, relativeDuration: 0.30) {
+                imageView.transform = .identity
+            }
+        } completion: { _ in
+            imageView.transform = .identity
         }
     }
 
@@ -5551,7 +5691,7 @@ extension ViewController {
     private func loadThemePreference() {
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "selectedThemeIndex") == nil {
-            UIColor.activeThemeIndex = AppTheme.urbanFog.index
+            UIColor.activeThemeIndex = AppTheme.sunriseRoute.index
         } else {
             UIColor.activeThemeIndex = defaults.integer(forKey: "selectedThemeIndex")
         }
