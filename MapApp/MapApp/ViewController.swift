@@ -6645,4 +6645,6 @@ More stuff I'd like to do: :
  Way in the future additions:
  
  add apple watch compatability
+ 
+ look for api's to make "fake email"
  */
