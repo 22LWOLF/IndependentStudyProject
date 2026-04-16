@@ -6633,11 +6633,13 @@ More stuff I'd like to do: :
     fix out and back route type random and just in general. 4/7/2026 NEED TO TEST TO MAKE SURE
  
  
- reflection, including user feedback
+ reflection, including user feedback   4/14/2026 started
  
  Come up with list of tasks for users to try  record feedback. 4/14/2026 done
  
  poster
+ 
+ whenever I get to done testing with people do a github repo pus hweht beta version.
  
  
  Way in the future additions:
