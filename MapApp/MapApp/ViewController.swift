@@ -3565,7 +3565,7 @@ extension ViewController {
     private func generateWaypoints(for config: RouteConfig, center: CLLocationCoordinate2D, targetMiles: Double) -> [CLLocationCoordinate2D] {
         switch config.type {
         case .oneWay, .outAndBack:
-            let radius = calculateRadius(targetMiles: targetMiles, windingFactor: 2.5)
+            let radius = initialEndpointRadius(targetMiles: targetMiles, routeType: config.type)
             let endpoint = generateRandomCoordinate(around: center, radius: radius, direction: config.direction ?? "random")
             return [center, endpoint]
         case .loop:
@@ -3576,6 +3576,12 @@ extension ViewController {
     }
 
     private func calculateRadius(targetMiles: Double, windingFactor: Double) -> Double { (targetMiles * 1609.34) / (2 * .pi * windingFactor) }
+
+    private func initialEndpointRadius(targetMiles: Double, routeType: RouteConfig.RouteType) -> CLLocationDistance {
+        let targetMeters = targetMiles * 1609.34
+        let legTargetMeters = routeType == .outAndBack ? targetMeters / 2.0 : targetMeters
+        return max(150, legTargetMeters * 0.7)
+    }
 }
 
 // MARK: - Core Route Request
@@ -3601,11 +3607,12 @@ extension ViewController {
             if let error = error { self.showErrorAlert(message: "Route failed: \(error.localizedDescription)"); self.isGeneratingRoute = false; return }
             guard let routes = response?.routes, !routes.isEmpty else { self.isGeneratingRoute = false; return }
             let selectedRoute = config.isScenic ? self.pickScenicRoute(from: routes) : routes[0]
-            if retryCount < 4 {
+            if retryCount < 6 {
                 let ratio: Double?
                 if self.useTimeInput, let targetSeconds = self.getUserInputMinutes().map({ $0 * 60.0 }), targetSeconds > 0 {
-                    let actualTime = isOutAndBack ? selectedRoute.expectedTravelTime * 2 : selectedRoute.expectedTravelTime
-                    ratio = actualTime / targetSeconds
+                    let actualDistance = isOutAndBack ? selectedRoute.distance * 2 : selectedRoute.distance
+                    let actualSeconds = self.estimatedRouteMinutes(totalDistance: actualDistance) * 60.0
+                    ratio = actualSeconds / targetSeconds
                 } else if let targetMiles = targetMiles {
                     let actualDistance = isOutAndBack ? selectedRoute.distance * 2 : selectedRoute.distance
                     let targetMeters = targetMiles * 1609.34
@@ -3614,7 +3621,8 @@ extension ViewController {
                     ratio = nil
                 }
 
-                if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > 0.25 {
+                let tolerance = self.useTimeInput ? 0.12 : 0.20
+                if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > tolerance {
                     let currentDistance = CLLocation(latitude: start.latitude, longitude: start.longitude).distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
                     let adjustedRadius = currentDistance / ratio
                     let newEndpoint = self.generateRandomCoordinate(around: start, radius: adjustedRadius, direction: config.direction ?? "random")
@@ -3685,10 +3693,11 @@ extension ViewController {
                 }
                 
                 //CHECK IF WE NEED TO RETRY
-                if retryCount < 3 {
+                if retryCount < 6 {
                     let ratio: Double?
                     if self.useTimeInput, let targetSeconds = self.getUserInputMinutes().map({ $0 * 60.0 }), targetSeconds > 0 {
-                        ratio = totalTime / targetSeconds
+                        let actualSeconds = self.estimatedRouteMinutes(totalDistance: totalDistance) * 60.0
+                        ratio = actualSeconds / targetSeconds
                     } else if let targetMiles = targetMiles {
                         let actualMiles = totalDistance / 1609.34
                         ratio = actualMiles / targetMiles
@@ -3696,7 +3705,8 @@ extension ViewController {
                         ratio = nil
                     }
                     
-                    if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > 0.25 {  // More than 25% off
+                    let tolerance = self.useTimeInput ? 0.12 : 0.20
+                    if let ratio, ratio.isFinite, ratio > 0, abs(ratio - 1.0) > tolerance {
                         print("Loop retry \(retryCount + 1): ratio \(String(format: "%.2f", ratio))")
                         
                         // Clear current overlays
@@ -4061,7 +4071,7 @@ extension ViewController {
     
     private func liveActivityContentState() -> MapAppRouteActivityAttributes.ContentState {
         MapAppRouteActivityAttributes.ContentState(
-            routeName: currentRouteDisplayName,
+            routeName: currentRouteNameForWidget(),
             remainingMiles: max(0, totalRouteDistance - traveledDistance) / 1609.34,
             remainingMinutes: Int(estimatedRouteMinutes(totalDistance: totalRouteDistance, traveledDistance: traveledDistance).rounded()),
             nextInstruction: nextNavigationInstructionText(),
@@ -4191,6 +4201,12 @@ extension ViewController {
         guard usesRouteModeDisplayName else { return }
         currentRouteDisplayName = defaultRouteDisplayName()
         routeNameLabel?.text = currentRouteDisplayName
+    }
+
+    private func currentRouteNameForWidget() -> String {
+        guard !usesRouteModeDisplayName else { return "Current Route" }
+        let trimmedName = currentRouteDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "Current Route" : trimmedName
     }
     
     private func setSaveRoutePillVisible(_ isVisible: Bool) {
@@ -5160,15 +5176,33 @@ extension ViewController {
     private func getUserInputMiles() -> Double? {
         guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text) else { return nil }
         if useTimeInput {
-            let walkingSpeedMPH: Double
-            if walkSampleCount >= 10 {
-                walkingSpeedMPH = avgWalkingSpeed * 2.23694 //converting m/s to mph
-            } else {
-                walkingSpeedMPH = 3.5
-            }
-            return (value/60.0) * walkingSpeedMPH
+            return targetDistanceMeters(forTargetMinutes: value) / 1609.34
         }
         return value
+    }
+
+    private func targetDistanceMeters(forTargetMinutes minutes: Double) -> CLLocationDistance {
+        let targetSeconds = minutes * 60.0
+        let activePaces = paceOrder.filter { $0.percentage >= 0.01 }
+        guard !activePaces.isEmpty else {
+            return targetSeconds * learnedSpeed(for: .walk)
+        }
+
+        let totalPercentage = activePaces.reduce(0.0) { $0 + $1.percentage }
+        guard totalPercentage > 0 else {
+            return targetSeconds * learnedSpeed(for: .walk)
+        }
+
+        let secondsPerMeter = activePaces.reduce(0.0) { partial, pace in
+            let normalizedPercentage = pace.percentage / totalPercentage
+            return partial + (normalizedPercentage / learnedSpeed(for: pace.paceType))
+        }
+
+        guard secondsPerMeter > 0 else {
+            return targetSeconds * learnedSpeed(for: .walk)
+        }
+
+        return targetSeconds / secondsPerMeter
     }
     
     
@@ -5304,9 +5338,8 @@ extension ViewController {
         
         let alert = UIAlertController(title: "Save Route", message: "Give this route a name.", preferredStyle: .alert)
         alert.addTextField { textField in
-            let currentName = self.currentRouteDisplayName
             textField.placeholder = "Route name"
-            textField.text = currentName == "Current Route" || currentName == "Welcome Back" ? "" : currentName
+            textField.text = self.usesRouteModeDisplayName ? "" : self.currentRouteNameForWidget()
             textField.autocapitalizationType = .words
         }
         
@@ -6639,7 +6672,7 @@ More stuff I'd like to do: :
  
  poster
  
- whenever I get to done testing with people do a github repo pus hweht beta version.
+ whenever I get to done testing with people do a github repo push with beta version.
  
  
  Way in the future additions:
