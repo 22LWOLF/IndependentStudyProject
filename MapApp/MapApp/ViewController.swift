@@ -379,7 +379,7 @@ extension UIColor {
     static var panelNeutralButtonBackground: UIColor { sidePanelBackground.blended(withFraction: 0.18, of: darkColor) }
     static var panelNeutralButtonForeground: UIColor { activeTheme.palette.floatingButtonForeground }
     static var activeCenterButtonTint: UIColor {
-        activeTheme == .sunriseRoute ? UIColor(hex: "#071426") : compColor
+        activeTheme == .sunriseRoute ? UIColor(hex: "#071426") : floatingButtonForeground
     }
     static var semanticGenerateColor: UIColor { UIColor(hex: "#8AAF5C").blended(withFraction: 0.22, of: appPrimary) }
     static var semanticClearColor: UIColor { UIColor(hex: "#D46A74").blended(withFraction: 0.22, of: compColor) }
@@ -2569,6 +2569,24 @@ extension ViewController {
             configuration.background.cornerRadius = diameter / 2
             configuration.background.strokeColor = UIColor.floatingButtonForeground.withAlphaComponent(0.35)
             configuration.background.strokeWidth = 1.5
+            button.configuration = configuration
+        }
+
+        if button === recenterButton {
+            applyRecenterButtonStyle(to: button)
+        }
+    }
+
+    private func applyRecenterButtonStyle(to button: UIButton) {
+        let backgroundColor: UIColor = isFollowingUser ? .compColor : .floatingButtonBackground
+        let foregroundColor: UIColor = isFollowingUser ? .activeCenterButtonTint : .floatingButtonForeground
+        button.backgroundColor = backgroundColor
+        button.tintColor = foregroundColor
+
+        if var configuration = button.configuration {
+            configuration.baseBackgroundColor = backgroundColor
+            configuration.baseForegroundColor = foregroundColor
+            configuration.background.strokeColor = foregroundColor.withAlphaComponent(isFollowingUser ? 0.55 : 0.35)
             button.configuration = configuration
         }
     }
@@ -5073,7 +5091,6 @@ extension ViewController {
         updateLocationManagerForRouteTracking()
         if isFollowingUser {
             button.setImage(UIImage(systemName: "location.fill"), for: .normal)
-            button.tintColor = .activeCenterButtonTint
             followCameraDistance = max(300, mapView.camera.centerCoordinateDistance)
             if let userLocation {
                 let location = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
@@ -5081,8 +5098,8 @@ extension ViewController {
             }
         } else {
             button.setImage(UIImage(systemName: "location"), for: .normal)
-            button.tintColor = .floatingButtonForeground
         }
+        applyRecenterButtonStyle(to: button)
     }
 
     private func animateSettingsCog(_ button: UIButton, clockwise: Bool = true) {
