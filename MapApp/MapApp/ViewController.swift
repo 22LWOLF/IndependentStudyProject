@@ -1849,6 +1849,7 @@ class ViewController: UIViewController {
     private var distanceOrTimeLabel: UILabel?
     private var speedLabel: UILabel = UILabel()
     private var selectedDirectionButton: UIButton?
+    private var randomDirectionButton: UIButton?
     private var randomGenerationToggle: UISwitch?
     private var randomGenerationSectionViews: [UIView] = []
     private var randomDirectionButtons: [UIButton] = []
@@ -2434,6 +2435,9 @@ extension ViewController {
         routeHistorySheet.layer.borderColor = UIColor.clear.cgColor
 
         routeNameLabel?.textColor = .primaryTextColor
+        routeNameLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        routeNameLabel?.adjustsFontSizeToFitWidth = true
+        routeNameLabel?.minimumScaleFactor = 0.82
         routeInfoLabel.textColor = .primaryTextColor
 
         routeTypeSelector.backgroundColor = .selectorSurface
@@ -2578,7 +2582,7 @@ extension ViewController {
     }
 
     private func applyRecenterButtonStyle(to button: UIButton) {
-        let backgroundColor: UIColor = isFollowingUser ? .compColor : .floatingButtonBackground
+        let backgroundColor: UIColor = isFollowingUser ? activeRecenterButtonBackgroundColor() : .floatingButtonBackground
         let foregroundColor: UIColor = isFollowingUser ? .activeCenterButtonTint : .floatingButtonForeground
         button.backgroundColor = backgroundColor
         button.tintColor = foregroundColor
@@ -2589,6 +2593,10 @@ extension ViewController {
             configuration.background.strokeColor = foregroundColor.withAlphaComponent(isFollowingUser ? 0.55 : 0.35)
             button.configuration = configuration
         }
+    }
+
+    private func activeRecenterButtonBackgroundColor() -> UIColor {
+        UIColor.activeTheme == .sunriseRoute ? .appPrimary : .compColor
     }
 
     private func applyThemeColors(to button: UIButton, backgroundColor: UIColor) {
@@ -3133,7 +3141,7 @@ extension ViewController {
         container.addSubview(label)
         randomGenerationSectionViews.append(label)
         currentY += 25
-        let directions = [["NW", "N", "NE"], ["W", ".", "E"], ["SW", "S", "SE"]]
+        let directions = [["NW", "N", "NE"], ["W", "random", "E"], ["SW", "S", "SE"]]
         let buttonSize: CGFloat = 44
         let gap: CGFloat = 4
         let gridWidth = (buttonSize * 3) + (gap * 2)
@@ -3143,17 +3151,18 @@ extension ViewController {
                 let title = directions[row][col]
                 let button = UIButton(type: .system)
                 button.frame = CGRect(x: startX + CGFloat(col) * (buttonSize + gap), y: currentY + CGFloat(row) * (buttonSize + gap), width: buttonSize, height: buttonSize)
-                button.setTitle(title, for: .normal)
-                button.setTitleColor(.panelBodyTextColor, for: .normal)
-                button.backgroundColor = .panelNeutralButtonBackground
-                button.layer.cornerRadius = 8
-                if title == "." {
-                    button.setTitleColor(.clear, for: .normal)
-                    button.isEnabled = false
+                button.accessibilityIdentifier = title
+                if title == "random" {
+                    button.setImage(UIImage(systemName: "die.face.5.fill"), for: .normal)
+                    button.accessibilityLabel = "Random Direction"
+                    randomDirectionButton = button
                 } else {
-                    button.addTarget(self, action: #selector(directionButtonTapped(_:)), for: .touchUpInside)
-                    randomDirectionButtons.append(button)
+                    button.setTitle(title, for: .normal)
                 }
+                styleDirectionButton(button, selected: title == selectedDirection)
+                button.layer.cornerRadius = 8
+                button.addTarget(self, action: #selector(directionButtonTapped(_:)), for: .touchUpInside)
+                randomDirectionButtons.append(button)
                 container.addSubview(button)
                 randomGenerationSectionViews.append(button)
             }
@@ -3189,11 +3198,21 @@ extension ViewController {
 
         for button in randomDirectionButtons {
             button.isEnabled = isRandomGenerationEnabled
-            if !isRandomGenerationEnabled {
-                button.backgroundColor = .panelNeutralButtonBackground
-                button.setTitleColor(.panelBodyTextColor, for: .normal)
-            }
+            let buttonDirection = directionValue(for: button)
+            let shouldSelect = isRandomGenerationEnabled && buttonDirection == selectedDirection
+            styleDirectionButton(button, selected: shouldSelect)
         }
+    }
+
+    private func directionValue(for button: UIButton) -> String {
+        button.accessibilityIdentifier ?? button.title(for: .normal) ?? "random"
+    }
+
+    private func styleDirectionButton(_ button: UIButton, selected: Bool) {
+        let foregroundColor: UIColor = selected ? .floatingButtonForeground : .panelBodyTextColor
+        button.backgroundColor = selected ? .appPrimary : .panelNeutralButtonBackground
+        button.setTitleColor(foregroundColor, for: .normal)
+        button.tintColor = foregroundColor
     }
 
     private func addLoopPointControls(to container: UIView, y: CGFloat, width: CGFloat, padding: CGFloat) -> CGFloat {
@@ -3511,6 +3530,14 @@ extension ViewController {
         animateActionButtonTap(sender, scale: 0.92, overshoot: 1.04)
         let config = buildRouteConfig()
         setRouteDisplayName(nil)
+        if isRandomGenerationEnabled && config.targetDistance == nil {
+            let inputType = useTimeInput ? "time" : "distance"
+            showInfoAlert(
+                title: "Random Route Needs a \(inputType.capitalized)",
+                message: "Random mode is on, but no \(inputType) was entered. Go back to Route Settings and enter a \(inputType) before generating."
+            )
+            return
+        }
         if let targetMiles = config.targetDistance {
             generateRandomRoute(config: config, targetMiles: targetMiles)
         } else {
@@ -5186,12 +5213,13 @@ extension ViewController {
         guard useTimeInput,
               let text = distanceTextField?.text,
               !text.isEmpty,
-              let value = Double(text) else { return nil }
+              let value = Double(text),
+              value > 0 else { return nil }
         return value
     }
 
     private func getUserInputMiles() -> Double? {
-        guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text) else { return nil }
+        guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text), value > 0 else { return nil }
         if useTimeInput {
             return targetDistanceMeters(forTargetMinutes: value) / 1609.34
         }
@@ -5255,14 +5283,17 @@ extension ViewController {
     }
 
     @objc private func directionButtonTapped(_ sender: UIButton) {
-        guard let direction = sender.title(for: .normal) else { return }
-        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
-        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
-        if selectedDirectionButton == sender { selectedDirectionButton = nil; selectedDirection = "random"; return }
-        sender.backgroundColor = .appPrimary
-        sender.setTitleColor(.floatingButtonForeground, for: .normal)
-        selectedDirectionButton = sender
+        let direction = directionValue(for: sender)
+        if selectedDirectionButton == sender && direction != "random" {
+            selectedDirectionButton = randomDirectionButton
+            selectedDirection = "random"
+            updateRandomGenerationControlsState()
+            return
+        }
+
         selectedDirection = direction
+        selectedDirectionButton = sender
+        updateRandomGenerationControlsState()
     }
 
     @objc private func loopPointStepperChanged(_ sender: UIStepper) { selectedLoopPoints = Int(sender.value); loopPointLabel?.text = "Loop Points: \(selectedLoopPoints)" }
@@ -5271,14 +5302,14 @@ extension ViewController {
         isRandomGenerationEnabled = sender.isOn
 
         guard !sender.isOn else {
+            selectedDirectionButton = randomDirectionButton
+            selectedDirection = "random"
             refreshRouteDisplayNameIfNeeded()
             updateRandomGenerationControlsState()
             return
         }
 
         distanceTextField?.text = ""
-        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
-        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
         selectedDirectionButton = nil
         selectedDirection = "random"
         useTimeInput = false
@@ -5292,9 +5323,7 @@ extension ViewController {
 
     @objc private func clearRandomSettings() {
         distanceTextField?.text = ""
-        selectedDirectionButton?.backgroundColor = .panelNeutralButtonBackground
-        selectedDirectionButton?.setTitleColor(.panelBodyTextColor, for: .normal)
-        selectedDirectionButton = nil
+        selectedDirectionButton = randomDirectionButton
         selectedDirection = "random"
         useTimeInput = false
         distanceOrTimeLabel?.text = "Distance (miles)"
