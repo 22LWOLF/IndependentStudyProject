@@ -1161,13 +1161,13 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func contactSupportTapped() {
-        let email = "mailto:stepout.support@example.com?subject=StepOut%20Issue"
+        let email = "mailto:stepout.app.dev@gmail.com?subject=StepOut%20Issue"
         if let url = URL(string: email), UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         } else {
             let alert = UIAlertController(
                 title: "Contact Support",
-                message: "Email stepout.support@example.com with a description of the issue.",
+                message: "Email stepout.app.dev@gmail.com with a description of the issue.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
