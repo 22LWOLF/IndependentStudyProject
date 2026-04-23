@@ -1161,8 +1161,46 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func contactSupportTapped() {
-        let email = "mailto:stepout.app.dev@gmail.com?subject=StepOut%20Issue"
-        if let url = URL(string: email), UIApplication.shared.canOpenURL(url) {
+        let subject = "StepOut Feedback"
+        let body = """
+        Hey, I tried StepOut and here’s my feedback:
+
+        -----------------------------
+        What I tried:
+        (e.g. 20 min loop, 2 mile route, etc.)
+
+        What worked well:
+        -
+
+        What was confusing or frustrating:
+        -
+
+        Did the route feel accurate for the time/distance?
+        (Yes / No + details)
+
+        Any bugs or issues:
+        -
+
+        -----------------------------
+        Device Info:
+        iPhone Model:
+        iOS Version:
+        App Version:
+
+        -----------------------------
+        Additional comments:
+        -
+        """
+
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "stepout.app.dev@gmail.com"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: body)
+        ]
+
+        if let url = components.url, UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         } else {
             let alert = UIAlertController(
@@ -6202,7 +6240,7 @@ extension ViewController: UITableViewDelegate {
         loadRouteOnMap(selectedRoute)
     }
     
-    func tableView(_ tableView: UITableView, trailingSwipeActionConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         // dont allow for deletion of place holder
         
         guard !filteredRoutes.isEmpty else {return nil}
