@@ -22,10 +22,6 @@ struct AppPalette {
     let sidePanelBackground: UIColor
 }
 
-private enum ThemeAppearance {
-    static var usesDarkVariant = false
-}
-
 enum AppTheme: String, CaseIterable {
     // MARK: Wildflower Trail
     case wildflowerTrail
@@ -141,76 +137,8 @@ enum AppTheme: String, CaseIterable {
         }
     }
 
-    private var darkPalette: AppPalette {
-        switch self {
-        case .wildflowerTrail:
-            return AppPalette(
-                primary: UIColor(hex: "#92A573"),
-                secondary: UIColor(hex: "#B7849E"),
-                background: UIColor(hex: "#171116"),
-                floatingButtonBackground: UIColor(hex: "#231B20"),
-                floatingButtonForeground: UIColor(hex: "#F8F3F5"),
-                sidePanelBackground: UIColor(hex: "#221920")
-            )
-        case .coastalMorning:
-            return AppPalette(
-                primary: UIColor(hex: "#84A8CC"),
-                secondary: UIColor(hex: "#F0B79A"),
-                background: UIColor(hex: "#0F1821"),
-                floatingButtonBackground: UIColor(hex: "#18222E"),
-                floatingButtonForeground: UIColor(hex: "#F5FAFF"),
-                sidePanelBackground: UIColor(hex: "#17212C")
-            )
-        case .canyonPath:
-            return AppPalette(
-                primary: UIColor(hex: "#DB8F73"),
-                secondary: UIColor(hex: "#9DB694"),
-                background: UIColor(hex: "#181210"),
-                floatingButtonBackground: UIColor(hex: "#261D19"),
-                floatingButtonForeground: UIColor(hex: "#FFF5EF"),
-                sidePanelBackground: UIColor(hex: "#211915")
-            )
-        case .earlyFrost:
-            return AppPalette(
-                primary: UIColor(hex: "#9DCDC0"),
-                secondary: UIColor(hex: "#B7AAD0"),
-                background: UIColor(hex: "#121B1A"),
-                floatingButtonBackground: UIColor(hex: "#1A2624"),
-                floatingButtonForeground: UIColor(hex: "#F1F8F6"),
-                sidePanelBackground: UIColor(hex: "#182321")
-            )
-        case .urbanFog:
-            return AppPalette(
-                primary: UIColor(hex: "#99A3AA"),
-                secondary: UIColor(hex: "#E0C17B"),
-                background: UIColor(hex: "#121416"),
-                floatingButtonBackground: UIColor(hex: "#1B1E21"),
-                floatingButtonForeground: UIColor(hex: "#F7F8F9"),
-                sidePanelBackground: UIColor(hex: "#1B1E20")
-            )
-        case .eveningStroll:
-            return AppPalette(
-                primary: UIColor(hex: "#D9A0A0"),
-                secondary: UIColor(hex: "#E0B47A"),
-                background: UIColor(hex: "#180F13"),
-                floatingButtonBackground: UIColor(hex: "#26161A"),
-                floatingButtonForeground: UIColor(hex: "#FFF2F2"),
-                sidePanelBackground: UIColor(hex: "#221419")
-            )
-        case .sunriseRoute:
-            return AppPalette(
-                primary: UIColor(hex: "#87C8EA"),
-                secondary: UIColor(hex: "#FFD15A"),
-                background: UIColor(hex: "#04101E"),
-                floatingButtonBackground: UIColor(hex: "#102B45"),
-                floatingButtonForeground: UIColor(hex: "#F8D76A"),
-                sidePanelBackground: UIColor(hex: "#0C2237")
-            )
-        }
-    }
-
     var palette: AppPalette {
-        ThemeAppearance.usesDarkVariant ? darkPalette : lightPalette
+        lightPalette
     }
 }
 
@@ -220,11 +148,6 @@ extension UIColor {
         get { activeTheme.index }
         set { activeTheme = AppTheme(index: newValue) }
     }
-    static var usesDarkThemeVariant: Bool {
-        get { ThemeAppearance.usesDarkVariant }
-        set { ThemeAppearance.usesDarkVariant = newValue }
-    }
-
     static var appPrimary: UIColor { activeTheme.palette.primary }
     static var compColor: UIColor { activeTheme.palette.secondary }
     static var darkColor: UIColor { activeTheme.palette.background }
@@ -2068,13 +1991,6 @@ class ViewController: UIViewController {
         playRouteSplashIfNeeded()
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-
-        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
-        applyTheme()
-    }
-
 }
 
 // MARK: - Setup Methods
@@ -2462,8 +2378,6 @@ extension ViewController {
             UIColor.activeThemeIndex = themeIndex
         }
 
-        UIColor.usesDarkThemeVariant = traitCollection.userInterfaceStyle == .dark
-
         view.backgroundColor = .darkColor
         headerBox.backgroundColor = .headerBG
         bottomTabContainer.backgroundColor = .bottomBG
@@ -2637,9 +2551,8 @@ extension ViewController {
         UIColor.activeTheme == .sunriseRoute ? .appPrimary : .compColor
     }
 
-    private func applyThemeColors(to button: UIButton, backgroundColor: UIColor) {
-        let foregroundColor = UIColor.floatingButtonForeground
-
+    private func applyThemeColors(to button: UIButton, backgroundColor: UIColor, foregroundColor: UIColor = .floatingButtonForeground) {
+        // Centralized point where themed button background/text colors are applied.
         if var configuration = button.configuration {
             configuration.baseBackgroundColor = backgroundColor
             configuration.baseForegroundColor = foregroundColor
@@ -5388,33 +5301,39 @@ extension ViewController {
         presentSaveRouteDialog()
     }
     private func displayGoToResult(_ mapItem: MKMapItem, preferredRegion: MKCoordinateRegion?) {
-        let coordinate = mapItem.placemark.coordinate
+        let destinationCoordinate = mapItem.placemark.coordinate
+        let startCoordinate = userLocation ?? locationManager.location?.coordinate ?? determineStartLocation()
         let name = mapItem.name ?? "Unknown Location"
         let address = mapItem.placemark.title ?? ""
 
         print("Found: \(name) at \(address)")
 
+        // Go To should immediately create route waypoints using the app's custom pin type.
+        selectedCoordinates = [startCoordinate, destinationCoordinate]
+        mapView.removeOverlays(mapView.overlays)
+
         let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
         mapView.removeAnnotations(existingAnnotations)
-
-        let annotation = MKPointAnnotation()
-        annotation.coordinate = coordinate
-        annotation.title = name
-        annotation.subtitle = address
-        mapView.addAnnotation(annotation)
+        addAnnotation(at: startCoordinate, title: "Start", index: 0)
+        addAnnotation(at: destinationCoordinate, title: name, index: 1)
 
         let suggestedDistance: CLLocationDistance
         if let preferredRegion {
             let latMeters = preferredRegion.span.latitudeDelta * 111_000
-            let lonMeters = preferredRegion.span.longitudeDelta * 111_000 * cos(coordinate.latitude * .pi / 180)
+            let lonMeters = preferredRegion.span.longitudeDelta * 111_000 * cos(destinationCoordinate.latitude * .pi / 180)
             suggestedDistance = max(600, min(max(latMeters, lonMeters) * 1.2, 12_000))
         } else {
             suggestedDistance = 1_800
         }
 
-        safelyCenterMap(on: coordinate, distance: suggestedDistance)
+        safelyCenterMap(on: destinationCoordinate, distance: suggestedDistance)
 
-        mapView.selectAnnotation(annotation, animated: true)
+        if let destinationAnnotation = mapView.annotations
+            .compactMap({ $0 as? RouteAnnotation })
+            .first(where: { $0.index == 1 }) {
+            destinationAnnotation.subtitle = address.isEmpty ? "Press and drag to adjust this route pin" : address
+            mapView.selectAnnotation(destinationAnnotation, animated: true)
+        }
     }
 
     private func presentSaveRouteDialog() {
@@ -6707,61 +6626,20 @@ extension ViewController: UIGestureRecognizerDelegate {
     
 }
 /*
+Beta 1.0.1 issues to fix:
+ dark mode text color (FIXED) Removed dark mode for now
+ 
+ Improve Go To action
+ 
+ Fix and or alter follow mode, remove feature that makes when that is turned on you automatically use the users location.
 
- 
-    This week:
-        Figure out test cases
-    
-        Pacing pattern implemenation
- 
-        Think about ada compliance.
- 
- 
-ISSUE: 3/31/2026
- Walked route breaks color stuff. See if only drawing over user has walked is possible on top layer onstead of redrawing evertime a new segment is done. DONE
- Breaks means that the pacing colors get overidden by the walked on route colors where it is blue where not walked and green at the moment for walked. Probably change it to an opaic grey/black. DONE
- 
- 
-More stuff I'd like to do: :
-    I added color themes for later use, but I would also like to make darkmode versions for all of the themes I got. 4/2/2026 done (partial)
- 
-    whenver clear is hit also clear out the route info label up top. 4/2/2026 Done
- 
-    Make it to when the app is completely closed out it stops widget use.
-        MAYBE FIXED HAVE TO TEST 4/6/2026 last attempt didn't work trying new fix. 4/7/2026 Working way better now so DONE
-    
-    Make go to into more of a google search thing not lat and long for locations. 4/6/2026 DONE
- 
-    Make it to where settings actually does settings things:       4/7/2026 Mostly done just need to set up email and test.
-        1. allow user to pick color theme
-        2. allow user to turn off and on talking and vibrations
-        3. allow user to reset there average speeds for each pace (allow to reset individually) and this would also be the place that they can see there average speeds for each pace.
-        4. F.A.Q. thing or maybe a way to contact me if issue occurs (maybe)
-    
-    Make a tutorial that happens on first launch of the app that goes around and does the "Spotlight" walkthrough i'll call it where it only lets you click certain things while having what needs to be clicked brightly with a text box that shows up expalining what stuff does. 4/14/2026 done
-    
-    when the user is on a route have it to where if center on user button on whatever direction the user is walking is north (that way left and rights don't get confusing)
-            4/6/2026 DONE
-    
-    Add animaitons to just about everthing to make it feel more professional. 4/14/2026 done
- 
-    add a loading screen on launch. 4/6/2026 Paritally implemented needs refinement. 4/14/2026 Final version done.
- 
-    fix out and back route type random and just in general. 4/7/2026 NEED TO TEST TO MAKE SURE
- 
- 
- reflection, including user feedback   4/14/2026 started
- 
- Come up with list of tasks for users to try  record feedback. 4/14/2026 done
- 
- poster
- 
- whenever I get to done testing with people do a github repo push with beta version.
- 
  
  Way in the future additions:
  
  add apple watch compatability
  
- look for api's to make "fake email"
+ add in working darkmode for color palletes
+ 
+ gamify and implement way to redeem "points" or whatever for real life rewards.
+
  */
