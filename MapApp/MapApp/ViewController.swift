@@ -1838,7 +1838,14 @@ class ViewController: UIViewController {
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var isPanelOpen = false
     private var isGeneratingRoute = false
-    private var isFollowingUser = false
+    private var isFollowingUser = false  // might not need
+    private var isFollowTempPausedByUser = false
+    private var lastUserMapInteractionAt : Date?
+    private var lastFollowCenterLocation : CLLocation?
+    
+    private let followResumeDealy: TimeInterval = 3.0
+    private let followRecenterDistanceMeters: CLLocationDistance = 7.0
+    
     private var isActivelyWalkingRoute = false
     private var hasAlreadyCentered = false
     private var isReloadingExistingRoute = false
@@ -5007,38 +5014,51 @@ extension ViewController {
     }
 
     private func updateMapInteractionModeForFollowState() {
-        mapView.isScrollEnabled = !isFollowingUser
+        mapView.isScrollEnabled = true
         mapView.isZoomEnabled = true
-        mapView.isRotateEnabled = !isFollowingUser
-        mapView.isPitchEnabled = !isFollowingUser
+        mapView.isRotateEnabled = true
+        mapView.isPitchEnabled = true
     }
 
+    
+    
     private func updateFollowCamera(with location: CLLocation, animated: Bool) {
-        guard isFollowingUser else { return }
-
-        let distance = max(300, followCameraDistance)
-        guard isActivelyWalkingRoute, let heading = effectiveHeading(for: location) else {
-            safelyCenterMap(on: location.coordinate, distance: distance)
-            return
+        guard canAutoFollowNow () else {return}
+        guard isFollowingUser else {return}
+        
+        // Movement Threshold Check
+        if let lastFollowCenterLocation {
+            let moved = location.distance(from: lastFollowCenterLocation)
+            if moved < followRecenterDistanceMeters {
+                return
+            }
         }
-
+        // Keep zoom level same as what user last had
+        let currentDistance = max(100, mapView.camera.centerCoordinateDistance)
+        
+        // Animation for when user is moving/updating locationoa
         let camera = MKMapCamera(
             lookingAtCenter: location.coordinate,
-            fromDistance: distance,
-            pitch: 0,
-            heading: heading
+            fromDistance: currentDistance,
+            pitch: mapView.camera.pitch,
+            heading: mapView.camera.heading
         )
-
+        
         isUpdatingFollowCamera = true
+        
         UIView.animate(
-            withDuration: animated ? 0.55 : 0.0,
+            withDuration: 0.75,
             delay: 0,
-            options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]
-        ) {
+            usingSpringWithDamping: 1.0,
+            initialSpringVelocity: 0.0)
+        {
+            // animations block
             self.mapView.camera = camera
         } completion: { _ in
+            //completion block
             self.isUpdatingFollowCamera = false
         }
+        
     }
 
     private func determineStartLocation() -> CLLocationCoordinate2D { isFollowingUser ? (userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)) : (userLocation ?? CLLocationCoordinate2D(latitude: 40.2022, longitude: -93.1252)) }
@@ -5210,7 +5230,6 @@ extension ViewController {
     @objc private func handleMapTap(_ gesture: UITapGestureRecognizer) {
         let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
         let routeType = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
-        if isFollowingUser && selectedCoordinates.isEmpty, let userLoc = userLocation { selectedCoordinates.append(userLoc); addAnnotation(at: userLoc, title: "Start", index: 0) }
         if routeType != .loop && selectedCoordinates.count >= 2 {
             showInfoAlert(
                 title: "Adjust Existing Route",
@@ -5903,9 +5922,27 @@ extension ViewController {
 
 // MARK: - MKMapViewDelegate
 extension ViewController: MKMapViewDelegate {
+    
+    func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool){
+        guard !isUpdatingFollowCamera else {return}  // If my CODE isn't updating camera location
+        isFollowTempPausedByUser = true
+    }
+    
+    
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
         guard isFollowingUser, !isUpdatingFollowCamera else { return }
+        // Start cooldown only after user interaction has finished.
+        lastUserMapInteractionAt = Date()
         followCameraDistance = max(300, mapView.camera.centerCoordinateDistance)
+    }
+    
+    private func canAutoFollowNow() -> Bool {
+        guard isFollowingUser else {return false}
+        guard isFollowTempPausedByUser else {return true}
+        guard let lastInteraction = lastUserMapInteractionAt else {return true}
+        let enoughIdleTime = Date().timeIntervalSince(lastInteraction) >= followResumeDealy
+        if enoughIdleTime {isFollowTempPausedByUser = false}
+        return enoughIdleTime
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -6631,7 +6668,7 @@ Beta 1.0.1 issues to fix:
  
  Improve Go To action
  
- Fix and or alter follow mode, remove feature that makes when that is turned on you automatically use the users location.
+ Fix and or alter follow mode, remove feature that makes when that is turned on you automatically use the users location.  partial
 
  
  Way in the future additions:
