@@ -193,45 +193,6 @@ extension UIColor {
                 .withAlphaComponent(0.60)
         }
     }
-    static var bottomBG: UIColor {
-        switch activeTheme {
-        case .wildflowerTrail:
-            return darkColor
-                .blended(withFraction: 0.42, of: compColor)
-                .blended(withFraction: 0.12, of: appPrimary)
-                .withAlphaComponent(0.58)
-        case .coastalMorning:
-            return darkColor
-                .blended(withFraction: 0.38, of: appPrimary)
-                .blended(withFraction: 0.10, of: UIColor(hex: "#BBD5E8"))
-                .withAlphaComponent(0.54)
-        case .canyonPath:
-            return darkColor
-                .blended(withFraction: 0.34, of: appPrimary)
-                .blended(withFraction: 0.14, of: compColor)
-                .withAlphaComponent(0.60)
-        case .earlyFrost:
-            return darkColor
-                .blended(withFraction: 0.34, of: appPrimary)
-                .blended(withFraction: 0.10, of: compColor)
-                .withAlphaComponent(0.54)
-        case .urbanFog:
-            return darkColor
-                .blended(withFraction: 0.18, of: compColor)
-                .blended(withFraction: 0.08, of: UIColor(hex: "#A6B0B8"))
-                .withAlphaComponent(0.62)
-        case .eveningStroll:
-            return darkColor
-                .blended(withFraction: 0.36, of: compColor)
-                .blended(withFraction: 0.14, of: appPrimary)
-                .withAlphaComponent(0.58)
-        case .sunriseRoute:
-            return darkColor
-                .blended(withFraction: 0.32, of: appPrimary)
-                .blended(withFraction: 0.12, of: compColor)
-                .withAlphaComponent(0.60)
-        }
-    }
     static var primaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground }
     static var secondaryTextColor: UIColor { activeTheme.palette.floatingButtonForeground.withAlphaComponent(0.72) }
     static var panelHeaderTextColor: UIColor {
@@ -1820,6 +1781,8 @@ class ViewController: UIViewController {
     private var routeVibeControl: UISegmentedControl?
     private var progressView = UIProgressView(progressViewStyle: .default)
     private var saveRoutePillButton: UIButton!
+    private var timeQuickSelectBar: UIView?
+    private var timePresetButtons: [UIButton] = []
     
     // MARK: - Pace Settings Panel
     private var pacePanel: UIView!
@@ -1838,7 +1801,7 @@ class ViewController: UIViewController {
     private var selectedCoordinates: [CLLocationCoordinate2D] = []
     private var isPanelOpen = false
     private var isGeneratingRoute = false
-    private var isFollowingUser = false  // might not need
+    private var isFollowingUser = false
     private var isFollowTempPausedByUser = false
     private var lastUserMapInteractionAt : Date?
     private var lastFollowCenterLocation : CLLocation?
@@ -1872,6 +1835,7 @@ class ViewController: UIViewController {
     private var useScenicRouting = false
     private var isRandomGenerationEnabled = false
     private var useTimeInput = false
+    private var pendingTargetMinutes: Double?
     private var selectedDirection = "random"
     private var selectedLoopPoints = 3
     private var isVoiceGuidanceEnabled = true
@@ -2320,6 +2284,7 @@ extension ViewController {
             routesSearchBar.alpha = 0
             routesTableView.alpha = 0
             saveRoutePillButton?.alpha = 0
+            timeQuickSelectBar?.alpha = 0
             return
         }
 
@@ -2332,6 +2297,7 @@ extension ViewController {
             self.routesSearchBar.alpha = alpha
             self.routesTableView.alpha = alpha
             self.saveRoutePillButton?.alpha = alpha
+            self.timeQuickSelectBar?.alpha = alpha
         }
     }
 
@@ -2378,6 +2344,7 @@ extension ViewController {
         setupSlidePanel()
         setupLoopControls()
         setupSaveRoutePill()
+        setupTimeQuickSelectBar()
     }
 
     private func applyTheme(themeIndex: Int? = nil) {
@@ -2387,7 +2354,7 @@ extension ViewController {
 
         view.backgroundColor = .darkColor
         headerBox.backgroundColor = .headerBG
-        bottomTabContainer.backgroundColor = .bottomBG
+        bottomTabContainer.backgroundColor = .headerBG
         let isRouteSheetCollapsed = routeHistorySheet.frame.height <= (routeSheetCollapsedHeight + 1)
         routeHistorySheet.backgroundColor = isRouteSheetCollapsed ? .clear : .elevatedPanelSurface
         routeHistorySheet.layer.borderWidth = 0
@@ -2962,6 +2929,141 @@ enum BottomSheetState {
 }
 
 
+// MARK: - Time Quick Select
+extension ViewController {
+    private static let timePresetMinutes: [Int] = [10, 20, 30, 45]
+
+    private func setupTimeQuickSelectBar() {
+        guard timeQuickSelectBar == nil else { return }
+
+        let bar = UIView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.backgroundColor = .elevatedPanelSurface
+        bar.layer.cornerRadius = 18
+        bar.layer.shadowColor = UIColor.black.cgColor
+        bar.layer.shadowOpacity = 0.18
+        bar.layer.shadowOffset = CGSize(width: 0, height: 4)
+        bar.layer.shadowRadius = 10
+        view.addSubview(bar)
+
+        let title = UILabel()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.text = "How much time do you have?"
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.textColor = .panelHeaderTextColor
+        bar.addSubview(title)
+
+        let chipStack = UIStackView()
+        chipStack.translatesAutoresizingMaskIntoConstraints = false
+        chipStack.axis = .horizontal
+        chipStack.distribution = .fillEqually
+        chipStack.spacing = 6
+        bar.addSubview(chipStack)
+
+        timePresetButtons.removeAll()
+        for minutes in Self.timePresetMinutes {
+            let chip = makeTimePresetChip(title: "\(minutes) min", tag: minutes)
+            chipStack.addArrangedSubview(chip)
+            timePresetButtons.append(chip)
+        }
+        let customChip = makeTimePresetChip(title: "Custom", tag: -1)
+        chipStack.addArrangedSubview(customChip)
+        timePresetButtons.append(customChip)
+
+        timeQuickSelectBar = bar
+
+        NSLayoutConstraint.activate([
+            bar.topAnchor.constraint(equalTo: headerBox.bottomAnchor, constant: 10),
+            bar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            bar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+
+            title.topAnchor.constraint(equalTo: bar.topAnchor, constant: 10),
+            title.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 14),
+            title.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -14),
+
+            chipStack.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+            chipStack.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 10),
+            chipStack.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -10),
+            chipStack.bottomAnchor.constraint(equalTo: bar.bottomAnchor, constant: -10),
+            chipStack.heightAnchor.constraint(equalToConstant: 36)
+        ])
+    }
+
+    private func makeTimePresetChip(title: String, tag: Int) -> UIButton {
+        let chip = UIButton(type: .system)
+        chip.translatesAutoresizingMaskIntoConstraints = false
+        chip.tag = tag
+        chip.setTitle(title, for: .normal)
+        chip.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        chip.setTitleColor(.panelNeutralButtonForeground, for: .normal)
+        chip.backgroundColor = .selectorSurface
+        chip.layer.cornerRadius = 12
+        chip.layer.borderWidth = 1
+        chip.layer.borderColor = UIColor.dividerColor.cgColor
+        chip.addTarget(self, action: #selector(timePresetChipTapped(_:)), for: .touchUpInside)
+        return chip
+    }
+
+    @objc private func timePresetChipTapped(_ sender: UIButton) {
+        animateActionButtonTap(sender, scale: 0.94, overshoot: 1.03)
+        if sender.tag > 0 {
+            generateTimedRoute(minutes: Double(sender.tag))
+        } else {
+            presentCustomTimeInput()
+        }
+    }
+
+    private func presentCustomTimeInput() {
+        let alert = UIAlertController(
+            title: "Custom Time",
+            message: "How many minutes do you have? StepOut will build a route that fits.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { field in
+            field.placeholder = "e.g. 25"
+            field.keyboardType = .numberPad
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Build route", style: .default) { [weak self, weak alert] _ in
+            guard let text = alert?.textFields?.first?.text,
+                  let minutes = Double(text), minutes > 0 else { return }
+            self?.generateTimedRoute(minutes: minutes)
+        })
+        present(alert, animated: true)
+    }
+
+    private func generateTimedRoute(minutes: Double) {
+        guard minutes > 0 else { return }
+        view.endEditing(true)
+        if isPanelOpen { closePanel() }
+
+        useTimeInput = true
+        isRandomGenerationEnabled = true
+        pendingTargetMinutes = minutes
+        selectedCoordinates = []
+
+        // Reflect the choice in the advanced panel so power users see the state
+        timeToggle?.setOn(true, animated: true)
+        randomGenerationToggle?.setOn(true, animated: true)
+        distanceOrTimeLabel?.text = "Time (min)"
+        distanceTextField?.placeholder = "e.g. 30"
+        distanceTextField?.text = String(Int(minutes.rounded()))
+        updateRandomGenerationControlsState()
+
+        let targetMiles = targetDistanceMeters(forTargetMinutes: minutes) / 1609.34
+        let type = RouteConfig.RouteType(rawValue: routeTypeSelector.selectedSegmentIndex) ?? .oneWay
+        let config = RouteConfig(
+            type: type,
+            isScenic: useScenicRouting,
+            waypoints: selectedCoordinates,
+            targetDistance: targetMiles,
+            direction: selectedDirection
+        )
+        setRouteDisplayName(nil)
+        generateRandomRoute(config: config, targetMiles: targetMiles)
+    }
+}
+
 // MARK: - Slide Panel Setup      TEMPORARY: CHANGE SSP TO ROUTESETTINGSPANEL
 extension ViewController {
     private var sidePanelTopY: CGFloat { 165 }
@@ -3061,6 +3163,7 @@ extension ViewController {
         field.borderStyle = .roundedRect
         field.keyboardType = .decimalPad
         field.delegate = self
+        field.addTarget(self, action: #selector(panelDistanceFieldEdited(_:)), for: .editingChanged)
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
         let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
@@ -5181,6 +5284,7 @@ extension ViewController {
 // MARK: - Input Helpers
 extension ViewController {
     private func getUserInputMinutes() -> Double? {
+        if let pending = pendingTargetMinutes, pending > 0 { return pending }
         guard useTimeInput,
               let text = distanceTextField?.text,
               !text.isEmpty,
@@ -5190,6 +5294,9 @@ extension ViewController {
     }
 
     private func getUserInputMiles() -> Double? {
+        if let pending = pendingTargetMinutes, pending > 0 {
+            return targetDistanceMeters(forTargetMinutes: pending) / 1609.34
+        }
         guard let text = distanceTextField?.text, !text.isEmpty, let value = Double(text), value > 0 else { return nil }
         if useTimeInput {
             return targetDistanceMeters(forTargetMinutes: value) / 1609.34
@@ -5247,9 +5354,14 @@ extension ViewController {
 
     @objc private func timeToggleChanged(_ sender: UISwitch) {
         useTimeInput = sender.isOn
+        pendingTargetMinutes = nil
         distanceOrTimeLabel?.text = sender.isOn ? "Time (min)" : "Distance (miles)"
         distanceTextField?.placeholder = sender.isOn ? "e.g. 30" : "e.g. 3.1"
         distanceTextField?.text = ""
+    }
+
+    @objc private func panelDistanceFieldEdited(_ sender: UITextField) {
+        pendingTargetMinutes = nil
     }
 
     @objc private func directionButtonTapped(_ sender: UIButton) {
@@ -5293,6 +5405,7 @@ extension ViewController {
 
     @objc private func clearRandomSettings() {
         distanceTextField?.text = ""
+        pendingTargetMinutes = nil
         selectedDirectionButton = randomDirectionButton
         selectedDirection = "random"
         useTimeInput = false
