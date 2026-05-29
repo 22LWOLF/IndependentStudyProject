@@ -5857,7 +5857,7 @@ extension ViewController {
         let currentPace = paceType(at: traveledDistance)?.rawValue ?? "None"
         print(
             """
-            📊 Speed averages
+            Speed averages
             - Current pace segment: \(currentPace)
             - Walk: \(String(format: "%.2f", avgWalkingSpeed)) m/s (\(walkSampleCount) samples)
             - Jog: \(String(format: "%.2f", avgJoggingSpeed)) m/s (\(jogSampleCount) samples)
@@ -6436,9 +6436,9 @@ extension ViewController {
         
         // Debug: show what happened
         if searchText.isEmpty {
-            print("🎯 Applied filters: \(results.count) routes match")
+            print("Applied filters: \(results.count) routes match")
         } else {
-            print("🔍 Search: '\(searchText)' with filters → \(results.count) routes match")
+            print("Search: '\(searchText)' with filters → \(results.count) routes match")
         }
     }
     
@@ -6525,7 +6525,7 @@ extension ViewController {
         // Reload table
         routesTableView.reloadData()
         
-        print("🗑️ All routes cleared and counter reset")
+        print("All routes cleared and counter reset")
         showInfoAlert(message: "All routes deleted. Next route will be Route #1")
     }
     
@@ -6536,7 +6536,7 @@ extension ViewController {
         // Reset speed data
         resetSpeedData()
         
-        print("♻️ Everything reset to defaults")
+        print("Everything reset to defaults")
         showInfoAlert(message: "Everything reset! Fresh start.")
     }
     
@@ -6623,7 +6623,7 @@ extension ViewController {
         // Reload table
         routesTableView.reloadData()
         
-        print("🗑️ All routes cleared (counter NOT reset)")
+        print("All routes cleared (counter NOT reset)")
     }
     
     private func applyFiltersAndSort()
@@ -6668,7 +6668,7 @@ Beta 1.0.1 issues to fix:
  
  Improve Go To action
  
- Fix and or alter follow mode, remove feature that makes when that is turned on you automatically use the users location.  partial
+ Fix and or alter follow mode, remove feature that makes when that is turned on you automatically use the users location.  partial still using when finger first placed down not after its taken off
 
  
  Way in the future additions:
