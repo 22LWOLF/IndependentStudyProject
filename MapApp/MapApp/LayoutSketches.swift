@@ -11,6 +11,15 @@
 //    1. Open this file in Xcode
 //    2. Open the Canvas (Editor → Canvas, or ⌥⌘↩)
 //    3. Use the preview chooser at the bottom of the canvas to switch sketches.
+
+//Launch Screen: is 2 Tabs plan layout
+
+//Customize/Alter route specs page: layout 6 Customize Rotue Sheet
+
+// Go/when you are running the route you made screen is: layout 2 Tabs Go (active)
+
+// Route history/You page vibe of ultra modern (dark)
+
 //
 
 import SwiftUI
