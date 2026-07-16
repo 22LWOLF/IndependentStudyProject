@@ -5,6 +5,7 @@
 //  Turns a route request into real MapKit walking directions.
 //  Auto mode: random waypoints from RouteGeometry, retried until the total
 //  distance lands near the target. Manual mode: routes through user pins.
+//  Also collects turn-by-turn cues and splits the route into pace-colored runs.
 //
 
 import Foundation
@@ -29,6 +30,14 @@ enum RouteBuildError: LocalizedError {
 struct PaceRun {
     var pace: PaceType?
     var coords: [CLLocationCoordinate2D]
+    /// Distance along the route where this run begins.
+    var startMeters: CLLocationDistance = 0
+}
+
+/// A turn instruction anchored to a distance along the route.
+struct NavigationCue: Equatable {
+    let meters: CLLocationDistance
+    let instruction: String
 }
 
 /// A fully generated route ready to display and walk.
@@ -39,6 +48,11 @@ struct BuiltRoute {
     var paceSegments: [PaceSegmentConfig]
     var coloredSegments: [PaceRun]
     var estimatedMinutes: Double
+    var cues: [NavigationCue]
+    /// Running distance at each coordinate; same length as `coordinates`.
+    var cumulativeMeters: [CLLocationDistance]
+    /// For out-and-back routes: the distance where the return leg begins.
+    var returnStartMeters: CLLocationDistance?
 
     var totalMiles: Double { totalMeters / 1609.34 }
 }
@@ -54,13 +68,20 @@ enum RouteBuilder {
         var manualPins: [CLLocationCoordinate2D]?
     }
 
+    /// Everything MapKit gives us before pace math is applied.
+    struct RawRoute {
+        var coords: [CLLocationCoordinate2D]
+        var meters: CLLocationDistance
+        var waypoints: [CLLocationCoordinate2D]
+        var cues: [NavigationCue]
+        var returnStartMeters: CLLocationDistance?
+    }
+
     /// Accept routes within ±15% of the target distance.
     static let acceptableError = 0.15
     private static let maxAttempts = 4
 
-    static func build(_ request: Request) async throws
-        -> (coords: [CLLocationCoordinate2D], meters: CLLocationDistance, waypoints: [CLLocationCoordinate2D]) {
-
+    static func build(_ request: Request) async throws -> RawRoute {
         if let pins = request.manualPins {
             return try await buildManual(pins: pins, type: request.type)
         }
@@ -69,9 +90,7 @@ enum RouteBuilder {
 
     // MARK: - Manual (pin-to-pin)
 
-    private static func buildManual(pins: [CLLocationCoordinate2D], type: RouteConfig.RouteType) async throws
-        -> (coords: [CLLocationCoordinate2D], meters: CLLocationDistance, waypoints: [CLLocationCoordinate2D]) {
-
+    private static func buildManual(pins: [CLLocationCoordinate2D], type: RouteConfig.RouteType) async throws -> RawRoute {
         guard pins.count >= 2 else { throw RouteBuildError.needMorePins }
 
         var stops = pins
@@ -79,21 +98,19 @@ enum RouteBuilder {
             stops.append(first)
         }
 
-        var (coords, meters) = try await routeThrough(stops)
+        var raw = try await routeThrough(stops)
+        raw.waypoints = pins
         if type == .outAndBack {
-            coords += coords.reversed()
-            meters *= 2
+            raw = doubledBack(raw)
         }
-        return (coords, meters, pins)
+        return raw
     }
 
     // MARK: - Random (target-seeking)
 
-    private static func buildRandom(_ request: Request) async throws
-        -> (coords: [CLLocationCoordinate2D], meters: CLLocationDistance, waypoints: [CLLocationCoordinate2D]) {
-
+    private static func buildRandom(_ request: Request) async throws -> RawRoute {
         var radius = initialRadius(for: request)
-        var best: (coords: [CLLocationCoordinate2D], meters: CLLocationDistance, waypoints: [CLLocationCoordinate2D])?
+        var best: RawRoute?
         var bestError = Double.infinity
 
         for attempt in 0..<maxAttempts {
@@ -104,21 +121,21 @@ enum RouteBuilder {
                     stops.append(request.start)
                 }
 
-                var (coords, meters) = try await routeThrough(stops)
+                var raw = try await routeThrough(stops)
+                raw.waypoints = waypoints
                 if request.type == .outAndBack {
-                    coords += coords.reversed()
-                    meters *= 2
+                    raw = doubledBack(raw)
                 }
 
-                let error = abs(meters - request.targetMeters) / request.targetMeters
+                let error = abs(raw.meters - request.targetMeters) / request.targetMeters
                 if error < bestError {
-                    best = (coords, meters, waypoints)
+                    best = raw
                     bestError = error
                 }
                 if error <= acceptableError { break }
 
                 // Rescale the search radius toward the target and roll again.
-                let ratio = request.targetMeters / meters
+                let ratio = request.targetMeters / raw.meters
                 radius *= min(max(ratio, 0.4), 2.5)
             } catch {
                 // A leg failed (water, unroutable area) — shrink and reroll.
@@ -168,23 +185,48 @@ enum RouteBuilder {
         }
     }
 
+    /// Append the reversed path for an out-and-back. Return-leg turn cues would
+    /// be mirrored (a left becomes a right), so instead we add one honest cue
+    /// at the turnaround.
+    private static func doubledBack(_ raw: RawRoute) -> RawRoute {
+        var result = raw
+        result.returnStartMeters = raw.meters
+        result.coords += raw.coords.reversed()
+        result.meters *= 2
+        result.cues.append(NavigationCue(
+            meters: raw.meters,
+            instruction: "Turn around and head back the way you came"
+        ))
+        return result
+    }
+
     // MARK: - Legs
 
-    private static func routeThrough(_ stops: [CLLocationCoordinate2D]) async throws
-        -> (coords: [CLLocationCoordinate2D], meters: CLLocationDistance) {
-
+    private static func routeThrough(_ stops: [CLLocationCoordinate2D]) async throws -> RawRoute {
         var coords: [CLLocationCoordinate2D] = []
         var meters: CLLocationDistance = 0
+        var cues: [NavigationCue] = []
 
         for i in 0..<(stops.count - 1) {
             let route = try await leg(from: stops[i], to: stops[i + 1])
             let legCoords = route.polyline.coordinateArray
             coords += coords.isEmpty ? legCoords : Array(legCoords.dropFirst())
+
+            // Anchor each step's instruction to its distance along the route.
+            var stepOffset: CLLocationDistance = 0
+            for step in route.steps {
+                let text = step.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    cues.append(NavigationCue(meters: meters + stepOffset, instruction: text))
+                }
+                stepOffset += pathLength(step.polyline.coordinateArray)
+            }
+
             meters += route.distance
         }
 
         guard coords.count > 1 else { throw RouteBuildError.noRouteFound }
-        return (coords, meters)
+        return RawRoute(coords: coords, meters: meters, waypoints: [], cues: cues, returnStartMeters: nil)
     }
 
     private static func leg(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) async throws -> MKRoute {
@@ -202,14 +244,17 @@ enum RouteBuilder {
 
     /// Split a route's coordinates into pace-colored runs, interpolating the
     /// exact boundary point where one pace hands off to the next.
+    /// `extraBoundaries` forces additional splits (e.g. at an out-and-back's
+    /// turnaround) so runs never straddle a style change.
     static func coloredSegments(
         coords: [CLLocationCoordinate2D],
         totalMeters: CLLocationDistance,
-        segments: [PaceSegmentConfig]
+        segments: [PaceSegmentConfig],
+        extraBoundaries: [CLLocationDistance] = []
     ) -> [PaceRun] {
         guard coords.count > 1 else { return [] }
         guard totalMeters > 0, !segments.isEmpty else {
-            return [PaceRun(pace: nil, coords: coords)]
+            return [PaceRun(pace: nil, coords: coords, startMeters: 0)]
         }
 
         // Cumulative end-distance for each pace segment.
@@ -222,8 +267,18 @@ enum RouteBuilder {
             boundaries.append((segment.paceType, running))
         }
 
+        // Force splits at the extra boundaries, keeping the pace of the
+        // segment each one lands inside.
+        for extra in extraBoundaries where extra > 1 && extra < totalMeters - 1 {
+            guard let index = boundaries.firstIndex(where: { $0.end > extra }) else { continue }
+            if abs(boundaries[index].end - extra) > 1 {
+                boundaries.insert((boundaries[index].pace, extra), at: index)
+            }
+        }
+
         var result: [PaceRun] = []
         var current: [CLLocationCoordinate2D] = [coords[0]]
+        var currentStart: CLLocationDistance = 0
         var boundaryIndex = 0
         var traveled: CLLocationDistance = 0
 
@@ -240,8 +295,13 @@ enum RouteBuilder {
                     longitude: from.longitude + (to.longitude - from.longitude) * t
                 )
                 current.append(cut)
-                result.append(PaceRun(pace: boundaries[boundaryIndex].pace, coords: current))
+                result.append(PaceRun(
+                    pace: boundaries[boundaryIndex].pace,
+                    coords: current,
+                    startMeters: currentStart
+                ))
                 current = [cut]
+                currentStart = boundaries[boundaryIndex].end
                 traveled += need
                 edge -= need
                 from = cut
@@ -255,7 +315,8 @@ enum RouteBuilder {
         if current.count > 1 {
             result.append(PaceRun(
                 pace: boundaries[min(boundaryIndex, boundaries.count - 1)].pace,
-                coords: current
+                coords: current,
+                startMeters: currentStart
             ))
         }
         return result

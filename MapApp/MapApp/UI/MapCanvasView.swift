@@ -3,8 +3,10 @@
 //  MapApp
 //
 //  SwiftUI wrapper around MKMapView. Renders the built route as pace-colored
-//  polylines, shows draggable manual pins, and (on the Build tab) lets a tap
-//  drop a new pin.
+//  polylines (outbound legs wide and solid, out-and-back return legs thin and
+//  dotted on top so both paces stay visible), dims the walked portion during a
+//  live session, shows draggable manual pins, and (on the Build tab) lets a
+//  tap drop a new pin.
 //
 
 import SwiftUI
@@ -15,6 +17,8 @@ struct MapCanvasView: UIViewRepresentable {
 
     /// When true, tapping the map drops manual pins and pins can be dragged.
     var allowsPinEditing = false
+    /// When true (live session), the camera follows the user.
+    var followsUser = false
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
@@ -37,7 +41,9 @@ struct MapCanvasView: UIViewRepresentable {
         context.coordinator.model = model
         context.coordinator.allowsPinEditing = allowsPinEditing
         syncOverlays(on: map, coordinator: context.coordinator)
+        syncWalkedOverlay(on: map, coordinator: context.coordinator)
         syncPins(on: map, coordinator: context.coordinator)
+        syncFollowMode(on: map, coordinator: context.coordinator)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
@@ -50,14 +56,19 @@ struct MapCanvasView: UIViewRepresentable {
         } ?? "none"
         guard signature != coordinator.overlaySignature else { return }
         coordinator.overlaySignature = signature
+        coordinator.walkedBucket = -1
 
         map.removeOverlays(map.overlays)
         guard let route = model.builtRoute else { return }
 
-        for run in route.coloredSegments where run.coords.count > 1 {
+        // Order matters: outbound (forward) runs first, then return (backward)
+        // runs so the thin dotted line rides on top of the wide solid one.
+        let runs = route.coloredSegments.sorted { isReturnRun($0, route: route) == false && isReturnRun($1, route: route) }
+        for run in runs where run.coords.count > 1 {
             var coords = run.coords
             let line = StyledPolyline(coordinates: &coords, count: coords.count)
             line.paceType = run.pace
+            line.kind = isReturnRun(run, route: route) ? .backward : .forward
             map.addOverlay(line)
         }
 
@@ -68,6 +79,37 @@ struct MapCanvasView: UIViewRepresentable {
             edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40),
             animated: true
         )
+    }
+
+    private func isReturnRun(_ run: PaceRun, route: BuiltRoute) -> Bool {
+        guard let returnStart = route.returnStartMeters else { return false }
+        return run.startMeters >= returnStart - 0.5
+    }
+
+    /// Dim the portion already walked during a live (or just-completed) session.
+    private func syncWalkedOverlay(on map: MKMapView, coordinator: Coordinator) {
+        let active = model.isLive || model.routeCompleted
+        let bucket = active ? Int((model.progress?.traveledMeters ?? 0) / 8) : -1
+        guard bucket != coordinator.walkedBucket else { return }
+        coordinator.walkedBucket = bucket
+
+        let stale = map.overlays.compactMap { $0 as? StyledPolyline }.filter { $0.kind == .walked }
+        map.removeOverlays(stale)
+
+        guard bucket >= 0,
+              let route = model.builtRoute,
+              let progress = model.progress else { return }
+
+        var coords = RouteTracking.walkedPath(
+            route: route.coordinates,
+            cumulative: route.cumulativeMeters,
+            traveled: progress.traveledMeters
+        )
+        guard coords.count > 1 else { return }
+
+        let line = StyledPolyline(coordinates: &coords, count: coords.count)
+        line.kind = .walked
+        map.addOverlay(line)
     }
 
     private func syncPins(on map: MKMapView, coordinator: Coordinator) {
@@ -85,6 +127,14 @@ struct MapCanvasView: UIViewRepresentable {
         }
     }
 
+    private func syncFollowMode(on map: MKMapView, coordinator: Coordinator) {
+        guard coordinator.wasFollowing != followsUser else { return }
+        coordinator.wasFollowing = followsUser
+        if followsUser {
+            map.setUserTrackingMode(.follow, animated: true)
+        }
+    }
+
     // MARK: - Coordinator
 
     @MainActor
@@ -93,6 +143,8 @@ struct MapCanvasView: UIViewRepresentable {
         var allowsPinEditing = false
         var overlaySignature = ""
         var pinSignature = ""
+        var walkedBucket = -1
+        var wasFollowing = false
 
         init(model: AppModel) { self.model = model }
 
@@ -120,12 +172,28 @@ struct MapCanvasView: UIViewRepresentable {
                 return MKOverlayRenderer(overlay: overlay)
             }
             let renderer = MKPolylineRenderer(polyline: line)
-            renderer.lineWidth = 5
             renderer.lineCap = .round
-            if let styled = line as? StyledPolyline, let pace = styled.paceType {
-                renderer.strokeColor = Theme.uiColor(for: pace)
-            } else {
+
+            guard let styled = line as? StyledPolyline else {
+                renderer.lineWidth = 5
                 renderer.strokeColor = Theme.denimUI
+                return renderer
+            }
+
+            switch styled.kind {
+            case .walked:
+                // Dim what's already covered; pace colors stay visible around it.
+                renderer.lineWidth = 9
+                renderer.strokeColor = UIColor.black.withAlphaComponent(0.35)
+            case .backward:
+                // Return leg of an out-and-back: thin dots riding on the wide
+                // outbound stripe so both legs' paces stay readable.
+                renderer.lineWidth = 3.5
+                renderer.lineDashPattern = [0.1, 8]
+                renderer.strokeColor = styled.paceType.map(Theme.uiColor(for:)) ?? Theme.denimUI
+            default:
+                renderer.lineWidth = 7
+                renderer.strokeColor = styled.paceType.map(Theme.uiColor(for:)) ?? Theme.denimUI
             }
             return renderer
         }
