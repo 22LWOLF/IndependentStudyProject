@@ -211,6 +211,7 @@ final class AppModel: NSObject, ObservableObject {
     }
 
     func clearPins() {
+        clearRoute()
         manualPins.removeAll()
         buildMode = .auto
     }
