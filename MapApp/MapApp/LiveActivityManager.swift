@@ -84,3 +84,36 @@ enum LiveActivityManager {
         return Date().timeIntervalSince1970 - heartbeat >= maxAge
     }
 }
+
+// MARK: - Route session activities
+
+extension LiveActivityManager {
+
+    @available(iOS 16.2, *)
+    static func startRouteActivity(initialState: MapAppRouteActivityAttributes.ContentState) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        Task {
+            // One route activity at a time.
+            await endAllRouteActivities()
+            do {
+                _ = try Activity.request(
+                    attributes: MapAppRouteActivityAttributes(routeID: UUID().uuidString),
+                    content: ActivityContent(state: initialState, staleDate: nil)
+                )
+                markRouteActivityStarted()
+            } catch {
+                print("⚠️ Live Activity failed to start: \(error)")
+            }
+        }
+    }
+
+    @available(iOS 16.2, *)
+    static func updateRouteActivity(_ state: MapAppRouteActivityAttributes.ContentState) {
+        Task {
+            for activity in Activity<MapAppRouteActivityAttributes>.activities {
+                await activity.update(ActivityContent(state: state, staleDate: nil))
+            }
+            markRouteActivityHeartbeat()
+        }
+    }
+}

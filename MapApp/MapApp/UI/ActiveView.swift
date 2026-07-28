@@ -94,7 +94,7 @@ struct ActiveView: View {
 
             HStack(alignment: .lastTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(String(format: "%.1f", route.totalMiles))
+                    Text(String(format: "%.1f", model.remainingMiles(for: route)))
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                     Text("miles left")
                         .font(.caption)
@@ -102,7 +102,7 @@ struct ActiveView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("~\(Int(route.estimatedMinutes.rounded()))")
+                    Text("~\(Int(model.remainingMinutes(for: route).rounded()))")
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                     Text("minutes")
                         .font(.caption)
@@ -110,13 +110,16 @@ struct ActiveView: View {
                 }
             }
 
+            if model.isLive, let progress = model.progress {
+                ProgressView(value: min(max(progress.fraction, 0), 1))
+                    .tint(Theme.denim)
+            }
+
             HStack(spacing: 10) {
                 Image(systemName: "arrowshape.turn.up.right.fill")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.denim)
-                Text(model.isLive
-                     ? "Turn-by-turn directions arrive in the next update."
-                     : "Press start when you're at the route's first step.")
+                Text(instructionText)
                     .font(.subheadline.weight(.medium))
                 Spacer()
             }
@@ -125,7 +128,13 @@ struct ActiveView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button {
-                withAnimation(.snappy) { model.isLive.toggle() }
+                withAnimation(.snappy) {
+                    if model.isLive {
+                        model.endRoute()
+                    } else {
+                        model.startRoute()
+                    }
+                }
             } label: {
                 Text(model.isLive ? "End route" : "Start route")
                     .font(.headline)
@@ -141,6 +150,25 @@ struct ActiveView: View {
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.15), radius: 12, y: -2)
+    }
+
+    private var instructionText: String {
+        guard model.isLive else {
+            return "Press start when you're at the route's first step."
+        }
+        if let progress = model.progress, progress.deviationMeters > 40 {
+            return "You're off the route — head back toward the line."
+        }
+        if let cue = model.nextCue {
+            if let traveled = model.progress?.traveledMeters {
+                let feet = Int(((cue.meters - traveled) * 3.28084 / 10).rounded() * 10)
+                if feet > 30 {
+                    return "In \(feet) ft: \(cue.instruction)"
+                }
+            }
+            return cue.instruction
+        }
+        return "Follow the route."
     }
 }
 

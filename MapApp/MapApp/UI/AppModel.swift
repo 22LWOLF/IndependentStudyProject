@@ -406,13 +406,37 @@ final class AppModel: NSObject, ObservableObject {
     }
 
     private func activityState(route: BuiltRoute, traveled: CLLocationDistance) -> MapAppRouteActivityAttributes.ContentState {
-        MapAppRouteActivityAttributes.ContentState(
+        let miles: Double = max(0, (route.totalMeters - traveled) / 1609.34)
+        let minutes: Int = Int(remainingMinutes(for: route).rounded())
+        let pace: PaceType = currentPace ?? paceOrder.first ?? .walk
+
+        let cueFeet: Int
+        if let cue = nextCue {
+            cueFeet = max(0, Int(((cue.meters - traveled) * 3.28084 / 10).rounded() * 10))
+        } else {
+            cueFeet = 0
+        }
+
+        return MapAppRouteActivityAttributes.ContentState(
             routeName: activeRouteName ?? "StepOut Route",
-            remainingMiles: max(0, (route.totalMeters - traveled) / 1609.34),
-            remainingMinutes: Int(remainingMinutes(for: route).rounded()),
+            remainingMiles: miles,
+            remainingMinutes: minutes,
             nextInstruction: nextCue?.instruction ?? "Follow the route",
-            currentPaceType: (currentPace ?? paceOrder.first ?? .walk).rawValue
+            nextInstructionDistanceFeet: cueFeet,
+            nextInstructionSymbolName: Self.symbolName(forInstruction: nextCue?.instruction),
+            currentPaceType: pace.rawValue
         )
+    }
+
+    private static func symbolName(forInstruction instruction: String?) -> String {
+        guard let text = instruction?.lowercased() else { return "arrow.up" }
+        if text.contains("turn around") || text.contains("u-turn") {
+            return "arrow.uturn.down"
+        }
+        if text.contains("left") { return "arrow.turn.up.left" }
+        if text.contains("right") { return "arrow.turn.up.right" }
+        if text.contains("arrive") || text.contains("destination") { return "mappin.circle.fill" }
+        return "arrow.up"
     }
 
     // MARK: - Persistence
